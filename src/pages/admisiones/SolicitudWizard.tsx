@@ -651,7 +651,7 @@ export default function SolicitudWizard() {
   const progress = (completeCount / STEPS.length) * 100;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <button
         type="button"
         onClick={() => navigate(`/admisiones/${code}`)}

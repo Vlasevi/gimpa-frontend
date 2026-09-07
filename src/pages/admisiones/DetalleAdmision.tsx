@@ -98,7 +98,7 @@ export default function DetalleAdmision() {
   const completed = SECTIONS.filter((s) => isFilled(application.data, s.key)).length;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <button
         type="button"
         onClick={() => navigate("/admisiones")}

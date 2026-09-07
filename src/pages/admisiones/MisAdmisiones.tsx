@@ -49,7 +49,7 @@ export default function MisAdmisiones() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       {/* Encabezado */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
