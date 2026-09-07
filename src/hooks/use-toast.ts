@@ -1,186 +1,73 @@
-import * as React from "react";
+/**
+ * Hook de toast compartido — Paso 1 del refactor de Admisiones
+ * (docs/plan-admisiones-ui-rhf-acordeon.md).
+ *
+ * Reemplaza por completo el `hooks/use-toast.ts` anterior: era un reducer estilo
+ * shadcn/ui que importaba `@/components/ui/toast` (archivo inexistente); confirmado
+ * en el Paso 0 que ningún archivo del repo lo importaba, así que era código muerto e
+ * inutilizable — no rompía el build solo porque nadie lo usaba.
+ *
+ * Extrae y unifica en un solo lugar el patrón que hoy existe repetido tres veces con
+ * la misma forma conceptual (`{type, msg}` + auto-dismiss a los 3500ms):
+ * - `flash()` en components/admisiones/admin/ApplicationDetail.tsx (solo success/error)
+ * - `showToast()` en components/matriculas/MatriculasAdmin.tsx
+ * - `showToast()` en components/matriculas/StudentDataTabs.tsx (casi idéntico al anterior)
+ * Ver docs/paso0-informe-admisiones.md §5.2.
+ *
+ * Uso (un toast a la vez, igual que los tres orígenes — no es una cola):
+ *   const { toast, flash, dismiss } = useToast();
+ *   flash("success", "Guardado correctamente");
+ *   return <Toast toast={toast} />;   // components/ui/Toast.tsx
+ *
+ * NO se ha migrado ningún consumidor existente todavía (ApplicationDetail,
+ * MatriculasAdmin y StudentDataTabs siguen con su implementación local) — eso es un
+ * paso posterior del plan.
+ */
 
-import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+export type ToastVariant = "success" | "error" | "warning" | "info";
 
-type ToasterToast = ToastProps & {
-  id: string;
-  title?: React.ReactNode;
-  description?: React.ReactNode;
-  action?: ToastActionElement;
-};
-
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const;
-
-let count = 0;
-
-function genId() {
-  count = (count + 1) % Number.MAX_SAFE_INTEGER;
-  return count.toString();
+export interface ToastState {
+  id: number;
+  type: ToastVariant;
+  msg: string;
 }
 
-type ActionType = typeof actionTypes;
+const AUTO_DISMISS_MS = 3500;
 
-type Action =
-  | {
-      type: ActionType["ADD_TOAST"];
-      toast: ToasterToast;
+export function useToast() {
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const idRef = useRef(0);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
-  | {
-      type: ActionType["UPDATE_TOAST"];
-      toast: Partial<ToasterToast>;
-    }
-  | {
-      type: ActionType["DISMISS_TOAST"];
-      toastId?: ToasterToast["id"];
-    }
-  | {
-      type: ActionType["REMOVE_TOAST"];
-      toastId?: ToasterToast["id"];
-    };
+  }, []);
 
-interface State {
-  toasts: ToasterToast[];
-}
+  const dismiss = useCallback(() => {
+    clearTimer();
+    setToast(null);
+  }, [clearTimer]);
 
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
-
-const addToRemoveQueue = (toastId: string) => {
-  if (toastTimeouts.has(toastId)) {
-    return;
-  }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId);
-    dispatch({
-      type: "REMOVE_TOAST",
-      toastId: toastId,
-    });
-  }, TOAST_REMOVE_DELAY);
-
-  toastTimeouts.set(toastId, timeout);
-};
-
-export const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case "ADD_TOAST":
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      };
-
-    case "UPDATE_TOAST":
-      return {
-        ...state,
-        toasts: state.toasts.map((t) => (t.id === action.toast.id ? { ...t, ...action.toast } : t)),
-      };
-
-    case "DISMISS_TOAST": {
-      const { toastId } = action;
-
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue(toastId);
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
-        });
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t,
-        ),
-      };
-    }
-    case "REMOVE_TOAST":
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        };
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      };
-  }
-};
-
-const listeners: Array<(state: State) => void> = [];
-
-let memoryState: State = { toasts: [] };
-
-function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => {
-    listener(memoryState);
-  });
-}
-
-type Toast = Omit<ToasterToast, "id">;
-
-function toast({ ...props }: Toast) {
-  const id = genId();
-
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    });
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss();
-      },
+  const flash = useCallback(
+    (type: ToastVariant, msg: string) => {
+      clearTimer();
+      idRef.current += 1;
+      setToast({ id: idRef.current, type, msg });
+      timerRef.current = window.setTimeout(() => setToast(null), AUTO_DISMISS_MS);
     },
-  });
+    [clearTimer],
+  );
 
-  return {
-    id: id,
-    dismiss,
-    update,
-  };
+  // Cancela el timer pendiente si el componente que usa el hook se desmonta antes de
+  // que el toast se autocierre.
+  useEffect(() => clearTimer, [clearTimer]);
+
+  return { toast, flash, dismiss };
 }
 
-function useToast() {
-  const [state, setState] = React.useState<State>(memoryState);
-
-  React.useEffect(() => {
-    listeners.push(setState);
-    return () => {
-      const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    };
-  }, [state]);
-
-  return {
-    ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
-  };
-}
-
-export { useToast, toast };
+export default useToast;
