@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
 import { Loader2, ArrowLeft, AlertCircle } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { ID_DOC_TYPES, SEXES } from "@/components/admisiones/admissionTypes";
-
-const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
-
-// Estilo daisyui, igual que matrículas.
-const fieldClass = "input input-bordered w-full focus:input-primary transition-all";
-const selectFieldClass = "select select-bordered w-full focus:select-primary transition-all";
+import {
+  labelClass,
+  inputClass,
+  selectClass,
+  primaryBtnClass,
+} from "@/components/ui/formStyles";
 
 /** Edad en años a partir de la fecha de nacimiento (ISO YYYY-MM-DD). "" si no es válida. */
 function computeAge(iso: string): string {
@@ -22,9 +23,6 @@ function computeAge(iso: string): string {
   if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
   return age >= 0 ? String(age) : "";
 }
-
-const primaryBtnClass =
-  "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-200 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 interface Grade {
   id: number;
@@ -41,6 +39,20 @@ const gradeLabel = (g: Grade) => g.description || g.name;
 const currentYear = new Date().getFullYear();
 const YEAR_OPTIONS = [currentYear, currentYear + 1];
 
+/** Valores del formulario, un mapeo 1:1 con lo que ya se enviaba antes de RHF. */
+interface FormValues {
+  first_name1: string;
+  first_name2: string;
+  last_name1: string;
+  last_name2: string;
+  id_type: string;
+  id_number: string;
+  birth_date: string;
+  sex: string;
+  academic_year: string;
+  grade_applied: string;
+}
+
 export default function NuevaAdmision() {
   const navigate = useNavigate();
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -48,21 +60,36 @@ export default function NuevaAdmision() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    first_name1: "",
-    first_name2: "",
-    last_name1: "",
-    last_name2: "",
-    id_type: "RC",
-    id_number: "",
-    birth_date: "",
-    sex: "",
-    academic_year: String(currentYear + 1),
-    grade_applied: "",
+  const { register, handleSubmit, watch } = useForm<FormValues>({
+    defaultValues: {
+      first_name1: "",
+      first_name2: "",
+      last_name1: "",
+      last_name2: "",
+      id_type: "RC",
+      id_number: "",
+      birth_date: "",
+      sex: "",
+      academic_year: String(currentYear + 1),
+      grade_applied: "",
+    },
   });
 
-  const set = (key: keyof typeof form) => (value: string) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  // Edad: valor puramente derivado (readOnly), igual que antes de la migración — no se
+  // registra como campo de formulario propio ni se envía en el payload.
+  const birthDate = watch("birth_date");
+
+  // Chequeo manual existente para habilitar el botón — NO es validación nueva, es el
+  // mismo `canSubmit` de antes de RHF, ahora leído con `watch` sobre los mismos 4 campos.
+  const [firstName1, lastName1, idNumber, gradeApplied] = watch([
+    "first_name1",
+    "last_name1",
+    "id_number",
+    "grade_applied",
+  ]);
+  const canSubmit = Boolean(
+    firstName1 && lastName1 && idNumber && gradeApplied && !submitting,
+  );
 
   useEffect(() => {
     let active = true;
@@ -80,8 +107,7 @@ export default function NuevaAdmision() {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (form: FormValues) => {
     setSubmitting(true);
     setError(null);
 
@@ -123,13 +149,6 @@ export default function NuevaAdmision() {
     }
   };
 
-  const canSubmit =
-    form.first_name1 &&
-    form.last_name1 &&
-    form.id_number &&
-    form.grade_applied &&
-    !submitting;
-
   return (
     <div className="space-y-6">
       <button
@@ -162,7 +181,7 @@ export default function NuevaAdmision() {
       )}
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={handleSubmit(onSubmit)}
         className="space-y-6 rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm"
       >
         <fieldset className="space-y-4">
@@ -177,22 +196,16 @@ export default function NuevaAdmision() {
               </label>
               <input
                 id="fn1"
-                className={fieldClass}
-                value={form.first_name1}
-                onChange={(e) => set("first_name1")(e.target.value)}
+                className={inputClass}
                 required
+                {...register("first_name1")}
               />
             </div>
             <div>
               <label htmlFor="fn2" className={labelClass}>
                 Segundo nombre
               </label>
-              <input
-                id="fn2"
-                className={fieldClass}
-                value={form.first_name2}
-                onChange={(e) => set("first_name2")(e.target.value)}
-              />
+              <input id="fn2" className={inputClass} {...register("first_name2")} />
             </div>
             <div>
               <label htmlFor="ln1" className={labelClass}>
@@ -200,22 +213,16 @@ export default function NuevaAdmision() {
               </label>
               <input
                 id="ln1"
-                className={fieldClass}
-                value={form.last_name1}
-                onChange={(e) => set("last_name1")(e.target.value)}
+                className={inputClass}
                 required
+                {...register("last_name1")}
               />
             </div>
             <div>
               <label htmlFor="ln2" className={labelClass}>
                 Segundo apellido
               </label>
-              <input
-                id="ln2"
-                className={fieldClass}
-                value={form.last_name2}
-                onChange={(e) => set("last_name2")(e.target.value)}
-              />
+              <input id="ln2" className={inputClass} {...register("last_name2")} />
             </div>
           </div>
 
@@ -224,12 +231,7 @@ export default function NuevaAdmision() {
               <label htmlFor="idtype" className={labelClass}>
                 Tipo de documento *
               </label>
-              <select
-                id="idtype"
-                className={selectFieldClass}
-                value={form.id_type}
-                onChange={(e) => set("id_type")(e.target.value)}
-              >
+              <select id="idtype" className={selectClass} {...register("id_type")}>
                 {ID_DOC_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
@@ -243,10 +245,9 @@ export default function NuevaAdmision() {
               </label>
               <input
                 id="idnum"
-                className={fieldClass}
-                value={form.id_number}
-                onChange={(e) => set("id_number")(e.target.value)}
+                className={inputClass}
                 required
+                {...register("id_number")}
               />
             </div>
             <div>
@@ -256,9 +257,8 @@ export default function NuevaAdmision() {
               <input
                 id="bdate"
                 type="date"
-                className={fieldClass}
-                value={form.birth_date}
-                onChange={(e) => set("birth_date")(e.target.value)}
+                className={inputClass}
+                {...register("birth_date")}
               />
             </div>
             <div>
@@ -267,8 +267,8 @@ export default function NuevaAdmision() {
               </label>
               <input
                 id="edad"
-                className={`${fieldClass} bg-base-200`}
-                value={computeAge(form.birth_date)}
+                className={`${inputClass} bg-base-200`}
+                value={computeAge(birthDate)}
                 readOnly
                 placeholder="Se calcula sola"
               />
@@ -277,12 +277,7 @@ export default function NuevaAdmision() {
               <label htmlFor="sex" className={labelClass}>
                 Sexo
               </label>
-              <select
-                id="sex"
-                className={selectFieldClass}
-                value={form.sex}
-                onChange={(e) => set("sex")(e.target.value)}
-              >
+              <select id="sex" className={selectClass} {...register("sex")}>
                 <option value="">Selecciona…</option>
                 {SEXES.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -306,11 +301,10 @@ export default function NuevaAdmision() {
               </label>
               <select
                 id="grade"
-                className={selectFieldClass}
-                value={form.grade_applied}
-                onChange={(e) => set("grade_applied")(e.target.value)}
+                className={selectClass}
                 required
                 disabled={loadingGrades}
+                {...register("grade_applied")}
               >
                 <option value="">
                   {loadingGrades ? "Cargando grados…" : "Selecciona un grado"}
@@ -326,12 +320,7 @@ export default function NuevaAdmision() {
               <label htmlFor="year" className={labelClass}>
                 Año lectivo *
               </label>
-              <select
-                id="year"
-                className={selectFieldClass}
-                value={form.academic_year}
-                onChange={(e) => set("academic_year")(e.target.value)}
-              >
+              <select id="year" className={selectClass} {...register("academic_year")}>
                 {YEAR_OPTIONS.map((y) => (
                   <option key={y} value={y}>
                     {y}

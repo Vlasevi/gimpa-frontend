@@ -15,9 +15,7 @@ import {
   isEditable,
   type AdmissionApplicationRow,
 } from "@/components/admisiones/admissionTypes";
-
-const primaryBtnClass =
-  "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-200 active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+import { primaryBtnClass } from "@/components/ui/formStyles";
 
 export default function MisAdmisiones() {
   const navigate = useNavigate();

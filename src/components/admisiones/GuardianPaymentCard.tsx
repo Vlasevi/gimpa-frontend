@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { apiUrl, apiFetch, API_ENDPOINTS } from "@/utils/api";
+import { labelClass, inputClass, primaryBtnClass } from "@/components/ui/formStyles";
 
 interface PaymentInfo {
   status: string;
@@ -21,14 +22,6 @@ interface PaymentInfo {
   receipt_url?: string | null;
   admin_note?: string | null;
 }
-
-const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
-
-const controlClass =
-  "h-11 w-full rounded-lg border border-base-300 bg-base-200 px-3 text-sm text-base-content transition-colors focus:border-primary focus:bg-base-100 focus:outline-none focus:ring-2 focus:ring-primary/40";
-
-const primaryBtn =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-content transition-all duration-200 ease-out hover:bg-primary/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
 
 /** Estados en los que el acudiente todavía debe (o puede volver a) reportar el pago. */
 const CAN_REPORT = ["PENDIENTE", "RECHAZADO"];
@@ -215,7 +208,7 @@ export function GuardianPaymentCard({
               <input
                 id="paid-at"
                 type="date"
-                className={controlClass}
+                className={inputClass}
                 value={paidAt}
                 onChange={(e) => setPaidAt(e.target.value)}
               />
@@ -226,14 +219,14 @@ export function GuardianPaymentCard({
               </label>
               <input
                 id="reference"
-                className={controlClass}
+                className={inputClass}
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
               />
             </div>
           </div>
 
-          <button type="submit" disabled={saving || !file} className={primaryBtn}>
+          <button type="submit" disabled={saving || !file} className={primaryBtnClass}>
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

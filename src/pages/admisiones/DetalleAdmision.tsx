@@ -10,9 +10,6 @@ import {
   MessageSquareWarning,
 } from "lucide-react";
 
-const primaryBtnClass =
-  "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-200 active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
-
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { StatusBadge } from "@/components/admisiones/StatusBadge";
 import {
@@ -25,6 +22,7 @@ import {
 import { GuardianPaymentCard } from "@/components/admisiones/GuardianPaymentCard";
 import { GuardianDocumentsCard } from "@/components/admisiones/GuardianDocumentsCard";
 import { GuardianInterviewsCard } from "@/components/admisiones/GuardianInterviewsCard";
+import { primaryBtnClass } from "@/components/ui/formStyles";
 
 /** Secciones del formulario (espejo de `DATA_SECTIONS` del backend). */
 const SECTIONS: { key: string; label: string; hint: string }[] = [

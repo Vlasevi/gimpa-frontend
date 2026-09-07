@@ -8,10 +8,19 @@ import { useAuth } from "./Login/loginLogic";
  * Marco de las pantallas del acudiente (admisiones).
  *
  * Deliberadamente **sin el Sidebar institucional**: quien entra aquí es una familia
- * externa, no personal del colegio. Solo barra mínima con la marca y su cuenta.
+ * externa, no personal del colegio. Solo barra mínima con la marca y su cuenta —
+ * la misma pieza "header + <Outlet/>" de `Layout.tsx`, sin el slot de `<Sidebar/>`.
  *
  * El filo de acento superior es el mismo device de marca del hero de Login y del
  * encabezado de los correos.
+ *
+ * Decisión del Paso 6 (docs/plan-admisiones-ui-rhf-acordeon.md): el "menú de cuenta"
+ * de abajo está casi calcado del de `Navbar.tsx` (ver docs/paso0-informe-admisiones.md
+ * §6) y es candidato a un `ui/AccountMenu.tsx` compartido. NO se extrajo en este paso
+ * a propósito: hacerlo bien requiere tocar también `Navbar.tsx` (usado por el layout
+ * de staff), que queda fuera de la lista de archivos de este paso, y extraer solo la
+ * mitad no elimina la duplicación real. Queda como hallazgo pendiente para un paso de
+ * limpieza aparte (bajo riesgo, ya con la firma de props propuesta en el informe).
  */
 export default function AcudienteLayout() {
   const { user, logout, isLoggingOut } = useAuth();

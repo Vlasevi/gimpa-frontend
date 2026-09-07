@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { apiUrl, apiFetch, API_ENDPOINTS } from "@/utils/api";
+import { primaryBtnClass } from "@/components/ui/formStyles";
 
 interface DocumentRow {
   doc_type: string;
@@ -35,9 +36,10 @@ const STATUS_ICON: Record<string, { Icon: typeof CheckCircle2; className: string
   PENDIENTE_POSTERIOR: { Icon: Clock, className: "text-base-content/40" },
 };
 
-const primaryBtn =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-content transition-all duration-200 ease-out hover:bg-primary/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
-
+// `primaryBtn` local se reemplazó por el `primaryBtnClass` compartido (Paso 6). No hay
+// aún un `ui/Button.tsx` con variantes de tamaño (documentado como pendiente en
+// docs/paso0-informe-admisiones.md §7), así que `secondaryBtn` — un botón chico de fila,
+// sin equivalente compartido hoy — se conserva local a propósito.
 const secondaryBtn =
   "inline-flex h-10 items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-3 text-sm font-medium text-base-content transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
@@ -264,7 +266,7 @@ export function GuardianDocumentsCard({
             type="button"
             onClick={confirmUpload}
             disabled={submitting}
-            className={primaryBtn}
+            className={primaryBtnClass}
           >
             {submitting ? (
               <>
