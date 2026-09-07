@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import {
   Loader2,
   ArrowLeft,
@@ -24,45 +25,6 @@ import {
   type StepProps,
 } from "@/components/admisiones/steps";
 
-/** Los 6 pasos, en orden. `key` = sección de `data` en el backend. */
-const STEPS: {
-  key: string;
-  title: string;
-  subtitle: string;
-  Component: (props: StepProps) => JSX.Element;
-}[] = [
-  {
-    key: "residence",
-    title: "Residencia",
-    subtitle: "¿Dónde vive el aspirante?",
-    Component: ResidenceStep,
-  },
-  {
-    key: "academic_history",
-    title: "Historial académico",
-    subtitle: "Su trayectoria escolar hasta hoy.",
-    Component: AcademicHistoryStep,
-  },
-  {
-    key: "guardians",
-    title: "Acudientes",
-    subtitle: "Quién responde por el aspirante.",
-    Component: GuardiansStep,
-  },
-  {
-    key: "health",
-    title: "Salud",
-    subtitle: "Para cuidarlo mejor durante el año escolar.",
-    Component: HealthStep,
-  },
-  {
-    key: "declarations",
-    title: "Declaraciones",
-    subtitle: "Revisa y envía tu solicitud.",
-    Component: DeclarationsStep,
-  },
-];
-
 const primaryBtnClass =
   "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-200 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
@@ -74,11 +36,65 @@ export default function SolicitudWizard() {
   const navigate = useNavigate();
 
   const [application, setApplication] = useState<AdmissionApplication | null>(null);
-  const [sections, setSections] = useState<Record<string, SectionValues>>({});
   const [stepIndex, setStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Un `useForm()` por sección (no uno global): el PATCH sigue siendo por sección, y
+  // así el usuario puede saltar de pestaña sin perder lo que escribió en otra — los 5
+  // formularios viven aquí, en el padre, y no se recrean al cambiar de paso (solo el
+  // `StepComponent` que los consume se monta/desmonta).
+  const residenceForm = useForm<SectionValues>({ defaultValues: {} });
+  const academicForm = useForm<SectionValues>({ defaultValues: {} });
+  const guardiansForm = useForm<SectionValues>({ defaultValues: {} });
+  const healthForm = useForm<SectionValues>({ defaultValues: {} });
+  const declarationsForm = useForm<SectionValues>({ defaultValues: {} });
+
+  /** Los 5 pasos, en orden. `key` = sección de `data` en el backend. */
+  const STEPS: {
+    key: string;
+    title: string;
+    subtitle: string;
+    Component: (props: StepProps) => JSX.Element;
+    form: UseFormReturn<SectionValues>;
+  }[] = [
+    {
+      key: "residence",
+      title: "Residencia",
+      subtitle: "¿Dónde vive el aspirante?",
+      Component: ResidenceStep,
+      form: residenceForm,
+    },
+    {
+      key: "academic_history",
+      title: "Historial académico",
+      subtitle: "Su trayectoria escolar hasta hoy.",
+      Component: AcademicHistoryStep,
+      form: academicForm,
+    },
+    {
+      key: "guardians",
+      title: "Acudientes",
+      subtitle: "Quién responde por el aspirante.",
+      Component: GuardiansStep,
+      form: guardiansForm,
+    },
+    {
+      key: "health",
+      title: "Salud",
+      subtitle: "Para cuidarlo mejor durante el año escolar.",
+      Component: HealthStep,
+      form: healthForm,
+    },
+    {
+      key: "declarations",
+      title: "Declaraciones",
+      subtitle: "Revisa y envía tu solicitud.",
+      Component: DeclarationsStep,
+      form: declarationsForm,
+    },
+  ];
 
   const step = STEPS[stepIndex];
   const isLast = stepIndex === STEPS.length - 1;
@@ -94,7 +110,13 @@ export default function SolicitudWizard() {
         }
         const data: AdmissionApplication = await res.json();
         setApplication(data);
-        setSections((data.data ?? {}) as Record<string, SectionValues>);
+        // Hidrata cada sección con lo que trajo el servidor. `reset(...)`, no
+        // `defaultValues` síncronos: el dato llega async.
+        residenceForm.reset((data.data?.residence as SectionValues) ?? {});
+        academicForm.reset((data.data?.academic_history as SectionValues) ?? {});
+        guardiansForm.reset((data.data?.guardians as SectionValues) ?? {});
+        healthForm.reset((data.data?.health as SectionValues) ?? {});
+        declarationsForm.reset((data.data?.declarations as SectionValues) ?? {});
         // Retoma en la primera sección sin diligenciar.
         const firstPending = STEPS.findIndex(
           (s) => !data.data?.[s.key] || Object.keys(data.data[s.key]).length === 0,
@@ -110,25 +132,17 @@ export default function SolicitudWizard() {
     return () => {
       active = false;
     };
+    // Solo al montar / cuando cambia `code`. Los 5 `useForm()` mantienen identidad
+    // estable entre renders (react-hook-form), listarlos no cambiaría nada.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
-
-  const values = useMemo(
-    () => sections[step?.key] ?? {},
-    [sections, step?.key],
-  );
-
-  const handleChange = (name: string, value: unknown) => {
-    setSections((prev) => ({
-      ...prev,
-      [step.key]: { ...(prev[step.key] ?? {}), [name]: value },
-    }));
-  };
 
   /** Guarda la sección actual. Devuelve true si salió bien. */
   const saveCurrentSection = async () => {
     setSaving(true);
     setError(null);
     try {
+      const values = step.form.getValues();
       const res = await apiFetch(
         API_ENDPOINTS.admissionsApplicationByCode(code),
         {
@@ -147,6 +161,8 @@ export default function SolicitudWizard() {
       }
       const updated: AdmissionApplication = await res.json();
       setApplication(updated);
+      // Re-hidrata con lo confirmado por el servidor (limpia el estado "dirty").
+      step.form.reset((updated.data?.[step.key] as SectionValues) ?? values);
       return true;
     } catch {
       setError("No pudimos conectar con el servidor.");
@@ -308,7 +324,12 @@ export default function SolicitudWizard() {
         )}
 
         <div key={step.key} className="animate-view-in">
-          <StepComponent values={values} onChange={handleChange} />
+          <StepComponent
+            control={step.form.control}
+            register={step.form.register}
+            setValue={step.form.setValue}
+            getValues={step.form.getValues}
+          />
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-6">

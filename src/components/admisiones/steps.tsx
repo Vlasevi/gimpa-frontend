@@ -7,9 +7,22 @@
  * ⚠️ Los campos de Salud (`has_medical_condition`, `takes_medication`,
  * `has_diagnosis`, `receives_therapy`, `needs_learning_support`) deben conservar
  * estos nombres: son los que lee `apply_alert_rules` en el backend.
+ *
+ * Cada paso recibe `control`/`register`/`setValue`/`getValues` de un `useForm()` de
+ * react-hook-form propio de esa sección (uno por sección, creado en
+ * `SolicitudWizard.tsx`) en vez de `values`/`onChange`. Ver el comentario al tope de
+ * `formFields.tsx` para el porqué de RHF en este módulo.
  */
 
 import { useEffect, useState } from "react";
+import {
+  useController,
+  useWatch,
+  type Control,
+  type UseFormGetValues,
+  type UseFormRegister,
+  type UseFormSetValue,
+} from "react-hook-form";
 
 import { useAuth } from "@/components/Login/loginLogic";
 import {
@@ -35,8 +48,10 @@ import {
 import { GeoResidenceFields, PersonFields, WorkFields, SubSection } from "./guardianFields";
 
 export interface StepProps {
-  values: SectionValues;
-  onChange: (name: string, value: unknown) => void;
+  control: Control<SectionValues>;
+  register: UseFormRegister<SectionValues>;
+  setValue: UseFormSetValue<SectionValues>;
+  getValues: UseFormGetValues<SectionValues>;
 }
 
 // Grados del colegio (para "último grado cursado"). Coincide con `seed_grades`.
@@ -68,64 +83,60 @@ const RESIDENCE_SUFFIXES = [
 ];
 
 // ---------------------------------------------------------------- Residencia
-export function ResidenceStep({ values, onChange }: StepProps) {
+export function ResidenceStep({ control, register, setValue }: StepProps) {
   return (
     <FieldGrid>
-      <GeoResidenceFields prefix="" values={values} onChange={onChange} />
+      <GeoResidenceFields prefix="" control={control} register={register} setValue={setValue} />
     </FieldGrid>
   );
 }
 
 // -------------------------------------------------------- Historial académico
-export function AcademicHistoryStep({ values, onChange }: StepProps) {
-  const repeated = (values.repeated as Record<string, unknown>) ?? {};
-  const difficulties = (values.difficulties as Record<string, unknown>) ?? {};
+export function AcademicHistoryStep({ control, register }: StepProps) {
+  const lastGrade = (useWatch({ control, name: "last_grade_completed" }) as string) ?? "";
+  const changeReason = (useWatch({ control, name: "change_reason" }) as string) ?? "";
+  const hasRepeated = useWatch({ control, name: "repeated.hasRepeated" });
+  const hasDificulties = useWatch({ control, name: "difficulties.hasDificulties" });
 
-  const setRepeated = (patch: Record<string, unknown>) =>
-    onChange("repeated", { ...repeated, ...patch });
-  const setDifficulties = (patch: Record<string, unknown>) =>
-    onChange("difficulties", { ...difficulties, ...patch });
-
-  const lastGrade = (values.last_grade_completed as string) ?? "";
-  const areas = Array.isArray(difficulties.dificulties)
-    ? (difficulties.dificulties as string[])
-    : [];
-  const toggleArea = (area: string) =>
-    setDifficulties({
-      dificulties: areas.includes(area) ? areas.filter((a) => a !== area) : [...areas, area],
-    });
+  // Sin `defaultValue`: el fallback a `[]` de abajo ya cubre el caso "aún sin valor",
+  // y fijar aquí un literal rompe la inferencia de tipos de RHF sobre un path anidado
+  // de un `SectionValues` (Record<string, unknown>).
+  const { field: areasField } = useController({
+    control,
+    name: "difficulties.dificulties",
+  });
+  const areas = Array.isArray(areasField.value) ? (areasField.value as string[]) : [];
+  const toggleArea = (area: string) => {
+    const next = areas.includes(area) ? areas.filter((a) => a !== area) : [...areas, area];
+    areasField.onChange(next);
+  };
 
   return (
     <FieldGrid>
-      <Field name="previous_school" label="Colegio anterior" values={values}
-        onChange={onChange} placeholder="Nombre de la institución" full />
+      <Field name="previous_school" label="Colegio anterior" register={register}
+        placeholder="Nombre de la institución" full />
 
       <SelectField name="last_grade_completed" label="Último grado cursado"
-        values={values} onChange={onChange} options={GRADE_OPTIONS} />
+        register={register} options={GRADE_OPTIONS} />
       {lastGrade === "Otro" && (
-        <Field name="last_grade_other" label="¿Cuál grado?" values={values} onChange={onChange} />
+        <Field name="last_grade_other" label="¿Cuál grado?" register={register} />
       )}
 
       <Field name="last_year" label="Año en que lo cursó" type="number"
-        values={values} onChange={onChange} placeholder="2025" />
+        register={register} placeholder="2025" />
       <SelectField name="change_reason" label="Motivo del cambio de colegio"
-        values={values} onChange={onChange} options={CHANGE_REASONS} full />
-      {(values.change_reason as string) === "Otro" && (
-        <Field name="change_reason_other" label="¿Cuál motivo?" values={values}
-          onChange={onChange} full />
+        register={register} options={CHANGE_REASONS} full />
+      {changeReason === "Otro" && (
+        <Field name="change_reason_other" label="¿Cuál motivo?" register={register} full />
       )}
 
       {/* Repitió año → { hasRepeated, grade, reason } */}
-      <BoolYesNo label="¿Ha repetido algún grado?"
-        value={repeated.hasRepeated as boolean | undefined}
-        onChange={(v) => setRepeated({ hasRepeated: v })} />
-      {repeated.hasRepeated === true && (
+      <BoolYesNo label="¿Ha repetido algún grado?" name="repeated.hasRepeated" control={control} />
+      {hasRepeated === true && (
         <>
           <div>
             <label htmlFor="repeated_grade" className={labelClass}>¿Qué grado repitió?</label>
-            <select id="repeated_grade" className={controlClass}
-              value={(repeated.grade as string) ?? ""}
-              onChange={(e) => setRepeated({ grade: e.target.value })}>
+            <select id="repeated_grade" className={controlClass} {...register("repeated.grade")}>
               <option value="">Selecciona…</option>
               {GRADE_OPTIONS.filter((g) => g !== "Otro").map((g) => (
                 <option key={g} value={g}>{g}</option>
@@ -135,17 +146,15 @@ export function AcademicHistoryStep({ values, onChange }: StepProps) {
           <div className="sm:col-span-2">
             <label htmlFor="repeated_reason" className={labelClass}>Motivo</label>
             <textarea id="repeated_reason" rows={2} className={textareaClass}
-              value={(repeated.reason as string) ?? ""}
-              onChange={(e) => setRepeated({ reason: e.target.value })} />
+              {...register("repeated.reason")} />
           </div>
         </>
       )}
 
       {/* Dificultades → { hasDificulties, dificulties[], other } */}
       <BoolYesNo label="¿Ha presentado dificultades académicas?"
-        value={difficulties.hasDificulties as boolean | undefined}
-        onChange={(v) => setDifficulties({ hasDificulties: v })} />
-      {difficulties.hasDificulties === true && (
+        name="difficulties.hasDificulties" control={control} />
+      {hasDificulties === true && (
         <>
           <fieldset className="sm:col-span-2">
             <legend className={labelClass}>¿En qué áreas?</legend>
@@ -169,9 +178,7 @@ export function AcademicHistoryStep({ values, onChange }: StepProps) {
           </fieldset>
           <div className="sm:col-span-2">
             <label htmlFor="dif_other" className={labelClass}>Otra dificultad (opcional)</label>
-            <input id="dif_other" className={inputClass}
-              value={(difficulties.other as string) ?? ""}
-              onChange={(e) => setDifficulties({ other: e.target.value })} />
+            <input id="dif_other" className={inputClass} {...register("difficulties.other")} />
           </div>
         </>
       )}
@@ -179,16 +186,23 @@ export function AcademicHistoryStep({ values, onChange }: StepProps) {
   );
 }
 
-/** Sí/No que guarda un booleano (no "Si"/"No"), para las formas anidadas de la DB. */
+/**
+ * Sí/No que guarda un booleano (no "Si"/"No"), para las formas anidadas de la DB.
+ * Vía `useController`: es un valor booleano propio, no lo que produce un `<input>`
+ * nativo, y en dos de sus tres usos vive en un path anidado (`repeated.hasRepeated`,
+ * `difficulties.hasDificulties`).
+ */
 function BoolYesNo({
   label,
-  value,
-  onChange,
+  name,
+  control,
 }: {
   label: string;
-  value: boolean | undefined;
-  onChange: (v: boolean) => void;
+  name: string;
+  control: Control<SectionValues>;
 }) {
+  const { field } = useController({ control, name });
+  const value = field.value as boolean | undefined;
   return (
     <fieldset className="sm:col-span-2">
       <legend className={labelClass}>{label}</legend>
@@ -205,7 +219,8 @@ function BoolYesNo({
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-base-300 bg-base-200 text-base-content/70 hover:bg-base-300/50"
               }`}>
-              <input type="radio" checked={active} onChange={() => onChange(o.val)} className="sr-only" />
+              <input type="radio" checked={active} onChange={() => field.onChange(o.val)}
+                onBlur={field.onBlur} className="sr-only" />
               {o.text}
             </label>
           );
@@ -216,9 +231,9 @@ function BoolYesNo({
 }
 
 // ---------------------------------------------------------------- Acudientes
-export function GuardiansStep({ values, onChange }: StepProps) {
+export function GuardiansStep({ control, register, setValue, getValues }: StepProps) {
   const { user } = useAuth();
-  const guardianType = (values.guardian_type as string) ?? "";
+  const guardianType = (useWatch({ control, name: "guardian_type" }) as string) ?? "";
 
   // Acordeón: solo una sección abierta a la vez. `null` = todas plegadas (estado inicial).
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -230,39 +245,57 @@ export function GuardiansStep({ values, onChange }: StepProps) {
   // El acudiente principal ES la cuenta: pre-llenamos una vez, si está vacío.
   useEffect(() => {
     if (!user) return;
-    const empty = !values.guardian_email && !values.guardian_firstname1 && !guardianType;
+    const empty =
+      !getValues("guardian_email") && !getValues("guardian_firstname1") && !guardianType;
     if (empty) {
-      onChange("guardian_firstname1", user.first_name ?? "");
-      onChange("guardian_lastname1", user.last_name ?? "");
-      onChange("guardian_email", user.email ?? "");
+      setValue("guardian_firstname1", user.first_name ?? "", { shouldDirty: true });
+      setValue("guardian_lastname1", user.last_name ?? "", { shouldDirty: true });
+      setValue("guardian_email", user.email ?? "", { shouldDirty: true });
     }
     // Solo al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-llenado del acudiente desde Padre/Madre (o limpieza si Empresa).
+  // Campos fuente vigilados para la auto-copia (ambos prefijos: solo uno importa a la
+  // vez según `guardianType`, pero los dos se observan porque cuál importa puede
+  // cambiar entre renders).
+  const fatherWatch = useWatch({
+    control,
+    name: [
+      ...PERSON_SUFFIXES.map((s) => `father_${s}`),
+      ...RESIDENCE_SUFFIXES.map((s) => `father_residence_${s}`),
+    ],
+  }) as unknown[];
+  const motherWatch = useWatch({
+    control,
+    name: [
+      ...PERSON_SUFFIXES.map((s) => `mother_${s}`),
+      ...RESIDENCE_SUFFIXES.map((s) => `mother_residence_${s}`),
+    ],
+  }) as unknown[];
+
   const srcPrefix =
     guardianType === "Padre" ? "father_" : guardianType === "Madre" ? "mother_" : "";
-  const srcSignature = srcPrefix
-    ? JSON.stringify([
-        ...PERSON_SUFFIXES.map((s) => values[`${srcPrefix}${s}`]),
-        ...RESIDENCE_SUFFIXES.map((s) => values[`${srcPrefix}residence_${s}`]),
-      ])
-    : "";
+  const srcValues = guardianType === "Padre" ? fatherWatch : motherWatch;
+  const srcSignature = srcPrefix ? JSON.stringify(srcValues) : "";
 
   // Solo COPIA (Padre/Madre); nunca limpia aquí, para no borrar data al reanudar.
   useEffect(() => {
     if (!srcPrefix) return;
-    PERSON_SUFFIXES.forEach((s) => {
-      const val = values[`${srcPrefix}${s}`] ?? "";
-      if (values[`guardian_${s}`] !== val) onChange(`guardian_${s}`, val);
+    PERSON_SUFFIXES.forEach((s, i) => {
+      const val = srcValues[i] ?? "";
+      if (getValues(`guardian_${s}`) !== val) {
+        setValue(`guardian_${s}`, val, { shouldDirty: true });
+      }
     });
-    RESIDENCE_SUFFIXES.forEach((s) => {
-      const val = values[`${srcPrefix}residence_${s}`] ?? "";
-      if (values[`guardian_residence_${s}`] !== val) onChange(`guardian_residence_${s}`, val);
+    RESIDENCE_SUFFIXES.forEach((s, i) => {
+      const val = srcValues[PERSON_SUFFIXES.length + i] ?? "";
+      if (getValues(`guardian_residence_${s}`) !== val) {
+        setValue(`guardian_residence_${s}`, val, { shouldDirty: true });
+      }
     });
-    if (values.guardian_relationship !== guardianType) {
-      onChange("guardian_relationship", guardianType);
+    if (getValues("guardian_relationship") !== guardianType) {
+      setValue("guardian_relationship", guardianType, { shouldDirty: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guardianType, srcSignature]);
@@ -270,47 +303,49 @@ export function GuardiansStep({ values, onChange }: StepProps) {
   // Borra lo autollenado. Se llama al cambiar el tipo (acción del usuario), no en un
   // efecto, para que reanudar una solicitud guardada no pierda datos.
   const clearGuardian = () => {
-    PERSON_SUFFIXES.forEach((s) => onChange(`guardian_${s}`, ""));
-    RESIDENCE_SUFFIXES.forEach((s) => onChange(`guardian_residence_${s}`, ""));
-    onChange("guardian_relationship", "");
-    onChange("guardian_full_name", "");
+    PERSON_SUFFIXES.forEach((s) => setValue(`guardian_${s}`, "", { shouldDirty: true }));
+    RESIDENCE_SUFFIXES.forEach((s) =>
+      setValue(`guardian_residence_${s}`, "", { shouldDirty: true }),
+    );
+    setValue("guardian_relationship", "", { shouldDirty: true });
+    setValue("guardian_full_name", "", { shouldDirty: true });
   };
 
   const onGuardianType = (t: string) => {
-    onChange("guardian_type", t);
+    setValue("guardian_type", t, { shouldDirty: true });
     // "Otra persona" o "Empresa": limpiar lo copiado de padre/madre.
     if (t === "Otro" || t === "Empresa") clearGuardian();
   };
 
   const isCopied = guardianType === "Padre" || guardianType === "Madre";
   const isEmpresa = guardianType === "Empresa";
+  const guardianRelationship =
+    (useWatch({ control, name: "guardian_relationship" }) as string) ?? "";
 
   return (
     <div className="space-y-4">
       {/* ¿Con quién vive? */}
       <SubSection title="¿Con quién vive el estudiante?" {...section("lives")}>
-        <BoolYesNo label="¿Vive con el padre?"
-          value={values.father_lives_with_student as boolean | undefined}
-          onChange={(v) => onChange("father_lives_with_student", v)} />
-        <BoolYesNo label="¿Vive con la madre?"
-          value={values.mother_lives_with_student as boolean | undefined}
-          onChange={(v) => onChange("mother_lives_with_student", v)} />
+        <BoolYesNo label="¿Vive con el padre?" name="father_lives_with_student" control={control} />
+        <BoolYesNo label="¿Vive con la madre?" name="mother_lives_with_student" control={control} />
         <Field name="lives_with_other" label="¿Con quién más vive? (opcional)"
-          values={values} onChange={onChange} full />
+          register={register} full />
       </SubSection>
 
       {/* Padre: nombres → residencia → trabajo */}
       <SubSection title="Información del padre" {...section("father")}>
-        <PersonFields prefix="father_" values={values} onChange={onChange} />
-        <GeoResidenceFields prefix="father_residence_" values={values} onChange={onChange} />
-        <WorkFields prefix="father_" values={values} onChange={onChange} />
+        <PersonFields prefix="father_" register={register} />
+        <GeoResidenceFields prefix="father_residence_" control={control} register={register}
+          setValue={setValue} />
+        <WorkFields prefix="father_" register={register} />
       </SubSection>
 
       {/* Madre */}
       <SubSection title="Información de la madre" {...section("mother")}>
-        <PersonFields prefix="mother_" values={values} onChange={onChange} />
-        <GeoResidenceFields prefix="mother_residence_" values={values} onChange={onChange} />
-        <WorkFields prefix="mother_" values={values} onChange={onChange} />
+        <PersonFields prefix="mother_" register={register} />
+        <GeoResidenceFields prefix="mother_residence_" control={control} register={register}
+          setValue={setValue} />
+        <WorkFields prefix="mother_" register={register} />
       </SubSection>
 
       {/* Acudiente / Adulto responsable */}
@@ -335,25 +370,26 @@ export function GuardiansStep({ values, onChange }: StepProps) {
 
         {isEmpresa ? (
           <>
-            <Field name="guardian_full_name" label="Razón social" values={values}
-              onChange={onChange} full />
-            <Field name="guardian_id_number" label="NIT" values={values} onChange={onChange} />
+            <Field name="guardian_full_name" label="Razón social" register={register} full />
+            <Field name="guardian_id_number" label="NIT" register={register} />
             <Field name="guardian_email" label="Correo de contacto" type="email"
-              values={values} onChange={onChange} />
-            <Field name="guardian_phone" label="Teléfono" type="tel" values={values} onChange={onChange} />
-            <GeoResidenceFields prefix="guardian_residence_" values={values} onChange={onChange} />
+              register={register} />
+            <Field name="guardian_phone" label="Teléfono" type="tel" register={register} />
+            <GeoResidenceFields prefix="guardian_residence_" control={control} register={register}
+              setValue={setValue} />
           </>
         ) : (
           <>
-            <SelectField name="guardian_relationship" label="Parentesco" values={values}
-              onChange={onChange} options={RELATIONSHIPS} />
-            {(values.guardian_relationship as string) === "Otro" && (
+            <SelectField name="guardian_relationship" label="Parentesco" register={register}
+              options={RELATIONSHIPS} />
+            {guardianRelationship === "Otro" && (
               <Field name="guardian_relationship_other" label="¿Cuál parentesco?"
-                values={values} onChange={onChange} />
+                register={register} />
             )}
-            <PersonFields prefix="guardian_" values={values} onChange={onChange} />
-            <GeoResidenceFields prefix="guardian_residence_" values={values} onChange={onChange} />
-            <WorkFields prefix="guardian_" values={values} onChange={onChange} />
+            <PersonFields prefix="guardian_" register={register} />
+            <GeoResidenceFields prefix="guardian_residence_" control={control} register={register}
+              setValue={setValue} />
+            <WorkFields prefix="guardian_" register={register} />
           </>
         )}
       </SubSection>
@@ -362,65 +398,58 @@ export function GuardiansStep({ values, onChange }: StepProps) {
 }
 
 // --------------------------------------------------------------------- Salud
-export function HealthStep({ values, onChange }: StepProps) {
+export function HealthStep({ control, register }: StepProps) {
   return (
     <FieldGrid>
-      <SelectField name="eps" label="EPS" values={values} onChange={onChange}
-        options={EPS_LIST} full />
-      <SelectField name="blood_abo" label="Grupo sanguíneo" values={values}
-        onChange={onChange} options={BLOOD_ABO} />
-      <SelectField name="blood_rh" label="RH" values={values} onChange={onChange}
-        options={BLOOD_RH} />
+      <SelectField name="eps" label="EPS" register={register} options={EPS_LIST} full />
+      <SelectField name="blood_abo" label="Grupo sanguíneo" register={register} options={BLOOD_ABO} />
+      <SelectField name="blood_rh" label="RH" register={register} options={BLOOD_RH} />
 
       {/* ⚠️ Estos nombres los lee `apply_alert_rules` en el backend. */}
       <YesNoField name="has_medical_condition"
-        label="¿Tiene alguna condición médica relevante?" values={values} onChange={onChange} />
-      <WhenYes when="has_medical_condition" values={values}>
-        <TextAreaField name="medical_condition_detail" label="¿Cuál?" values={values}
-          onChange={onChange} placeholder="Describa la condición y los cuidados que requiere" />
+        label="¿Tiene alguna condición médica relevante?" control={control} />
+      <WhenYes when="has_medical_condition" control={control}>
+        <TextAreaField name="medical_condition_detail" label="¿Cuál?" register={register}
+          placeholder="Describa la condición y los cuidados que requiere" />
       </WhenYes>
 
-      <YesNoField name="takes_medication" label="¿Toma algún medicamento?"
-        values={values} onChange={onChange} />
-      <WhenYes when="takes_medication" values={values}>
+      <YesNoField name="takes_medication" label="¿Toma algún medicamento?" control={control} />
+      <WhenYes when="takes_medication" control={control}>
         <TextAreaField name="medication_detail" label="¿Cuál y con qué frecuencia?"
-          values={values} onChange={onChange} />
+          register={register} />
       </WhenYes>
 
       <YesNoField name="has_diagnosis"
-        label="¿Tiene algún diagnóstico (aprendizaje, atención, u otro)?"
-        values={values} onChange={onChange} />
-      <WhenYes when="has_diagnosis" values={values}>
-        <TextAreaField name="diagnosis_detail" label="¿Cuál?" values={values} onChange={onChange} />
+        label="¿Tiene algún diagnóstico (aprendizaje, atención, u otro)?" control={control} />
+      <WhenYes when="has_diagnosis" control={control}>
+        <TextAreaField name="diagnosis_detail" label="¿Cuál?" register={register} />
       </WhenYes>
 
-      <YesNoField name="receives_therapy" label="¿Recibe alguna terapia?"
-        values={values} onChange={onChange} />
-      <WhenYes when="receives_therapy" values={values}>
-        <TextAreaField name="therapy_detail" label="¿Cuál?" values={values} onChange={onChange} />
+      <YesNoField name="receives_therapy" label="¿Recibe alguna terapia?" control={control} />
+      <WhenYes when="receives_therapy" control={control}>
+        <TextAreaField name="therapy_detail" label="¿Cuál?" register={register} />
       </WhenYes>
 
       <YesNoField name="needs_learning_support"
-        label="¿Requiere apoyos para el aprendizaje?" values={values} onChange={onChange} />
-      <WhenYes when="needs_learning_support" values={values}>
-        <TextAreaField name="learning_support_detail" label="¿Cuáles?" values={values} onChange={onChange} />
+        label="¿Requiere apoyos para el aprendizaje?" control={control} />
+      <WhenYes when="needs_learning_support" control={control}>
+        <TextAreaField name="learning_support_detail" label="¿Cuáles?" register={register} />
       </WhenYes>
     </FieldGrid>
   );
 }
 
 // -------------------------------------------------------------- Declaraciones
-export function DeclarationsStep({ values, onChange }: StepProps) {
+export function DeclarationsStep({ control, register }: StepProps) {
   return (
     <FieldGrid>
       <YesNoField name="accepts_truthfulness"
-        label="Declaro que la información suministrada es veraz y completa."
-        values={values} onChange={onChange} />
+        label="Declaro que la información suministrada es veraz y completa." control={control} />
       <YesNoField name="accepts_data_policy"
         label="Autorizo el tratamiento de datos personales conforme a la política de la institución."
-        values={values} onChange={onChange} />
-      <Field name="signed_by" label="Nombre de quien declara" values={values}
-        onChange={onChange} placeholder="Tu nombre completo" full />
+        control={control} />
+      <Field name="signed_by" label="Nombre de quien declara" register={register}
+        placeholder="Tu nombre completo" full />
     </FieldGrid>
   );
 }
