@@ -73,7 +73,7 @@ export function SubSection({
 
   return (
     <div
-      className={`overflow-hidden rounded-2xl border bg-base-100 shadow-sm transition-all duration-200 ease-out motion-reduce:transition-none ${
+      className={`overflow-hidden rounded-lg border bg-base-100 shadow-sm transition-all duration-200 ease-out motion-reduce:transition-none ${
         status === "error" ? "border-error/40" : "border-base-300"
       } ${className ?? ""}`}
     >

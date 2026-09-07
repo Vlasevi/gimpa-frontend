@@ -74,7 +74,7 @@ export default function MisAdmisiones() {
 
       {/* Cargando */}
       {loading && (
-        <div className="flex items-center justify-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
+        <div className="flex items-center justify-center gap-3 rounded-lg border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
           Cargando tus solicitudes…
         </div>
@@ -84,7 +84,7 @@ export default function MisAdmisiones() {
       {!loading && error && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-2xl border border-error/25 bg-error/5 p-6 text-base-content/80 shadow-sm"
+          className="flex items-start gap-3 rounded-lg border border-error/25 bg-error/5 p-6 text-base-content/80 shadow-sm"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error" />
           <div>
@@ -102,7 +102,7 @@ export default function MisAdmisiones() {
 
       {/* Vacío — invita a actuar */}
       {!loading && !error && rows.length === 0 && (
-        <div className="flex flex-col items-center rounded-2xl border border-base-300 bg-base-100 px-6 py-16 text-center shadow-sm">
+        <div className="flex flex-col items-center rounded-lg border border-base-300 bg-base-100 px-6 py-16 text-center shadow-sm">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <GraduationCap className="h-7 w-7 text-primary" />
           </div>
@@ -133,7 +133,7 @@ export default function MisAdmisiones() {
               <li key={row.code}>
                 <Link
                   to={`/admisiones/${row.code}`}
-                  className="group flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                  className="group flex flex-wrap items-center justify-between gap-4 rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:bg-base-200/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

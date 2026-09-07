@@ -1,38 +1,17 @@
 /**
- * Tokens de formulario y botón compartidos — Paso 1 del refactor de Admisiones
- * (docs/plan-admisiones-ui-rhf-acordeon.md). Extraídos de la duplicación documentada en
- * docs/paso0-informe-admisiones.md §5.1 (grep de primaryBtnClass/ghostBtnClass/
- * inputClass/selectClass/textareaClass/labelClass sobre ~12 archivos de todo `src/`).
+ * Tokens de formulario y botón compartidos.
+ *
+ * REGLA: Matrículas es la fuente de verdad del lenguaje visual. Todo lo de aquí debe
+ * ser IDÉNTICO a lo que Matrículas ya renderiza — no una interpretación "premium" de
+ * eso. Verificado por grep directo sobre components/matriculas/**: Matrículas nunca usa
+ * hover:-translate, nunca usa shadow-primary/*, nunca tiene una altura de botón custom
+ * (h-10/h-11/h-12) — usa las clases `btn`/`input`/`select`/`textarea` planas de daisyUI
+ * (con `bordered` en los campos), sin envolturas propias. Antes de este archivo,
+ * Admisiones tenía su propia familia de botones "premium" (rounded-xl, hover-lift,
+ * sombra de color) que NO existe en ningún lugar de Matrículas — corregido aquí.
  *
  * `labelClass`/`inputClass`/`selectClass`/`textareaClass` ya eran, carácter por
- * carácter, la misma cadena en Matrículas (daisyUI "bordered" usado inline) y en la
- * fuente que tenía Admisiones (`components/admisiones/formFields.tsx`, con el
- * comentario "Estilo daisyui, igual que matrículas") — se mueven aquí sin cambiar
- * ningún valor.
- *
- * `primaryBtnClass`/`ghostBtnClass` NO tenían una fuente única en ningún lado:
- * Matrículas no declara estas constantes, usa las clases planas `btn btn-primary` /
- * `btn btn-ghost` de daisyUI directamente en el JSX. El valor elegido aquí como
- * canónico es el de mayor consenso dentro de Admisiones (coincide carácter por
- * carácter entre `pages/admisiones/SolicitudWizard.tsx` y
- * `pages/admisiones/NuevaAdmision.tsx`), e incluye los estados `disabled:*` que le
- * faltaban a las otras dos copias (`MisAdmisiones.tsx`, `DetalleAdmision.tsx`) —
- * divergencia documentada en el informe del Paso 0 como probablemente accidental
- * (§5.1, punto 1). Ya cumple los patrones obligatorios del plan: `shadow-sm` en
- * reposo, `shadow-lg shadow-primary/25` en hover, `transition-all duration-200
- * ease-out` con `motion-reduce:*`.
- *
- * Fuera de alcance de este módulo (documentado, no resuelto aquí — ver resumen del
- * Paso 1): existe una segunda familia de botones más pequeños (`h-10`/`h-11`) en el
- * panel admin (ApplicationDetail.tsx, DecisionPanel.tsx, InterviewsPanel.tsx,
- * GuardianDocumentsCard.tsx, GuardianPaymentCard.tsx) que este módulo no intenta
- * unificar — eso es trabajo del futuro `ui/Button.tsx` con variantes de tamaño que
- * describe el informe del Paso 0 (§7), pendiente de decidir cuál altura es la
- * canónica antes de consolidar.
- *
- * Este módulo no está conectado todavía a ningún consumidor existente (Admisiones y
- * Matrículas siguen con sus propias declaraciones locales) — eso es un paso
- * posterior del plan. Es solo la fundación compartida.
+ * carácter, la misma cadena que usa Matrículas inline. Sin cambios.
  */
 
 export const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
@@ -45,28 +24,25 @@ export const textareaClass =
 /** Alias histórico de `selectClass`, usado por varios `<select>` crudos que no pasan por SelectField. */
 export const controlClass = selectClass;
 
-export const primaryBtnClass =
-  "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-200 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+/**
+ * Botón primario. Antes: `h-12 rounded-xl ... hover:-translate-y-0.5 hover:shadow-lg
+ * hover:shadow-primary/25` (estilo propio de Admisiones, sin equivalente en Matrículas).
+ * Ahora: literalmente `btn btn-primary gap-2 shadow-sm`, la clase exacta que usa
+ * Matrículas para su CTA principal (ver `MatriculasAdmin.tsx`, botón "Nueva Matrícula").
+ */
+export const primaryBtnClass = "btn btn-primary gap-2 shadow-sm";
 
-export const ghostBtnClass =
-  "inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-100 px-5 text-base font-medium text-base-content transition-all duration-200 ease-out hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none";
+/** Botón secundario/ghost. Antes: `h-12 rounded-xl border ...` custom. Ahora: `btn
+ * btn-ghost`, igual a Matrículas (ver `MatriculasAdmin.tsx`). */
+export const ghostBtnClass = "btn btn-ghost gap-2";
 
 /**
- * Botones "chicos" (h-10, `rounded-lg`) del panel de staff de Admisiones — Paso 7
- * (docs/plan-admisiones-ui-rhf-acordeon.md). Es una familia de tamaño DISTINTA a
- * `primaryBtnClass`/`ghostBtnClass` de arriba (h-12, pensados para el wizard del
- * acudiente): no se fusionan aquí a propósito, como ya advertía el comentario de este
- * módulo desde el Paso 1 ("existe una segunda familia de botones más pequeños...
- * pendiente de decidir cuál altura es la canónica antes de consolidar").
- *
- * Antes del Paso 7, `ApplicationDetail.tsx`, `DecisionPanel.tsx` e `InterviewsPanel.tsx`
- * declaraban cada uno su propia copia de esta familia, con pequeñas divergencias
- * accidentales (h-10 vs h-11, `rounded-xl` vs `rounded-lg`, `px-4` vs `px-5`) — ver
- * docs/paso0-informe-admisiones.md §5.1. Se unifican aquí en `rounded-lg`, el radio que
- * Matrículas usa de forma consistente en botones/inputs chicos (regla del Paso 7).
+ * Antes existían `adminPrimaryBtnClass`/`adminGhostBtnClass` como una SEGUNDA familia
+ * de botones (h-10, para el panel de staff), distinta de la de arriba — precisamente
+ * el tipo de divergencia interna que no debe existir si el objetivo es igualar
+ * Matrículas, que usa la misma clase `btn btn-primary`/`btn btn-ghost` en TODAS partes
+ * (listado, modales, paneles). Se eliminan como familia aparte: quedan como alias
+ * directos de `primaryBtnClass`/`ghostBtnClass` para no romper imports existentes.
  */
-export const adminPrimaryBtnClass =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-content transition-all duration-200 ease-out hover:bg-primary/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
-
-export const adminGhostBtnClass =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-base-300 bg-base-100 px-4 text-sm font-medium text-base-content transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60";
+export const adminPrimaryBtnClass = primaryBtnClass;
+export const adminGhostBtnClass = ghostBtnClass;

@@ -614,7 +614,7 @@ export default function SolicitudWizard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
+      <div className="flex items-center justify-center gap-3 rounded-lg border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         Cargando solicitud…
       </div>
@@ -625,7 +625,7 @@ export default function SolicitudWizard() {
     return (
       <div
         role="alert"
-        className="flex items-start gap-3 rounded-2xl border border-error/25 bg-error/5 p-6 shadow-sm"
+        className="flex items-start gap-3 rounded-lg border border-error/25 bg-error/5 p-6 shadow-sm"
       >
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error" />
         <div>
@@ -689,7 +689,7 @@ export default function SolicitudWizard() {
       {globalError && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-2xl border border-error/25 bg-error/5 p-4 text-sm text-base-content/80"
+          className="flex items-start gap-3 rounded-lg border border-error/25 bg-error/5 p-4 text-sm text-base-content/80"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error" />
           <span>{globalError}</span>

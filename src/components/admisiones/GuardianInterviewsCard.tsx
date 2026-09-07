@@ -49,7 +49,7 @@ export function GuardianInterviewsCard({ code }: { code: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-6 text-base-content/60 shadow-sm">
+      <div className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 p-6 text-base-content/60 shadow-sm">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         Cargando citas…
       </div>
@@ -60,7 +60,7 @@ export function GuardianInterviewsCard({ code }: { code: string }) {
   const scheduled = interviews.filter((i) => i.scheduled_at);
 
   return (
-    <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+    <div className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
       <h2 className="mb-1 font-display text-xl font-bold text-secondary">
         Citas de admisión
       </h2>

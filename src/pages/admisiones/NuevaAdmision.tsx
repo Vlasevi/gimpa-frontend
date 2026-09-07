@@ -182,7 +182,7 @@ export default function NuevaAdmision() {
 
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="space-y-6 rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm"
+        className="space-y-6 rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm"
       >
         <fieldset className="space-y-4">
           <legend className="font-display text-lg font-semibold text-secondary">

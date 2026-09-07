@@ -128,7 +128,7 @@ export function GuardianDocumentsCard({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-6 text-base-content/60 shadow-sm">
+      <div className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 p-6 text-base-content/60 shadow-sm">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         Cargando documentos…
       </div>
@@ -139,7 +139,7 @@ export function GuardianDocumentsCard({
   const stagedCount = Object.keys(staged).length;
 
   return (
-    <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+    <div className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-display text-xl font-bold text-secondary">Documentos</h2>
         <span className="text-sm text-base-content/60">

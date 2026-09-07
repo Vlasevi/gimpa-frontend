@@ -66,7 +66,7 @@ export default function DetalleAdmision() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
+      <div className="flex items-center justify-center gap-3 rounded-lg border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         Cargando solicitud…
       </div>
@@ -77,7 +77,7 @@ export default function DetalleAdmision() {
     return (
       <div
         role="alert"
-        className="flex items-start gap-3 rounded-2xl border border-error/25 bg-error/5 p-6 shadow-sm"
+        className="flex items-start gap-3 rounded-lg border border-error/25 bg-error/5 p-6 shadow-sm"
       >
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error" />
         <div>
@@ -109,7 +109,7 @@ export default function DetalleAdmision() {
       </button>
 
       {/* Resumen del expediente */}
-      <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+      <div className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="font-display text-3xl font-bold text-secondary">
@@ -132,7 +132,7 @@ export default function DetalleAdmision() {
       {/* Resultado de la decisión */}
       {application.result && (
         <div
-          className={`flex items-start gap-3 rounded-2xl border p-5 shadow-sm ${
+          className={`flex items-start gap-3 rounded-lg border p-5 shadow-sm ${
             application.result.decision.startsWith("ADMITIDO")
               ? "border-accent/30 bg-accent/5"
               : application.result.decision === "NO_ADMITIDO"
@@ -166,7 +166,7 @@ export default function DetalleAdmision() {
 
       {/* Devolución del colegio */}
       {application.correction_comment && (
-        <div className="flex items-start gap-3 rounded-2xl border border-warning/30 bg-warning/5 p-5 shadow-sm">
+        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 p-5 shadow-sm">
           <MessageSquareWarning className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
           <div>
             <h2 className="font-display font-semibold text-secondary">
@@ -195,7 +195,7 @@ export default function DetalleAdmision() {
       )}
 
       {/* Avance del formulario */}
-      <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+      <div className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="font-display text-xl font-bold text-secondary">
             Formulario de admisión
