@@ -46,7 +46,12 @@ export default function AdmisionesAdmin() {
   const [statusFilter, setStatusFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  // El expediente seleccionado se mantiene montado una vez abierto por primera vez
+  // (solo `detailOpen` se apaga al cerrar) para que la animación de salida del modal
+  // (components/ui/Modal.tsx) tenga tiempo de reproducirse — si se desmontara de
+  // inmediato con la fila del expediente, el cierre se vería sin transición.
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,7 +132,7 @@ export default function AdmisionesAdmin() {
 
       {/* Contenido */}
       {loading && (
-        <div className="flex items-center justify-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
+        <div className="flex items-center justify-center gap-3 rounded-lg border border-base-300 bg-base-100 p-12 text-base-content/60 shadow-sm">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
           Cargando expedientes…
         </div>
@@ -136,7 +141,7 @@ export default function AdmisionesAdmin() {
       {!loading && error && (
         <div
           role="alert"
-          className="flex items-start gap-3 rounded-2xl border border-error/25 bg-error/5 p-6 shadow-sm"
+          className="flex items-start gap-3 rounded-lg border border-error/25 bg-error/5 p-6 shadow-sm"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error" />
           <div>
@@ -153,7 +158,7 @@ export default function AdmisionesAdmin() {
       )}
 
       {!loading && !error && visible.length === 0 && (
-        <div className="flex flex-col items-center rounded-2xl border border-base-300 bg-base-100 px-6 py-16 text-center shadow-sm">
+        <div className="flex flex-col items-center rounded-lg border border-base-300 bg-base-100 px-6 py-16 text-center shadow-sm">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <Inbox className="h-7 w-7 text-primary" />
           </div>
@@ -167,7 +172,7 @@ export default function AdmisionesAdmin() {
       )}
 
       {!loading && !error && visible.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -209,7 +214,10 @@ export default function AdmisionesAdmin() {
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"
-                        onClick={() => setSelected(row.code)}
+                        onClick={() => {
+                          setSelectedCode(row.code);
+                          setDetailOpen(true);
+                        }}
                         title="Ver expediente"
                         className="rounded-full p-2 text-base-content/40 transition-all hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                       >
@@ -224,10 +232,11 @@ export default function AdmisionesAdmin() {
         </div>
       )}
 
-      {selected && (
+      {selectedCode && (
         <ApplicationDetail
-          code={selected}
-          onClose={() => setSelected(null)}
+          code={selectedCode}
+          isOpen={detailOpen}
+          onClose={() => setDetailOpen(false)}
           onChanged={load}
         />
       )}

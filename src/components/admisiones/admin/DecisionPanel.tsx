@@ -4,13 +4,31 @@
  * El comité es la decisión final: un formulario con preguntas dinámicas (esquema
  * sembrado en el backend) más la decisión, el grado/ruta aprobados, las condiciones y el
  * mensaje al acudiente. Registrar mueve el expediente a su estado terminal y notifica.
+ *
+ * Migrado a react-hook-form en el Paso 7 del refactor de Admisiones
+ * (docs/plan-admisiones-ui-rhf-acordeon.md), por consistencia con el resto del módulo
+ * (Pasos 2-3). Un único `useForm()` para {decision, route, conditions, messagePublic,
+ * answers}, hidratado con `reset()` cuando llega el dato del servidor. `answers.<key>`
+ * usa `Controller` (los tipos `bool`/`scale`/`select` no son un `<input>` nativo con un
+ * `onChange` de string plano); el resto usa `register`. El payload enviado al backend
+ * NO cambia: se sigue construyendo explícitamente con las mismas claves
+ * (`decision`, `answers`, `route_approved`, `conditions`, `message_public`).
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { Loader2, Gavel, CheckCircle2, Lock } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import type { SectionPermissions } from "@/components/Login/loginLogic";
+import {
+  inputClass,
+  selectClass,
+  textareaClass,
+  labelClass,
+  adminPrimaryBtnClass,
+} from "@/components/ui/formStyles";
+import type { FlashFn } from "@/components/admisiones/admin/adminTypes";
 
 type QuestionType = "text" | "textarea" | "select" | "bool" | "scale";
 
@@ -34,6 +52,14 @@ interface DecisionData {
   decided_at: string | null;
 }
 
+interface DecisionFormValues {
+  decision: string;
+  route: string;
+  conditions: string;
+  messagePublic: string;
+  answers: Record<string, unknown>;
+}
+
 const DECISIONS = [
   { value: "ADMITIDO", label: "Admitido" },
   { value: "ADMITIDO_CON_CONDICIONES", label: "Admitido con condiciones" },
@@ -51,12 +77,13 @@ const ROUTES = [
   { value: "OTRA", label: "Otra" },
 ];
 
-const inputClass = "input input-bordered w-full focus:input-primary transition-all";
-const selectClass = "select select-bordered w-full focus:select-primary transition-all";
-const textareaClass = "textarea textarea-bordered w-full focus:textarea-primary transition-all";
-const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
-const primaryBtn =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-medium text-primary-content transition-all hover:bg-primary/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60";
+const EMPTY_VALUES: DecisionFormValues = {
+  decision: "",
+  route: "",
+  conditions: "",
+  messagePublic: "",
+  answers: {},
+};
 
 export function DecisionPanel({
   code,
@@ -66,18 +93,17 @@ export function DecisionPanel({
 }: {
   code: string;
   perms: SectionPermissions;
-  flash: (type: "success" | "error", msg: string) => void;
+  flash: FlashFn;
   onChanged: () => void;
 }) {
   const [data, setData] = useState<DecisionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [decision, setDecision] = useState("");
-  const [answers, setAnswers] = useState<Record<string, unknown>>({});
-  const [route, setRoute] = useState("");
-  const [conditions, setConditions] = useState("");
-  const [messagePublic, setMessagePublic] = useState("");
+  const { register, control, handleSubmit, reset } = useForm<DecisionFormValues>({
+    defaultValues: EMPTY_VALUES,
+  });
+  const decisionValue = useWatch({ control, name: "decision" });
 
   const load = useCallback(async () => {
     try {
@@ -85,22 +111,24 @@ export function DecisionPanel({
       if (!res.ok) return;
       const d: DecisionData = await res.json();
       setData(d);
-      setDecision(d.decision ?? "");
-      setAnswers({ ...(d.answers ?? {}) });
-      setRoute(d.route_approved ?? "");
-      setConditions(d.conditions ?? "");
-      setMessagePublic(d.message_public ?? "");
+      reset({
+        decision: d.decision ?? "",
+        route: d.route_approved ?? "",
+        conditions: d.conditions ?? "",
+        messagePublic: d.message_public ?? "",
+        answers: { ...(d.answers ?? {}) },
+      });
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, reset]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const submit = async () => {
-    if (!decision) {
+  const onSubmit = handleSubmit(async (values) => {
+    if (!values.decision) {
       flash("error", "Elige una decisión.");
       return;
     }
@@ -109,11 +137,11 @@ export function DecisionPanel({
       const res = await apiFetch(API_ENDPOINTS.admissionsDecision(code), {
         method: "POST",
         body: JSON.stringify({
-          decision,
-          answers,
-          route_approved: route,
-          conditions,
-          message_public: messagePublic,
+          decision: values.decision,
+          answers: values.answers,
+          route_approved: values.route,
+          conditions: values.conditions,
+          message_public: values.messagePublic,
         }),
       });
       if (!res.ok) {
@@ -132,10 +160,7 @@ export function DecisionPanel({
     } finally {
       setSaving(false);
     }
-  };
-
-  const setAnswer = (key: string, value: unknown) =>
-    setAnswers((prev) => ({ ...prev, [key]: value }));
+  });
 
   if (loading) {
     return (
@@ -155,11 +180,11 @@ export function DecisionPanel({
     );
   }
 
-  const needsConditions = decision === "ADMITIDO_CON_CONDICIONES";
+  const needsConditions = decisionValue === "ADMITIDO_CON_CONDICIONES";
   const canDecide = perms.canDecide;
 
   return (
-    <div className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       {data.decided && (
         <div className="flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-accent">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
@@ -174,12 +199,18 @@ export function DecisionPanel({
           Comité de admisión
         </h3>
         {data.form.questions.map((q) => (
-          <QuestionField
+          <Controller
             key={q.key}
-            question={q}
-            value={answers[q.key]}
-            disabled={!canDecide}
-            onChange={(v) => setAnswer(q.key, v)}
+            name={`answers.${q.key}`}
+            control={control}
+            render={({ field }) => (
+              <QuestionField
+                question={q}
+                value={field.value}
+                disabled={!canDecide}
+                onChange={field.onChange}
+              />
+            )}
           />
         ))}
       </div>
@@ -188,12 +219,7 @@ export function DecisionPanel({
       <div className="grid gap-3 rounded-xl border border-base-300 p-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Decisión *</label>
-          <select
-            className={selectClass}
-            value={decision}
-            disabled={!canDecide}
-            onChange={(e) => setDecision(e.target.value)}
-          >
+          <select className={selectClass} disabled={!canDecide} {...register("decision")}>
             <option value="">Elige…</option>
             {DECISIONS.map((d) => (
               <option key={d.value} value={d.value}>
@@ -204,12 +230,7 @@ export function DecisionPanel({
         </div>
         <div>
           <label className={labelClass}>Ruta aprobada</label>
-          <select
-            className={selectClass}
-            value={route}
-            disabled={!canDecide}
-            onChange={(e) => setRoute(e.target.value)}
-          >
+          <select className={selectClass} disabled={!canDecide} {...register("route")}>
             <option value="">—</option>
             {ROUTES.map((r) => (
               <option key={r.value} value={r.value}>
@@ -224,9 +245,8 @@ export function DecisionPanel({
             <textarea
               rows={2}
               className={textareaClass}
-              value={conditions}
               disabled={!canDecide}
-              onChange={(e) => setConditions(e.target.value)}
+              {...register("conditions")}
             />
           </div>
         )}
@@ -237,15 +257,14 @@ export function DecisionPanel({
           <textarea
             rows={2}
             className={textareaClass}
-            value={messagePublic}
             disabled={!canDecide}
-            onChange={(e) => setMessagePublic(e.target.value)}
+            {...register("messagePublic")}
           />
         </div>
       </div>
 
       {canDecide ? (
-        <button type="button" onClick={submit} disabled={saving} className={primaryBtn}>
+        <button type="submit" disabled={saving} className={adminPrimaryBtnClass}>
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -258,7 +277,7 @@ export function DecisionPanel({
           Solo el rector/administrador puede registrar la decisión.
         </p>
       )}
-    </div>
+    </form>
   );
 }
 

@@ -50,3 +50,23 @@ export const primaryBtnClass =
 
 export const ghostBtnClass =
   "inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-100 px-5 text-base font-medium text-base-content transition-all duration-200 ease-out hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none";
+
+/**
+ * Botones "chicos" (h-10, `rounded-lg`) del panel de staff de Admisiones — Paso 7
+ * (docs/plan-admisiones-ui-rhf-acordeon.md). Es una familia de tamaño DISTINTA a
+ * `primaryBtnClass`/`ghostBtnClass` de arriba (h-12, pensados para el wizard del
+ * acudiente): no se fusionan aquí a propósito, como ya advertía el comentario de este
+ * módulo desde el Paso 1 ("existe una segunda familia de botones más pequeños...
+ * pendiente de decidir cuál altura es la canónica antes de consolidar").
+ *
+ * Antes del Paso 7, `ApplicationDetail.tsx`, `DecisionPanel.tsx` e `InterviewsPanel.tsx`
+ * declaraban cada uno su propia copia de esta familia, con pequeñas divergencias
+ * accidentales (h-10 vs h-11, `rounded-xl` vs `rounded-lg`, `px-4` vs `px-5`) — ver
+ * docs/paso0-informe-admisiones.md §5.1. Se unifican aquí en `rounded-lg`, el radio que
+ * Matrículas usa de forma consistente en botones/inputs chicos (regla del Paso 7).
+ */
+export const adminPrimaryBtnClass =
+  "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-content transition-all duration-200 ease-out hover:bg-primary/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none";
+
+export const adminGhostBtnClass =
+  "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-base-300 bg-base-100 px-4 text-sm font-medium text-base-content transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60";

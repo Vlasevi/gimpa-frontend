@@ -5,9 +5,24 @@
  * (se notifica al acudiente y al asignado). El **usuario asignado** —desde su propia
  * sesión— es el único que registra las respuestas del formulario (preguntas dinámicas del
  * esquema sembrado). Un usuario que no agenda solo ve las entrevistas que le asignaron.
+ *
+ * Paso 7 del refactor de Admisiones (docs/plan-admisiones-ui-rhf-acordeon.md): la parte de
+ * REGISTRO (respuestas + concepto + observación) migra a react-hook-form, por consistencia
+ * con el resto del módulo. La parte de AGENDAR/reprogramar (fecha/hora/modalidad/enlace +
+ * `assigned_to`) se deja tal cual con `useState` — el plan no la pide explícitamente y
+ * migrarla no aporta nada (no tiene lógica condicional ni campos dinámicos; es la que
+ * asigna usuario, no la que llena preguntas), así que se prioriza no introducir riesgo.
+ *
+ * El formulario de registro usa un único `useForm()` cuyos valores están indexados por
+ * `kind` (`{ [kind]: { answers, concept, general_note } }`), hidratado con `reset()` al
+ * cargar. Cada entrevista tiene su propio botón "Guardar registro" — en vez de un submit
+ * de formulario único, se lee el valor vigente de esa fila con `getValues(kind)` al pulsar
+ * el botón (no se usa `watch()` en el render, para no perder el beneficio de RHF). El
+ * payload enviado al backend no cambia.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { Controller, useForm, type Control } from "react-hook-form";
 import {
   Loader2,
   CalendarClock,
@@ -21,6 +36,15 @@ import {
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import type { SectionPermissions } from "@/components/Login/loginLogic";
+import {
+  inputClass,
+  selectClass,
+  textareaClass,
+  labelClass,
+  adminPrimaryBtnClass,
+  adminGhostBtnClass,
+} from "@/components/ui/formStyles";
+import type { FlashFn } from "@/components/admisiones/admin/adminTypes";
 
 type QuestionType = "text" | "textarea" | "select" | "bool" | "scale";
 
@@ -59,21 +83,21 @@ interface StaffUser {
   role: string;
 }
 
+/** Valores del formulario de REGISTRO, indexados por `kind` (una entrevista por fila). */
+interface RegisterFormValues {
+  [kind: string]: {
+    answers: Record<string, unknown>;
+    concept: string;
+    general_note: string;
+  };
+}
+
 const CONCEPTS = [
   { value: "FAVORABLE", label: "Favorable" },
   { value: "FAVORABLE_CON_OBSERVACIONES", label: "Favorable con observaciones" },
   { value: "REQUIERE_COMITE", label: "Requiere comité" },
   { value: "DESFAVORABLE", label: "Desfavorable" },
 ];
-
-const inputClass = "input input-bordered w-full focus:input-primary transition-all";
-const selectClass = "select select-bordered w-full focus:select-primary transition-all";
-const textareaClass = "textarea textarea-bordered w-full focus:textarea-primary transition-all";
-const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
-const primaryBtn =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-content transition-all hover:bg-primary/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60";
-const ghostBtn =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-base-300 bg-base-100 px-4 text-sm font-medium text-base-content transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60";
 
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -100,7 +124,7 @@ export function InterviewsPanel({
 }: {
   code: string;
   perms: SectionPermissions;
-  flash: (type: "success" | "error", msg: string) => void;
+  flash: FlashFn;
   onChanged: () => void;
 }) {
   const canSchedule = Boolean(perms.canScheduleInterviews);
@@ -110,15 +134,18 @@ export function InterviewsPanel({
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<string | null>(null);
 
+  // Agenda/reprogramación (no migra a RHF — ver comentario del archivo).
   const [sched, setSched] = useState<
     Record<
       string,
       { scheduled_at: string; modality: string; meeting_link: string; assigned_to: string }
     >
   >({});
-  const [answers, setAnswers] = useState<Record<string, Record<string, unknown>>>({});
-  const [concepts, setConcepts] = useState<Record<string, string>>({});
-  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  // Registro (respuestas + concepto + observación) — RHF.
+  const { control, register, getValues, reset } = useForm<RegisterFormValues>({
+    defaultValues: {},
+  });
 
   const load = useCallback(async () => {
     try {
@@ -127,9 +154,7 @@ export function InterviewsPanel({
       const rows: InterviewRow[] = (await res.json()).interviews ?? [];
       setInterviews(rows);
       const s: typeof sched = {};
-      const a: typeof answers = {};
-      const c: typeof concepts = {};
-      const n: typeof notes = {};
+      const registerValues: RegisterFormValues = {};
       for (const row of rows) {
         s[row.kind] = {
           scheduled_at: toLocalInput(row.scheduled_at),
@@ -137,18 +162,18 @@ export function InterviewsPanel({
           meeting_link: row.meeting_link || "",
           assigned_to: row.assigned_to ? String(row.assigned_to) : "",
         };
-        a[row.kind] = { ...(row.answers ?? {}) };
-        c[row.kind] = row.concept ?? "";
-        n[row.kind] = row.general_note ?? "";
+        registerValues[row.kind] = {
+          answers: { ...(row.answers ?? {}) },
+          concept: row.concept ?? "",
+          general_note: row.general_note ?? "",
+        };
       }
       setSched(s);
-      setAnswers(a);
-      setConcepts(c);
-      setNotes(n);
+      reset(registerValues);
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, reset]);
 
   useEffect(() => {
     load();
@@ -214,22 +239,20 @@ export function InterviewsPanel({
     );
   };
 
-  const register = (kind: string) => {
+  const registerInterview = (kind: string) => {
+    const values = getValues(kind);
     post(
       API_ENDPOINTS.admissionsInterviewRegister(code),
       {
         kind,
-        answers: answers[kind] ?? {},
-        concept: concepts[kind] ?? "",
-        general_note: notes[kind] ?? "",
+        answers: values?.answers ?? {},
+        concept: values?.concept ?? "",
+        general_note: values?.general_note ?? "",
       },
       `reg-${kind}`,
       "Entrevista registrada.",
     );
   };
-
-  const setAnswer = (kind: string, key: string, value: unknown) =>
-    setAnswers((prev) => ({ ...prev, [kind]: { ...prev[kind], [key]: value } }));
 
   if (loading) {
     return (
@@ -361,7 +384,7 @@ export function InterviewsPanel({
                     type="button"
                     onClick={() => schedule(iv.kind)}
                     disabled={pending !== null}
-                    className={ghostBtn}
+                    className={adminGhostBtnClass}
                   >
                     {pending === `sched-${iv.kind}` ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -395,7 +418,7 @@ export function InterviewsPanel({
               )
             )}
 
-            {/* --- Registro de respuestas --- */}
+            {/* --- Registro de respuestas (RHF) --- */}
             {iv.restricted ? (
               <p className="flex items-center gap-2 rounded-lg bg-base-200 px-3 py-2 text-sm text-base-content/60">
                 <Lock className="h-4 w-4" />
@@ -408,22 +431,22 @@ export function InterviewsPanel({
                   Registro de la entrevista
                 </h4>
                 {iv.form.questions.map((q) => (
-                  <QuestionField
+                  <Controller
                     key={q.key}
-                    question={q}
-                    value={answers[iv.kind]?.[q.key]}
-                    onChange={(v) => setAnswer(iv.kind, q.key, v)}
+                    name={`${iv.kind}.answers.${q.key}`}
+                    control={control as unknown as Control<Record<string, unknown>>}
+                    render={({ field }) => (
+                      <QuestionField
+                        question={q}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
                 ))}
                 <div>
                   <label className={labelClass}>Concepto</label>
-                  <select
-                    className={selectClass}
-                    value={concepts[iv.kind] ?? ""}
-                    onChange={(e) =>
-                      setConcepts((p) => ({ ...p, [iv.kind]: e.target.value }))
-                    }
-                  >
+                  <select className={selectClass} {...register(`${iv.kind}.concept`)}>
                     <option value="">Sin concepto</option>
                     {CONCEPTS.map((c) => (
                       <option key={c.value} value={c.value}>
@@ -437,15 +460,14 @@ export function InterviewsPanel({
                   <textarea
                     rows={2}
                     className={textareaClass}
-                    value={notes[iv.kind] ?? ""}
-                    onChange={(e) => setNotes((p) => ({ ...p, [iv.kind]: e.target.value }))}
+                    {...register(`${iv.kind}.general_note`)}
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={() => register(iv.kind)}
+                  onClick={() => registerInterview(iv.kind)}
                   disabled={pending !== null}
-                  className={primaryBtn}
+                  className={adminPrimaryBtnClass}
                 >
                   {pending === `reg-${iv.kind}` ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
