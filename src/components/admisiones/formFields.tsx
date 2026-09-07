@@ -20,15 +20,19 @@
 import { Controller, useWatch, type Control, type UseFormRegister } from "react-hook-form";
 
 // Tokens de estilo: fuente única en components/ui/formStyles.ts (Paso 1 del refactor).
-// Re-exportados aquí para no romper los imports existentes de este módulo
-// (guardianFields.tsx, steps.tsx, ComboBox.tsx) — verificación del Paso 9.
-export {
+// Se importan (para uso interno de este archivo: Field/SelectField/etc. los usan
+// directamente) Y se re-exportan (para no romper los imports existentes de
+// guardianFields.tsx, steps.tsx, ComboBox.tsx) — verificación del Paso 9.
+// OJO: `export { x } from "mod"` por sí solo NO declara `x` como variable local
+// utilizable en este archivo, solo re-exporta el binding — de ahí el import aparte.
+import {
   labelClass,
   inputClass,
   selectClass,
   textareaClass,
   controlClass,
 } from "@/components/ui/formStyles";
+export { labelClass, inputClass, selectClass, textareaClass, controlClass };
 
 export type SectionValues = Record<string, unknown>;
 
