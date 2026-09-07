@@ -16,7 +16,6 @@
  */
 
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
 import {
   useWatch,
   type Control,
@@ -30,7 +29,7 @@ import {
   DOCUMENT_TYPES,
 } from "@/components/shared/formLists";
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
-import { Field, FieldGrid, SelectField, type SectionValues } from "./formFields";
+import { Field, SelectField, type SectionValues } from "./formFields";
 import { ComboBox } from "./ComboBox";
 
 type GeoItem = { id: number; name: string };
@@ -211,41 +210,7 @@ export function WorkFields({ prefix, register }: PersonWorkProps) {
   );
 }
 
-/**
- * Sub-sección plegable, **controlada** por el padre (acordeón: solo una abierta a la
- * vez). Estilo del `SectionCard` de matrículas.
- */
-export function SubSection({
-  title,
-  children,
-  open,
-  onToggle,
-}: {
-  title: string;
-  children: React.ReactNode;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-      >
-        <h3 className="font-display text-base font-semibold text-secondary">{title}</h3>
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-base-content/40 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-      {open && (
-        <div className="border-t border-base-300 p-5">
-          <FieldGrid>{children}</FieldGrid>
-        </div>
-      )}
-    </div>
-  );
-}
+// El acordeón local que vivía aquí (`SubSection`) fue promovido a
+// `src/components/ui/SubSection.tsx` en el Paso 1 del refactor y conectado en el Paso 3
+// (docs/plan-admisiones-ui-rhf-acordeon.md). `steps.tsx` importa ahora el compartido en
+// vez de este — no lo dupliques de vuelta aquí.

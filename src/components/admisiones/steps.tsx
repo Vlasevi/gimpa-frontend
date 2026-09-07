@@ -45,7 +45,8 @@ import {
   labelClass,
   type SectionValues,
 } from "./formFields";
-import { GeoResidenceFields, PersonFields, WorkFields, SubSection } from "./guardianFields";
+import { GeoResidenceFields, PersonFields, WorkFields } from "./guardianFields";
+import { SubSection } from "@/components/ui/SubSection";
 
 export interface StepProps {
   control: Control<SectionValues>;
@@ -326,72 +327,80 @@ export function GuardiansStep({ control, register, setValue, getValues }: StepPr
     <div className="space-y-4">
       {/* ¿Con quién vive? */}
       <SubSection title="¿Con quién vive el estudiante?" {...section("lives")}>
-        <BoolYesNo label="¿Vive con el padre?" name="father_lives_with_student" control={control} />
-        <BoolYesNo label="¿Vive con la madre?" name="mother_lives_with_student" control={control} />
-        <Field name="lives_with_other" label="¿Con quién más vive? (opcional)"
-          register={register} full />
+        <FieldGrid>
+          <BoolYesNo label="¿Vive con el padre?" name="father_lives_with_student" control={control} />
+          <BoolYesNo label="¿Vive con la madre?" name="mother_lives_with_student" control={control} />
+          <Field name="lives_with_other" label="¿Con quién más vive? (opcional)"
+            register={register} full />
+        </FieldGrid>
       </SubSection>
 
       {/* Padre: nombres → residencia → trabajo */}
       <SubSection title="Información del padre" {...section("father")}>
-        <PersonFields prefix="father_" register={register} />
-        <GeoResidenceFields prefix="father_residence_" control={control} register={register}
-          setValue={setValue} />
-        <WorkFields prefix="father_" register={register} />
+        <FieldGrid>
+          <PersonFields prefix="father_" register={register} />
+          <GeoResidenceFields prefix="father_residence_" control={control} register={register}
+            setValue={setValue} />
+          <WorkFields prefix="father_" register={register} />
+        </FieldGrid>
       </SubSection>
 
       {/* Madre */}
       <SubSection title="Información de la madre" {...section("mother")}>
-        <PersonFields prefix="mother_" register={register} />
-        <GeoResidenceFields prefix="mother_residence_" control={control} register={register}
-          setValue={setValue} />
-        <WorkFields prefix="mother_" register={register} />
+        <FieldGrid>
+          <PersonFields prefix="mother_" register={register} />
+          <GeoResidenceFields prefix="mother_residence_" control={control} register={register}
+            setValue={setValue} />
+          <WorkFields prefix="mother_" register={register} />
+        </FieldGrid>
       </SubSection>
 
       {/* Acudiente / Adulto responsable */}
       <SubSection title="Acudiente / Adulto responsable" {...section("guardian")}>
-        <div>
-          <label htmlFor="guardian_type" className={labelClass}>Tipo de acudiente</label>
-          <select id="guardian_type" className={controlClass} value={guardianType}
-            onChange={(e) => onGuardianType(e.target.value)}>
-            <option value="">Selecciona…</option>
-            <option value="Padre">El padre</option>
-            <option value="Madre">La madre</option>
-            <option value="Otro">Otra persona</option>
-            <option value="Empresa">Una empresa</option>
-          </select>
-        </div>
+        <FieldGrid>
+          <div>
+            <label htmlFor="guardian_type" className={labelClass}>Tipo de acudiente</label>
+            <select id="guardian_type" className={controlClass} value={guardianType}
+              onChange={(e) => onGuardianType(e.target.value)}>
+              <option value="">Selecciona…</option>
+              <option value="Padre">El padre</option>
+              <option value="Madre">La madre</option>
+              <option value="Otro">Otra persona</option>
+              <option value="Empresa">Una empresa</option>
+            </select>
+          </div>
 
-        {isCopied && (
-          <p className="text-sm text-base-content/60 sm:col-span-2">
-            Se tomaron los datos del {guardianType === "Padre" ? "padre" : "la madre"}. Puedes ajustarlos abajo.
-          </p>
-        )}
+          {isCopied && (
+            <p className="text-sm text-base-content/60 sm:col-span-2">
+              Se tomaron los datos del {guardianType === "Padre" ? "padre" : "la madre"}. Puedes ajustarlos abajo.
+            </p>
+          )}
 
-        {isEmpresa ? (
-          <>
-            <Field name="guardian_full_name" label="Razón social" register={register} full />
-            <Field name="guardian_id_number" label="NIT" register={register} />
-            <Field name="guardian_email" label="Correo de contacto" type="email"
-              register={register} />
-            <Field name="guardian_phone" label="Teléfono" type="tel" register={register} />
-            <GeoResidenceFields prefix="guardian_residence_" control={control} register={register}
-              setValue={setValue} />
-          </>
-        ) : (
-          <>
-            <SelectField name="guardian_relationship" label="Parentesco" register={register}
-              options={RELATIONSHIPS} />
-            {guardianRelationship === "Otro" && (
-              <Field name="guardian_relationship_other" label="¿Cuál parentesco?"
+          {isEmpresa ? (
+            <>
+              <Field name="guardian_full_name" label="Razón social" register={register} full />
+              <Field name="guardian_id_number" label="NIT" register={register} />
+              <Field name="guardian_email" label="Correo de contacto" type="email"
                 register={register} />
-            )}
-            <PersonFields prefix="guardian_" register={register} />
-            <GeoResidenceFields prefix="guardian_residence_" control={control} register={register}
-              setValue={setValue} />
-            <WorkFields prefix="guardian_" register={register} />
-          </>
-        )}
+              <Field name="guardian_phone" label="Teléfono" type="tel" register={register} />
+              <GeoResidenceFields prefix="guardian_residence_" control={control} register={register}
+                setValue={setValue} />
+            </>
+          ) : (
+            <>
+              <SelectField name="guardian_relationship" label="Parentesco" register={register}
+                options={RELATIONSHIPS} />
+              {guardianRelationship === "Otro" && (
+                <Field name="guardian_relationship_other" label="¿Cuál parentesco?"
+                  register={register} />
+              )}
+              <PersonFields prefix="guardian_" register={register} />
+              <GeoResidenceFields prefix="guardian_residence_" control={control} register={register}
+                setValue={setValue} />
+              <WorkFields prefix="guardian_" register={register} />
+            </>
+          )}
+        </FieldGrid>
       </SubSection>
     </div>
   );
