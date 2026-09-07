@@ -43,6 +43,14 @@ export interface AdmissionApplication {
   status: string;
   status_label: string;
   data: Record<string, Record<string, unknown>>;
+  /**
+   * Contador de versión por sección (concurrencia optimista, Paso 4 del backend —
+   * docs/plan-admisiones-ui-rhf-acordeon.md). Una sección ausente cuenta como
+   * versión 0. Se envía de vuelta en el PATCH (`versions: { <section>: n }`) para
+   * detectar si otra pestaña/dispositivo guardó esa sección primero (409
+   * `section_version_conflict`, ver Paso 5).
+   */
+  data_versions?: Record<string, number>;
   correction_comment: string | null;
   submitted_at: string | null;
   decided_at: string | null;
