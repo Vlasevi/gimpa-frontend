@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   useAuth,
+  isGuardianOnly,
   type UserPermissions,
   type PermissionSection,
   type SectionPermissions,
@@ -18,6 +19,16 @@ import {
   GraduationCap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+// Estilo compartido de cada ítem del menú (activo = verde oscuro para
+// contrastar con el fondo verde claro del sidebar). Se usa tanto para el menú
+// de staff como para el de acudiente — un solo lugar donde vive este token.
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+    isActive
+      ? "bg-[hsl(var(--accent-dark))] text-white shadow-sm"
+      : "text-base-content/80 hover:bg-white/60 hover:text-primary"
+  }`;
 
 interface MenuItem {
   label: string;
@@ -111,19 +122,37 @@ export const Sidebar = () => {
 
   if (!user) return null;
 
+  // Un acudiente puro no tiene ningún ítem de ALL_MENU_ITEMS (todos son de secciones
+  // de staff, incluido el de "Admisiones" que apunta al panel INTERNO en
+  // /admisiones-admin, no al área del acudiente) — se le arma un menú de un solo ítem
+  // en vez de intentar reusar el filtro de arriba. Mismo <aside>/logo/estilo de
+  // NavLink que el resto: es el mismo componente, no una copia paralela.
+  if (isGuardianOnly(user)) {
+    return (
+      <aside className="w-64 min-h-screen border-r border-base-300 bg-[hsl(var(--accentlight))]">
+        <div className="mb-4 flex h-18 items-center justify-center border-b border-base-300 px-4 py-6">
+          <img
+            onClick={() => navigate("/admisiones", { replace: true })}
+            src={logo}
+            alt="GIMPA"
+            className="cursor-pointer"
+          />
+        </div>
+
+        <nav className="space-y-1 px-4">
+          <NavLink to="/admisiones" className={navLinkClass} end>
+            <FileText className="h-5 w-5 shrink-0" />
+            Mis solicitudes
+          </NavLink>
+        </nav>
+      </aside>
+    );
+  }
+
   const isAdminRector = user.role === "admin" || user.role === "rector";
   // Cambio visual: los roles que no son admin/rector ven "Matriculas" como "Estudiantes".
   const displayLabel = (label: string) =>
     label === "Matriculas" && !isAdminRector ? "Estudiantes" : label;
-
-  // Estilo compartido de cada ítem del menú (activo = verde oscuro para
-  // contrastar con el fondo verde claro del sidebar).
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-      isActive
-        ? "bg-[hsl(var(--accent-dark))] text-white shadow-sm"
-        : "text-base-content/80 hover:bg-white/60 hover:text-primary"
-    }`;
 
   return (
     <aside className="w-64 min-h-screen border-r border-base-300 bg-[hsl(var(--accentlight))]">
