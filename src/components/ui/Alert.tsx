@@ -180,7 +180,7 @@ export const Alert = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="alert-title"
-        className="animate-modal-pop relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-base-100 shadow-xl"
+        className="animate-modal-pop relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-base-100 shadow-xl"
       >
         {/* Header fijo */}
         <div className="flex-shrink-0 px-6 pt-6">

@@ -26,14 +26,12 @@ import {
 } from "@/components/admisiones/steps";
 import { SubSection, type SubSectionStatus } from "@/components/ui/SubSection";
 import { Alert } from "@/components/ui/Alert";
+import { primaryBtnClass } from "@/components/ui/formStyles";
 import {
   useAutosaveDraft,
   type AutosaveStatus,
   type UseAutosaveDraftResult,
 } from "@/hooks/useAutosaveDraft";
-
-const primaryBtnClass =
-  "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-200 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 /** Cuerpo del 409 nuevo del Paso 4 del backend (concurrencia optimista por sección). Se
  * distingue del 409 "de siempre" (máquina de estados) por la presencia de `code`. */

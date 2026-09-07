@@ -19,16 +19,18 @@
 
 import { Controller, useWatch, type Control, type UseFormRegister } from "react-hook-form";
 
+// Tokens de estilo: fuente única en components/ui/formStyles.ts (Paso 1 del refactor).
+// Re-exportados aquí para no romper los imports existentes de este módulo
+// (guardianFields.tsx, steps.tsx, ComboBox.tsx) — verificación del Paso 9.
+export {
+  labelClass,
+  inputClass,
+  selectClass,
+  textareaClass,
+  controlClass,
+} from "@/components/ui/formStyles";
+
 export type SectionValues = Record<string, unknown>;
-
-export const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
-
-// Estilo daisyui, igual que matrículas (input/select "bordered" con foco primary).
-export const inputClass = "input input-bordered w-full focus:input-primary transition-all";
-export const selectClass = "select select-bordered w-full focus:select-primary transition-all";
-export const textareaClass = "textarea textarea-bordered w-full focus:textarea-primary transition-all";
-// Alias por compatibilidad (se usa en algunos <select>).
-export const controlClass = selectClass;
 
 /** Rejilla responsive de campos. */
 export function FieldGrid({ children }: { children: React.ReactNode }) {
