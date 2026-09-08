@@ -150,7 +150,7 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
           )}
         </div>
         <div className="min-w-0 flex-1 pt-1">
-          <p className="text-xs text-bold-content/50">Formato y tamaño</p>
+          <p className="text-xs font-semibold text-base-content/60">Formato y tamaño:</p>
           <p className="text-xs text-base-content/50">JPG, JPEG, PNG</p>
           <p className="text-xs text-base-content/50">Máx. 3MB</p>
           {error && <p className="mt-1.5 text-xs font-medium text-error">{error}</p>}

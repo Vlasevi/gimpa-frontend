@@ -73,15 +73,25 @@ export function SubSection({
 
   return (
     <div
-      className={`overflow-hidden rounded-lg border bg-base-100 shadow-sm transition-all duration-200 ease-out motion-reduce:transition-none ${
+      className={`rounded-lg border bg-base-100 shadow-sm transition-all duration-200 ease-out motion-reduce:transition-none ${
         status === "error" ? "border-error/40" : "border-base-300"
       } ${className ?? ""}`}
     >
+      {/* Antes el `overflow-hidden` vivía en el div de arriba (para que el fondo de hover
+          del header respetara las esquinas redondeadas) — cortaba cualquier dropdown
+          (ComboBox) del contenido que se saliera del borde inferior de la sección
+          abierta, en vez de superponerse sobre lo siguiente. Se reemplaza por redondeo
+          directo en el botón: `rounded-t-lg` siempre (el header siempre está arriba) +
+          `rounded-b-lg` solo cuando está CERRADO, porque ahí el botón ocupa
+          visualmente el bloque completo (sin contenido debajo); abierto, la esquina
+          inferior ya no es responsabilidad del botón. */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className={`flex w-full items-center justify-between gap-3 rounded-t-lg px-5 py-4 text-left transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+          open ? "" : "rounded-b-lg"
+        }`}
       >
         <span className="flex min-w-0 items-center gap-2.5">
           {StatusIcon && (
@@ -113,7 +123,9 @@ export function SubSection({
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
       >
-        <div className="overflow-hidden">
+        {/* `overflow-hidden` solo mientras está cerrada/colapsando — ver comentario
+            equivalente en Step3StudentData.tsx (`SectionCard`), mismo bug ahí. */}
+        <div className={open ? "overflow-visible" : "overflow-hidden"}>
           <div className="border-t border-base-300 p-5">{children}</div>
         </div>
       </div>

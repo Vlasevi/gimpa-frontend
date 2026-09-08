@@ -437,7 +437,12 @@ const SectionCard = ({ title, isOpen, onToggle, children }: any) => (
         isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
       }`}
     >
-      <div className="overflow-hidden">
+      {/* `overflow-hidden` solo mientras está cerrada/colapsando (necesario para que la
+          animación grid-rows-[0fr] no muestre el contenido de golpe) — abierta, pasa a
+          `overflow-visible`: si no, un ComboBox cerca del borde inferior de la sección
+          quedaba recortado en vez de superponerse sobre el siguiente elemento (reportado
+          en vivo). No hay nada que ocultar cuando ya está abierta, así que no hay costo. */}
+      <div className={isOpen ? "overflow-visible" : "overflow-hidden"}>
         <div className="border-t border-gray-100 p-6 text-sm">{children}</div>
       </div>
     </div>
@@ -2742,22 +2747,13 @@ export const Step3StudentData = ({
             )}
 
             {(guardianType === "Otro" || guardianType === "Empresa") && (
-              <>
-                <div className="col-span-1 md:col-span-2 lg:col-span-3 mt-2 mb-1">
-                  <div className="alert alert-info py-2">
-                    <span className="text-sm">
-                      Segundo firmante para documentos (Contrato, Pagaré y Hoja de matrícula)
-                    </span>
-                  </div>
-                </div>
-                <FormSelect
-                  label="¿Quién firma como segunda persona?"
-                  name="guardian_second_signer"
-                  register={register}
-                  options={["Madre", "Padre", "No aplica"]}
-                  required={true}
-                />
-              </>
+              <FormSelect
+                label="¿Quién firma como segunda persona? (Contrato, Pagaré y Hoja de matrícula)"
+                name="guardian_second_signer"
+                register={register}
+                options={["Madre", "Padre", "No aplica"]}
+                required={true}
+              />
             )}
           </div>
         </SectionCard>
