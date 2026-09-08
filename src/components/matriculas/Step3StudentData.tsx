@@ -1,4 +1,10 @@
 import { useEffect, useState, useRef } from "react";
+import {
+  useForm,
+  useWatch,
+  type Control,
+  type UseFormSetValue,
+} from "react-hook-form";
 import { Alert } from "@/components/ui/Alert";
 import { API_ENDPOINTS, apiFetch } from "@/utils/api";
 
@@ -261,12 +267,77 @@ const COLOMBIA_DEPARTMENTS = [
   "Vichada",
 ];
 
+// Sufijos usados por el efecto de auto-copia Padre/Madre -> Acudiente (ver
+// sección "Acudiente" más abajo). `profession`/`company_name`/`company_address`/
+// `work_phone` se leen con `getValues` dentro del efecto (no se "watchean") a
+// propósito: así se replica exactamente el comportamiento pre-RHF, donde esos 4
+// campos NO estaban en el arreglo de dependencias del `useEffect` original
+// (Step3StudentData.tsx, versión useState) y por lo tanto no disparaban una
+// nueva copia por sí solos, aunque sí se leían con su valor más fresco cuando el
+// efecto se ejecutaba por otro motivo.
+const GUARDIAN_WATCHED_SUFFIXES = [
+  "lastname1",
+  "lastname2",
+  "firstname1",
+  "firstname2",
+  "id_number",
+  "email",
+  "phone",
+  "country",
+  "department",
+  "city",
+  "residence_country",
+  "residence_department",
+  "residence_city",
+  "residence_barrio",
+  "residence_address",
+  "residence_address_complement",
+  "residence_stratum",
+  "document_type",
+  "religion",
+];
+
+// Sufijos de los 7 campos de residencia que se copian de estudiante -> padre/
+// madre cuando "vive con el estudiante" está marcado.
+const RESIDENCE_COPY_SUFFIXES = [
+  "country",
+  "department",
+  "city",
+  "barrio",
+  "address",
+  "address_complement",
+  "stratum",
+];
+
+// Únicamente los campos que efectivamente se muestran en el texto del modal
+// legal (ver `handleSubmit`/`legalModalSnapshot` más abajo).
+type LegalModalSnapshot = {
+  guardian_full_name?: string;
+  guardian_firstname1?: string;
+  guardian_firstname2?: string;
+  guardian_lastname1?: string;
+  guardian_lastname2?: string;
+  guardian_document_type?: string;
+  guardian_id_number?: string;
+  student_firstname1?: string;
+  student_firstname2?: string;
+  student_lastname1?: string;
+  student_lastname2?: string;
+  student_id_type?: string;
+  student_id_number?: string;
+};
+
 // --- COMPONENTES AUXILIARES ---
 const FormInput = ({
   label,
   name,
-  value,
-  onChange,
+  register,
+  // Opciones extra para `register(name, registerOptions)` — p.ej. un
+  // `onChange` adicional para los 4 campos "Especifique el barrio" (que además
+  // de guardar su propio texto, deben reflejarlo en el campo de barrio real).
+  // Nunca se spreadea al DOM (a diferencia de `...props`): RHF ya se encarga
+  // de invocar el `onChange` propio del campo Y el de `registerOptions` juntos.
+  registerOptions,
   type = "text",
   placeholder,
   disabled,
@@ -280,15 +351,13 @@ const FormInput = ({
       </span>
     </label>
     <input
-      name={name}
       type={type}
       placeholder={placeholder || label}
       className={`input input-bordered w-full focus:input-primary transition-all ${
         disabled ? "bg-gray-100 text-gray-500" : ""
       }`}
-      value={value || ""}
-      onChange={onChange}
       disabled={disabled}
+      {...register(name, registerOptions)}
       {...props}
     />
   </div>
@@ -297,8 +366,7 @@ const FormInput = ({
 const FormSelect = ({
   label,
   name,
-  value,
-  onChange,
+  register,
   options,
   disabled,
   placeholder = "Selecciona una opción",
@@ -314,13 +382,11 @@ const FormSelect = ({
       </span>
     </label>
     <select
-      name={name}
       className={`select select-bordered w-full focus:select-primary ${
         disabled ? "bg-gray-100" : ""
       }`}
-      value={value || ""}
-      onChange={onChange}
       disabled={disabled}
+      {...register(name)}
       {...props}
     >
       <option value="">{placeholder}</option>
@@ -335,16 +401,16 @@ const FormSelect = ({
 
 const PhotoUploadField = ({
   dataKey,
-  data,
-  update,
+  control,
+  setValue,
   uploadedFiles,
   updateUploadedFiles,
   label,
   preloadedUrl,
 }: {
   dataKey: string;
-  data: any;
-  update: Function;
+  control: Control<any>;
+  setValue: UseFormSetValue<any>;
   uploadedFiles: any;
   updateUploadedFiles: Function;
   label: string;
@@ -355,6 +421,11 @@ const PhotoUploadField = ({
 
   // Key to track if photo was manually removed (persists in data object)
   const removedKey = `${dataKey}_manually_removed`;
+
+  // Valores del formulario que le corresponden a esta foto (viven en RHF, no en
+  // `uploadedFiles` — ese objeto es siempre el File real, aparte).
+  const photoValue = useWatch({ control, name: dataKey });
+  const removedFlag = useWatch({ control, name: removedKey });
 
   // Helper function to check if a value is empty (null, undefined, or empty object)
   const isEmpty = (value: any) => {
@@ -368,10 +439,10 @@ const PhotoUploadField = ({
   // Update useExisting when preloadedUrl changes (e.g., when photos are loaded)
   useEffect(() => {
     // Only set useExisting if the user hasn't manually removed the photo
-    if (preloadedUrl && isEmpty(data[dataKey]) && !data[removedKey]) {
+    if (preloadedUrl && isEmpty(photoValue) && !removedFlag) {
       setUseExisting(true);
     }
-  }, [preloadedUrl, data, dataKey, removedKey]);
+  }, [preloadedUrl, photoValue, removedFlag]);
 
   useEffect(() => {
     // Check if there's an uploaded file
@@ -386,20 +457,18 @@ const PhotoUploadField = ({
     }
 
     // No uploaded file - check if we should show preloaded photo
-    if (preloadedUrl && useExisting && !data[removedKey]) {
+    if (preloadedUrl && useExisting && !removedFlag) {
       setPreview(preloadedUrl);
     } else {
       setPreview(null);
     }
-  }, [uploadedFiles, dataKey, preloadedUrl, useExisting, data, removedKey]);
+  }, [uploadedFiles, dataKey, preloadedUrl, useExisting, removedFlag]);
 
   const handleRemovePhoto = () => {
-    // Mark as manually removed in the data object (persists across navigation)
-    update({
-      [dataKey]: null,
-      [`${dataKey}_uploaded`]: false,
-      [removedKey]: true,
-    });
+    // Mark as manually removed in the form values (persists across navigation)
+    setValue(dataKey, null, { shouldDirty: true });
+    setValue(`${dataKey}_uploaded`, false, { shouldDirty: true });
+    setValue(removedKey, true, { shouldDirty: true });
 
     // Also remove from uploaded files
     updateUploadedFiles({
@@ -419,10 +488,8 @@ const PhotoUploadField = ({
       });
 
       // Mark that we have a new file (for form validation)
-      update({
-        [`${dataKey}_uploaded`]: true,
-        [removedKey]: false, // Reset manually removed flag
-      });
+      setValue(`${dataKey}_uploaded`, true, { shouldDirty: true });
+      setValue(removedKey, false, { shouldDirty: true }); // Reset manually removed flag
     }
   };
 
@@ -655,8 +722,24 @@ export const Step3StudentData = ({
   enrollmentId,
   preloadedDocuments,
 }: any) => {
+  // Motor del formulario (react-hook-form). `data`/`update` (props del padre,
+  // `MatriculasEstudiantes.tsx`) siguen siendo la fuente de verdad ENTRE pasos
+  // (Step4/5/6 los leen directo) — este `useForm()` es el motor INTERNO de este
+  // paso, sembrado con `data` al montar, y se sincroniza de vuelta hacia el
+  // padre en el efecto de autoguardado más abajo (con el mismo debounce de
+  // 700ms que ya existía, en vez de en cada tecla).
+  const rhf = useForm<Record<string, unknown>>({ defaultValues: data });
+  const { register, control, getValues, setValue: setFieldValue } = rhf;
+
   // Estado para el modal legal
   const [showLegalModal, setShowLegalModal] = useState(false);
+  // Snapshot de los datos usados dentro del modal legal, tomado en el momento
+  // de abrirlo (`handleSubmit`). Evita "watchear" los campos de nombre del
+  // estudiante/acudiente (que se tipean carácter a carácter) solo para un
+  // texto que de todas formas no se ve hasta que el usuario ya terminó de
+  // escribir y le da "Siguiente".
+  const [legalModalSnapshot, setLegalModalSnapshot] =
+    useState<LegalModalSnapshot>({});
 
   // Estado para colapsar secciones
   const [openSections, setOpenSections] = useState({
@@ -686,22 +769,155 @@ export const Step3StudentData = ({
   const initializedRef = useRef(false);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const autosaveLastHashRef = useRef<string>("");
-  const autosaveInitializedRef = useRef(false);
 
+  // --- WATCHES puntuales ---
+  // Solo se "watchean" los campos que gatillan una rama condicional del JSX
+  // (qué widget mostrar, un `disabled`/`required` cruzado) o un efecto
+  // reactivo (edad, auto-copias). El resto de los campos usa `register()` sin
+  // watch, para no re-renderizar el formulario completo en cada tecla — esa
+  // era la razón original para migrar Matrículas a react-hook-form.
+  const studentBirthDate = useWatch({ control, name: "student_birth_date" });
+  const studentBirthCountry = useWatch({
+    control,
+    name: "student_birth_country",
+  });
+  const studentBirthDepartment = useWatch({
+    control,
+    name: "student_birth_department",
+  });
+  const studentBirthCity = useWatch({ control, name: "student_birth_city" });
+  const studentIdCountry = useWatch({ control, name: "student_id_country" });
+  const studentIdDepartment = useWatch({
+    control,
+    name: "student_id_department",
+  });
+  const studentIdCity = useWatch({ control, name: "student_id_city" });
+  const studentHealthEps = useWatch({ control, name: "student_health_eps" });
+  const studentHasCellphone = useWatch({
+    control,
+    name: "student_has_cellphone",
+  });
+  const studentHasSiblings = useWatch({
+    control,
+    name: "student_has_siblings",
+  });
+
+  const residenceForCopy = useWatch({
+    control,
+    name: RESIDENCE_COPY_SUFFIXES.map((s) => `residence_${s}`),
+  }) as unknown[];
+  const [
+    residenceCountry,
+    residenceDepartment,
+    residenceCity,
+    residenceBarrioValue,
+    ,
+    ,
+  ] = residenceForCopy;
+
+  const medicalHasHistory = useWatch({ control, name: "medical_has_history" });
+  const medicalHasMedications = useWatch({
+    control,
+    name: "medical_has_medications",
+  });
+  const medicalHasAllergies = useWatch({
+    control,
+    name: "medical_has_allergies",
+  });
+  const medicalHasDiagnosis = useWatch({
+    control,
+    name: "medical_has_diagnosis",
+  });
+
+  const fatherLivesWithStudent = useWatch({
+    control,
+    name: "father_lives_with_student",
+  });
+  const motherLivesWithStudent = useWatch({
+    control,
+    name: "mother_lives_with_student",
+  });
+
+  const fatherCountry = useWatch({ control, name: "father_country" });
+  const fatherDepartment = useWatch({ control, name: "father_department" });
+  const fatherCity = useWatch({ control, name: "father_city" });
+  const fatherResidenceForCopy = useWatch({
+    control,
+    name: RESIDENCE_COPY_SUFFIXES.map((s) => `father_residence_${s}`),
+  }) as unknown[];
+  const [
+    fatherResidenceCountry,
+    fatherResidenceDepartment,
+    fatherResidenceCity,
+    fatherResidenceBarrioValue,
+    ,
+    ,
+  ] = fatherResidenceForCopy;
+  const fatherGuardianSource = useWatch({
+    control,
+    name: GUARDIAN_WATCHED_SUFFIXES.map((s) => `father_${s}`),
+  }) as unknown[];
+
+  const motherCountry = useWatch({ control, name: "mother_country" });
+  const motherDepartment = useWatch({ control, name: "mother_department" });
+  const motherCity = useWatch({ control, name: "mother_city" });
+  const motherResidenceForCopy = useWatch({
+    control,
+    name: RESIDENCE_COPY_SUFFIXES.map((s) => `mother_residence_${s}`),
+  }) as unknown[];
+  const [
+    motherResidenceCountry,
+    motherResidenceDepartment,
+    motherResidenceCity,
+    motherResidenceBarrioValue,
+    ,
+    ,
+  ] = motherResidenceForCopy;
+  const motherGuardianSource = useWatch({
+    control,
+    name: GUARDIAN_WATCHED_SUFFIXES.map((s) => `mother_${s}`),
+  }) as unknown[];
+
+  const guardianType = useWatch({ control, name: "guardian_type" });
+  const guardianCountry = useWatch({ control, name: "guardian_country" });
+  const guardianDepartment = useWatch({
+    control,
+    name: "guardian_department",
+  });
+  const guardianCity = useWatch({ control, name: "guardian_city" });
+  const guardianResidenceCountry = useWatch({
+    control,
+    name: "guardian_residence_country",
+  });
+  const guardianResidenceDepartment = useWatch({
+    control,
+    name: "guardian_residence_department",
+  });
+  const guardianResidenceCity = useWatch({
+    control,
+    name: "guardian_residence_city",
+  });
+  const guardianResidenceBarrioValue = useWatch({
+    control,
+    name: "guardian_residence_barrio",
+  });
+
+  // --- EFFECT: edad del estudiante (persistida, no solo derivada) ---
   useEffect(() => {
-    if (data.student_birth_date) {
-      const birthDate = new Date(data.student_birth_date);
+    if (studentBirthDate) {
+      const birthDate = new Date(studentBirthDate as string);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const m = today.getMonth() - birthDate.getMonth();
       if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
         age--;
       }
-      if (data.student_age !== age) {
-        update({ student_age: age });
+      if (getValues("student_age") !== age) {
+        setFieldValue("student_age", age, { shouldDirty: true });
       }
     }
-  }, [data.student_birth_date, data.student_age, update]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentBirthDate]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -724,30 +940,39 @@ export const Step3StudentData = ({
     }
 
     // Fecha del formulario
-    if (!data.form_date) {
+    if (!getValues("form_date")) {
       updates.form_date = currentDate;
     }
 
     // Grado sugerido
     if (suggestedGradeObj) {
-      if (!data.grade) {
+      if (!getValues("grade")) {
         updates.grade = suggestedGradeObj.description;
       }
-      if (!data.grade_id) {
+      if (!getValues("grade_id")) {
         updates.grade_id = suggestedGradeObj.id;
       }
     }
 
     // Año escolar
-    if (targetYear && !data.school_year) {
+    if (targetYear && !getValues("school_year")) {
       updates.school_year = targetYear;
     }
 
     if (Object.keys(updates).length > 0) {
+      Object.entries(updates).forEach(([key, value]) => {
+        setFieldValue(key, value, { shouldDirty: true });
+      });
       update(updates);
     }
 
     initializedRef.current = true;
+    // Marca como "ya guardado" el estado recién hidratado, para que el efecto
+    // de autoguardado de abajo no dispare un POST redundante con datos que ya
+    // vienen del backend (existing_data) o son puramente derivados (grado
+    // sugerido, año, fecha).
+    autosaveLastHashRef.current = JSON.stringify(getValues());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     canEnroll,
     isFirstEnrollment,
@@ -755,68 +980,66 @@ export const Step3StudentData = ({
     suggestedGradeObj,
     targetYear,
     currentDate,
-    data.form_date,
-    data.grade,
-    data.grade_id,
-    data.school_year,
-    update,
   ]);
 
-  // --- EFFECT: Auto-save Step 3 user_data (sin cambiar estado de matrícula) ---
+  // --- EFFECT: puente RHF -> `data` del padre + autoguardado a backend ---
+  // Antes: cada `onChange` llamaba `update()` de inmediato (useState en el
+  // padre), y un efecto separado, atado a `data`, debounceaba solo el POST.
+  // Ahora: una única suscripción imperativa (`rhf.watch`, fuera del render,
+  // igual que el autoguardado de Admisiones en SolicitudWizard.tsx) debouncea
+  // 700ms tanto la sincronización hacia `data` del padre (que Step4/5/6 leen
+  // directamente) como el POST — mismo endpoint, mismo payload
+  // (`{ user_data: <objeto plano> }`), mismo hash para evitar POSTs
+  // redundantes.
   useEffect(() => {
-    if (!enrollmentId) return;
-    if (!initializedRef.current) return;
+    const subscription = rhf.watch((_values, { name }) => {
+      // `name === undefined` solo ocurre en un `reset()` — este paso no llama
+      // `reset()` nunca, pero se deja el chequeo por coherencia con el mismo
+      // patrón ya usado en Admisiones.
+      if (name === undefined) return;
+      if (!initializedRef.current) return;
 
-    const payloadHash = JSON.stringify(data);
-
-    // Evita guardar de inmediato en el primer render post-inicialización.
-    if (!autosaveInitializedRef.current) {
-      autosaveInitializedRef.current = true;
-      autosaveLastHashRef.current = payloadHash;
-      return;
-    }
-
-    if (payloadHash === autosaveLastHashRef.current) return;
-
-    if (autosaveTimeoutRef.current) {
-      window.clearTimeout(autosaveTimeoutRef.current);
-    }
-
-    autosaveTimeoutRef.current = window.setTimeout(async () => {
-      try {
-        const res = await apiFetch(
-          API_ENDPOINTS.enrollmentSaveStudentData(enrollmentId),
-          {
-            method: "POST",
-            body: JSON.stringify({ user_data: data }),
-          },
-        );
-        if (res.ok) {
-          autosaveLastHashRef.current = payloadHash;
-        }
-      } catch (error) {
-        console.error("Error guardando borrador Step 3:", error);
+      if (autosaveTimeoutRef.current) {
+        window.clearTimeout(autosaveTimeoutRef.current);
       }
-    }, 700);
+
+      autosaveTimeoutRef.current = window.setTimeout(async () => {
+        const snapshot = rhf.getValues();
+
+        // Sincroniza `data` en el padre — los demás pasos del wizard (4, 5, 6)
+        // leen `data` directamente, no este `useForm()` interno.
+        update(snapshot);
+
+        if (!enrollmentId) return;
+
+        const payloadHash = JSON.stringify(snapshot);
+        if (payloadHash === autosaveLastHashRef.current) return;
+
+        try {
+          const res = await apiFetch(
+            API_ENDPOINTS.enrollmentSaveStudentData(enrollmentId),
+            {
+              method: "POST",
+              body: JSON.stringify({ user_data: snapshot }),
+            },
+          );
+          if (res.ok) {
+            autosaveLastHashRef.current = payloadHash;
+          }
+        } catch (error) {
+          console.error("Error guardando borrador Step 3:", error);
+        }
+      }, 700);
+    });
 
     return () => {
+      subscription.unsubscribe();
       if (autosaveTimeoutRef.current) {
         window.clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [data, enrollmentId]);
-
-  // Handler para input/select
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value, type } = e.target;
-    if (type === "checkbox" && e.target instanceof HTMLInputElement) {
-      update({ [name]: e.target.checked });
-    } else {
-      update({ [name]: value });
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrollmentId]);
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -824,93 +1047,59 @@ export const Step3StudentData = ({
 
   // --- EFFECT: Auto-llenado acudiente (Padre/Madre) ---
   useEffect(() => {
-    if (data.guardian_type === "Padre") {
+    const get = (prefix: "father_" | "mother_", suffix: string) =>
+      getValues(`${prefix}${suffix}`);
+
+    if (guardianType === "Padre" || guardianType === "Madre") {
+      const prefix = guardianType === "Padre" ? "father_" : "mother_";
       const newGuardian = {
-        guardian_lastname1: data.father_lastname1,
-        guardian_lastname2: data.father_lastname2,
-        guardian_firstname1: data.father_firstname1,
-        guardian_firstname2: data.father_firstname2,
+        guardian_lastname1: get(prefix, "lastname1"),
+        guardian_lastname2: get(prefix, "lastname2"),
+        guardian_firstname1: get(prefix, "firstname1"),
+        guardian_firstname2: get(prefix, "firstname2"),
         guardian_full_name: [
-          data.father_firstname1,
-          data.father_firstname2,
-          data.father_lastname1,
-          data.father_lastname2,
+          get(prefix, "firstname1"),
+          get(prefix, "firstname2"),
+          get(prefix, "lastname1"),
+          get(prefix, "lastname2"),
         ]
           .filter(Boolean)
           .join(" "),
-        guardian_id_number: data.father_id_number,
-        guardian_email: data.father_email,
-        guardian_phone: data.father_phone,
-        guardian_country: data.father_country,
-        guardian_department: data.father_department,
-        guardian_city: data.father_city,
-        guardian_residence_country: data.father_residence_country,
-        guardian_residence_department: data.father_residence_department,
-        guardian_residence_city: data.father_residence_city,
-        guardian_residence_barrio: data.father_residence_barrio,
-        guardian_residence_address: data.father_residence_address,
-        guardian_residence_address_complement:
-          data.father_residence_address_complement,
-        guardian_residence_stratum: data.father_residence_stratum,
-        guardian_document_type: data.father_document_type,
-        guardian_religion: data.father_religion,
-        guardian_relationship: "Padre",
-        guardian_profession: data.father_profession,
-        guardian_company_name: data.father_company_name,
-        guardian_company_address: data.father_company_address,
-        guardian_work_phone: data.father_work_phone,
+        guardian_id_number: get(prefix, "id_number"),
+        guardian_email: get(prefix, "email"),
+        guardian_phone: get(prefix, "phone"),
+        guardian_country: get(prefix, "country"),
+        guardian_department: get(prefix, "department"),
+        guardian_city: get(prefix, "city"),
+        guardian_residence_country: get(prefix, "residence_country"),
+        guardian_residence_department: get(prefix, "residence_department"),
+        guardian_residence_city: get(prefix, "residence_city"),
+        guardian_residence_barrio: get(prefix, "residence_barrio"),
+        guardian_residence_address: get(prefix, "residence_address"),
+        guardian_residence_address_complement: get(
+          prefix,
+          "residence_address_complement",
+        ),
+        guardian_residence_stratum: get(prefix, "residence_stratum"),
+        guardian_document_type: get(prefix, "document_type"),
+        guardian_religion: get(prefix, "religion"),
+        guardian_relationship: guardianType,
+        guardian_profession: get(prefix, "profession"),
+        guardian_company_name: get(prefix, "company_name"),
+        guardian_company_address: get(prefix, "company_address"),
+        guardian_work_phone: get(prefix, "work_phone"),
       };
       const needsUpdate = Object.keys(newGuardian).some(
-        (key) => data[key] !== newGuardian[key],
+        (key) => getValues(key) !== newGuardian[key],
       );
       if (needsUpdate) {
-        update(newGuardian);
+        Object.entries(newGuardian).forEach(([key, value]) => {
+          setFieldValue(key, value, { shouldDirty: true });
+        });
       }
-    } else if (data.guardian_type === "Madre") {
-      const newGuardian = {
-        guardian_lastname1: data.mother_lastname1,
-        guardian_lastname2: data.mother_lastname2,
-        guardian_firstname1: data.mother_firstname1,
-        guardian_firstname2: data.mother_firstname2,
-        guardian_full_name: [
-          data.mother_firstname1,
-          data.mother_firstname2,
-          data.mother_lastname1,
-          data.mother_lastname2,
-        ]
-          .filter(Boolean)
-          .join(" "),
-        guardian_id_number: data.mother_id_number,
-        guardian_email: data.mother_email,
-        guardian_phone: data.mother_phone,
-        guardian_country: data.mother_country,
-        guardian_department: data.mother_department,
-        guardian_city: data.mother_city,
-        guardian_residence_country: data.mother_residence_country,
-        guardian_residence_department: data.mother_residence_department,
-        guardian_residence_city: data.mother_residence_city,
-        guardian_residence_barrio: data.mother_residence_barrio,
-        guardian_residence_address: data.mother_residence_address,
-        guardian_residence_address_complement:
-          data.mother_residence_address_complement,
-        guardian_residence_stratum: data.mother_residence_stratum,
-        guardian_document_type: data.mother_document_type,
-        guardian_religion: data.mother_religion,
-        guardian_relationship: "Madre",
-        guardian_profession: data.mother_profession,
-        guardian_company_name: data.mother_company_name,
-        guardian_company_address: data.mother_company_address,
-        guardian_work_phone: data.mother_work_phone,
-      };
-      const needsUpdate = Object.keys(newGuardian).some(
-        (key) => data[key] !== newGuardian[key],
-      );
-      if (needsUpdate) {
-        update(newGuardian);
-      }
-    } else if (data.guardian_type === "Empresa") {
+    } else if (guardianType === "Empresa") {
       // Limpiar campos de persona natural cuando se selecciona "Empresa"
-      const fieldsToClean = {
+      const fieldsToClean: Record<string, string> = {
         // Nombres separados (para Empresa se usa guardian_full_name = Razón Social)
         guardian_lastname1: "",
         guardian_lastname2: "",
@@ -932,144 +1121,50 @@ export const Step3StudentData = ({
         guardian_work_phone: "",
       };
       const needsCleaning = Object.keys(fieldsToClean).some(
-        (key) => data[key] !== "",
+        (key) => getValues(key) !== "",
       );
       if (needsCleaning) {
-        update(fieldsToClean);
+        Object.entries(fieldsToClean).forEach(([key, value]) => {
+          setFieldValue(key, value, { shouldDirty: true });
+        });
       }
     }
-  }, [
-    data.guardian_type,
-    // Padre
-    data.father_lastname1,
-    data.father_lastname2,
-    data.father_firstname1,
-    data.father_firstname2,
-    data.father_id_number,
-    data.father_email,
-    data.father_phone,
-    data.father_country,
-    data.father_department,
-    data.father_city,
-    data.father_residence_country,
-    data.father_residence_department,
-    data.father_residence_city,
-    data.father_residence_barrio,
-    data.father_residence_address,
-    data.father_residence_address_complement,
-    data.father_residence_stratum,
-    data.father_document_type,
-    data.father_religion,
-    // Madre
-    data.mother_lastname1,
-    data.mother_lastname2,
-    data.mother_firstname1,
-    data.mother_firstname2,
-    data.mother_id_number,
-    data.mother_email,
-    data.mother_phone,
-    data.mother_country,
-    data.mother_department,
-    data.mother_city,
-    data.mother_residence_country,
-    data.mother_residence_department,
-    data.mother_residence_city,
-    data.mother_residence_barrio,
-    data.mother_residence_address,
-    data.mother_residence_address_complement,
-    data.mother_residence_stratum,
-    data.mother_document_type,
-    data.mother_religion,
-    update,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guardianType, fatherGuardianSource, motherGuardianSource]);
 
   // --- EFFECT: Auto-llenado residencia padre si vive con estudiante ---
   useEffect(() => {
-    if (data.father_lives_with_student) {
-      const needsUpdate =
-        data.father_residence_country !== data.residence_country ||
-        data.father_residence_department !== data.residence_department ||
-        data.father_residence_city !== data.residence_city ||
-        data.father_residence_barrio !== data.residence_barrio ||
-        data.father_residence_address !== data.residence_address ||
-        data.father_residence_address_complement !==
-          data.residence_address_complement ||
-        data.father_residence_stratum !== data.residence_stratum;
+    if (fatherLivesWithStudent) {
+      const needsUpdate = RESIDENCE_COPY_SUFFIXES.some(
+        (_suffix, i) => fatherResidenceForCopy[i] !== residenceForCopy[i],
+      );
       if (needsUpdate) {
-        update({
-          father_residence_country: data.residence_country,
-          father_residence_department: data.residence_department,
-          father_residence_city: data.residence_city,
-          father_residence_barrio: data.residence_barrio,
-          father_residence_address: data.residence_address,
-          father_residence_address_complement:
-            data.residence_address_complement,
-          father_residence_stratum: data.residence_stratum,
+        RESIDENCE_COPY_SUFFIXES.forEach((suffix, i) => {
+          setFieldValue(`father_residence_${suffix}`, residenceForCopy[i], {
+            shouldDirty: true,
+          });
         });
       }
     }
-  }, [
-    data.father_lives_with_student,
-    data.residence_country,
-    data.residence_department,
-    data.residence_city,
-    data.residence_barrio,
-    data.residence_address,
-    data.residence_address_complement,
-    data.residence_stratum,
-    data.father_residence_country,
-    data.father_residence_department,
-    data.father_residence_city,
-    data.father_residence_barrio,
-    data.father_residence_address,
-    data.father_residence_address_complement,
-    data.father_residence_stratum,
-    update,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fatherLivesWithStudent, residenceForCopy, fatherResidenceForCopy]);
 
   // --- EFFECT: Auto-llenado residencia madre si vive con estudiante ---
   useEffect(() => {
-    if (data.mother_lives_with_student) {
-      const needsUpdate =
-        data.mother_residence_country !== data.residence_country ||
-        data.mother_residence_department !== data.residence_department ||
-        data.mother_residence_city !== data.residence_city ||
-        data.mother_residence_barrio !== data.residence_barrio ||
-        data.mother_residence_address !== data.residence_address ||
-        data.mother_residence_address_complement !==
-          data.residence_address_complement ||
-        data.mother_residence_stratum !== data.residence_stratum;
+    if (motherLivesWithStudent) {
+      const needsUpdate = RESIDENCE_COPY_SUFFIXES.some(
+        (_suffix, i) => motherResidenceForCopy[i] !== residenceForCopy[i],
+      );
       if (needsUpdate) {
-        update({
-          mother_residence_country: data.residence_country,
-          mother_residence_department: data.residence_department,
-          mother_residence_city: data.residence_city,
-          mother_residence_barrio: data.residence_barrio,
-          mother_residence_address: data.residence_address,
-          mother_residence_address_complement:
-            data.residence_address_complement,
-          mother_residence_stratum: data.residence_stratum,
+        RESIDENCE_COPY_SUFFIXES.forEach((suffix, i) => {
+          setFieldValue(`mother_residence_${suffix}`, residenceForCopy[i], {
+            shouldDirty: true,
+          });
         });
       }
     }
-  }, [
-    data.mother_lives_with_student,
-    data.residence_country,
-    data.residence_department,
-    data.residence_city,
-    data.residence_barrio,
-    data.residence_address,
-    data.residence_address_complement,
-    data.residence_stratum,
-    data.mother_residence_country,
-    data.mother_residence_department,
-    data.mother_residence_city,
-    data.mother_residence_barrio,
-    data.mother_residence_address,
-    data.mother_residence_address_complement,
-    data.mother_residence_stratum,
-    update,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motherLivesWithStudent, residenceForCopy, motherResidenceForCopy]);
 
   // --- MANEJO DE DATOS / localStorage ---
   const storageKey =
@@ -1207,9 +1302,17 @@ export const Step3StudentData = ({
     }
 
     try {
+      // Toma el valor MÁS FRESCO del motor RHF (no el `data` prop, que puede
+      // ir hasta 700ms detrás por el debounce del autoguardado) para que ni el
+      // snapshot de localStorage ni el modal legal pierdan la última tecla
+      // escrita antes de avanzar.
+      const currentValues = rhf.getValues();
+      update(currentValues);
+
       if (storageKey) {
-        localStorage.setItem(storageKey, JSON.stringify(data));
+        localStorage.setItem(storageKey, JSON.stringify(currentValues));
       }
+      setLegalModalSnapshot(currentValues as LegalModalSnapshot);
       // Mostrar modal legal antes de avanzar
       setShowLegalModal(true);
     } catch (error) {
@@ -1227,67 +1330,28 @@ export const Step3StudentData = ({
     setShowLegalModal(false);
   };
 
-  // --- ESTADOS PARA SELECTS DEPENDIENTES ---
-  const [studentDept, setStudentDept] = useState("");
-  const [studentCity, setStudentCity] = useState("");
-  const [studentBarrio, setStudentBarrio] = useState("");
-  const [studentOtroBarrio, setStudentOtroBarrio] = useState("");
-  const [residenceDept, setResidenceDept] = useState("");
-  const [residenceCity, setResidenceCity] = useState("");
-  const [residenceBarrio, setResidenceBarrio] = useState("");
-  const [residenceOtroBarrio, setResidenceOtroBarrio] = useState("");
-  const [fatherDept, setFatherDept] = useState("");
-  const [fatherCity, setFatherCity] = useState("");
-  const [fatherBarrio, setFatherBarrio] = useState("");
-  const [fatherOtroBarrio, setFatherOtroBarrio] = useState("");
-  const [motherDept, setMotherDept] = useState("");
-  const [motherCity, setMotherCity] = useState("");
-  const [motherBarrio, setMotherBarrio] = useState("");
-  const [motherOtroBarrio, setMotherOtroBarrio] = useState("");
-  const [guardianBarrio, setGuardianBarrio] = useState("");
-  const [guardianOtroBarrio, setGuardianOtroBarrio] = useState("");
+  // --- ESTADOS "COMPUERTA" PARA EL BARRIO "OTRO" (residencia y acudiente) ---
+  // Estas 2 (no 4) siguen existiendo como estado local puro de UI, exactamente
+  // como en el código pre-RHF: el ComboBox de barrio muestra esta "compuerta"
+  // (no el valor real del campo) para que, al escribir el barrio libre en
+  // "Especifique el barrio", el combo no se destape de "Otro" a mitad de
+  // tecleo (el campo real SÍ cambia con cada tecla, pero la compuerta solo se
+  // resincroniza en un efecto aparte). Padre/Madre NO tienen esta compuerta —
+  // ver el comentario en la sección "Padre" más abajo sobre el bug corregido.
+  const [residenceBarrioGate, setResidenceBarrioGate] = useState("");
+  const [guardianBarrioGate, setGuardianBarrioGate] = useState("");
 
-  // Sincronizar estado local de guardianBarrio con data
   useEffect(() => {
-    if (data.guardian_residence_barrio) {
-      setGuardianBarrio(data.guardian_residence_barrio);
+    if (residenceBarrioValue) {
+      setResidenceBarrioGate(residenceBarrioValue as string);
     }
-  }, [data.guardian_residence_barrio]);
+  }, [residenceBarrioValue]);
 
-  // Sincronizar residenceBarrio con data
   useEffect(() => {
-    if (data.residence_barrio) {
-      setResidenceBarrio(data.residence_barrio);
+    if (guardianResidenceBarrioValue) {
+      setGuardianBarrioGate(guardianResidenceBarrioValue as string);
     }
-  }, [data.residence_barrio]);
-
-  // Sincronizar fatherDept con data (para país de nacimiento del padre)
-  useEffect(() => {
-    if (data.father_country) {
-      setFatherDept(data.father_country);
-    }
-  }, [data.father_country]);
-
-  // Sincronizar fatherCity con data (para ciudad de nacimiento del padre)
-  useEffect(() => {
-    if (data.father_city) {
-      setFatherCity(data.father_city);
-    }
-  }, [data.father_city]);
-
-  // Sincronizar motherDept con data (para país de nacimiento de la madre)
-  useEffect(() => {
-    if (data.mother_country) {
-      setMotherDept(data.mother_country);
-    }
-  }, [data.mother_country]);
-
-  // Sincronizar motherCity con data (para ciudad de nacimiento de la madre)
-  useEffect(() => {
-    if (data.mother_city) {
-      setMotherCity(data.mother_city);
-    }
-  }, [data.mother_city]);
+  }, [guardianResidenceBarrioValue]);
 
   return (
     <form onSubmit={handleSubmit} noValidate={true}>
@@ -1303,8 +1367,8 @@ export const Step3StudentData = ({
             <div className="row-span-2 mt-3">
               <PhotoUploadField
                 dataKey="student_photo"
-                data={data}
-                update={update}
+                control={control}
+                setValue={setFieldValue}
                 uploadedFiles={uploadedFiles}
                 updateUploadedFiles={updateUploadedFiles}
                 label="Foto de perfil"
@@ -1313,25 +1377,12 @@ export const Step3StudentData = ({
             </div>
 
             {/* Datos de matrícula */}
-            <FormInput
-              label="Fecha"
-              name="form_date"
-              value={data.form_date || currentDate}
-              onChange={handleChange}
-              disabled
-            />
-            <FormInput
-              label="Grado"
-              name="grade"
-              value={data.grade || suggestedGrade}
-              onChange={handleChange}
-              disabled
-            />
+            <FormInput label="Fecha" name="form_date" register={register} disabled />
+            <FormInput label="Grado" name="grade" register={register} disabled />
             <FormInput
               label="Año escolar"
               name="school_year"
-              value={data.school_year || targetYear}
-              onChange={handleChange}
+              register={register}
               disabled
             />
 
@@ -1339,32 +1390,28 @@ export const Step3StudentData = ({
             <FormInput
               label="Primer Apellido"
               name="student_lastname1"
-              value={data.student_lastname1}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
               required={true}
             />
             <FormInput
               label="Segundo Apellido"
               name="student_lastname2"
-              value={data.student_lastname2}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
               required={true}
             />
             <FormInput
               label="Primer Nombre"
               name="student_firstname1"
-              value={data.student_firstname1}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
               required={true}
             />
             <FormInput
               label="Segundo Nombre"
               name="student_firstname2"
-              value={data.student_firstname2}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
               required={true}
             />
@@ -1373,8 +1420,7 @@ export const Step3StudentData = ({
             <FormSelect
               label="Sexo"
               name="student_gender"
-              value={data.student_gender}
-              onChange={handleChange}
+              register={register}
               options={["Masculino", "Femenino"]}
               required={true}
             />
@@ -1384,51 +1430,53 @@ export const Step3StudentData = ({
               label="Fecha de Nacimiento"
               name="student_birth_date"
               type="date"
-              value={data.student_birth_date}
-              onChange={handleChange}
+              register={register}
               required={true}
             />
-            <FormInput
-              label="Edad"
-              name="student_age"
-              value={data.student_age}
-              onChange={handleChange}
-              disabled
-            />
+            <FormInput label="Edad" name="student_age" register={register} disabled />
             <ComboBox
-              value={data.student_birth_country}
-              setValue={(value) => update({ student_birth_country: value })}
+              value={studentBirthCountry}
+              setValue={(value) =>
+                setFieldValue("student_birth_country", value, {
+                  shouldDirty: true,
+                })
+              }
               options={COUNTRIES}
               label="País de Nacimiento"
               disabled={false}
               required={true}
             />
-            {data.student_birth_country === "Colombia" ? (
+            {studentBirthCountry === "Colombia" ? (
               <ComboBox
-                value={data.student_birth_department}
+                value={studentBirthDepartment}
                 setValue={(value) =>
-                  update({ student_birth_department: value })
+                  setFieldValue("student_birth_department", value, {
+                    shouldDirty: true,
+                  })
                 }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento"
-                disabled={data.student_birth_country !== "Colombia"}
+                disabled={studentBirthCountry !== "Colombia"}
                 required={true}
               />
             ) : (
               <FormInput
                 label="Departamento"
                 name="student_birth_department"
-                value={data.student_birth_department}
-                onChange={handleChange}
+                register={register}
                 disabled={false}
                 required={true}
               />
             )}
-            {data.student_birth_country === "Colombia" &&
-            data.student_birth_department === "Atlántico" ? (
+            {studentBirthCountry === "Colombia" &&
+            studentBirthDepartment === "Atlántico" ? (
               <ComboBox
-                value={data.student_birth_city}
-                setValue={(value) => update({ student_birth_city: value })}
+                value={studentBirthCity}
+                setValue={(value) =>
+                  setFieldValue("student_birth_city", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad"
                 disabled={false}
@@ -1438,8 +1486,7 @@ export const Step3StudentData = ({
               <FormInput
                 label="Ciudad"
                 name="student_birth_city"
-                value={data.student_birth_city}
-                onChange={handleChange}
+                register={register}
                 required={true}
               />
             )}
@@ -1448,8 +1495,7 @@ export const Step3StudentData = ({
             <FormSelect
               label="Tipo de identificación"
               name="student_id_type"
-              value={data.student_id_type}
-              onChange={handleChange}
+              register={register}
               options={DOCUMENT_TYPES}
               placeholder="Selecciona ID"
               required={true}
@@ -1457,8 +1503,7 @@ export const Step3StudentData = ({
             <FormInput
               label="Número de ID"
               name="student_id_number"
-              value={data.student_id_number}
-              onChange={handleChange}
+              register={register}
               pattern="[0-9]*"
               inputMode="numeric"
               required={true}
@@ -1466,37 +1511,48 @@ export const Step3StudentData = ({
 
             {/* Expedición */}
             <ComboBox
-              value={data.student_id_country}
-              setValue={(value) => update({ student_id_country: value })}
+              value={studentIdCountry}
+              setValue={(value) =>
+                setFieldValue("student_id_country", value, {
+                  shouldDirty: true,
+                })
+              }
               options={COUNTRIES}
               label="País de Expedición"
               disabled={false}
               required={true}
             />
-            {data.student_id_country === "Colombia" ? (
+            {studentIdCountry === "Colombia" ? (
               <ComboBox
-                value={data.student_id_department}
-                setValue={(value) => update({ student_id_department: value })}
+                value={studentIdDepartment}
+                setValue={(value) =>
+                  setFieldValue("student_id_department", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento"
-                disabled={data.student_id_country !== "Colombia"}
+                disabled={studentIdCountry !== "Colombia"}
                 required={true}
               />
             ) : (
               <FormInput
                 label="Departamento"
                 name="student_id_department"
-                value={data.student_id_department}
-                onChange={handleChange}
+                register={register}
                 disabled={false}
                 required={true}
               />
             )}
-            {data.student_id_country === "Colombia" &&
-            data.student_id_department === "Atlántico" ? (
+            {studentIdCountry === "Colombia" &&
+            studentIdDepartment === "Atlántico" ? (
               <ComboBox
-                value={data.student_id_city}
-                setValue={(value) => update({ student_id_city: value })}
+                value={studentIdCity}
+                setValue={(value) =>
+                  setFieldValue("student_id_city", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad"
                 disabled={false}
@@ -1506,8 +1562,7 @@ export const Step3StudentData = ({
               <FormInput
                 label="Ciudad"
                 name="student_id_city"
-                value={data.student_id_city}
-                onChange={handleChange}
+                register={register}
                 disabled={false}
                 required={true}
               />
@@ -1516,15 +1571,18 @@ export const Step3StudentData = ({
               label="Fecha de expedición"
               name="student_id_issue_date"
               type="date"
-              value={data.student_id_issue_date}
-              onChange={handleChange}
+              register={register}
               required={true}
             />
 
             {/* Salud y familiares */}
             <ComboBox
-              value={data.student_health_eps}
-              setValue={(value) => update({ student_health_eps: value })}
+              value={studentHealthEps}
+              setValue={(value) =>
+                setFieldValue("student_health_eps", value, {
+                  shouldDirty: true,
+                })
+              }
               options={EPS_LIST}
               label="EPS"
               disabled={false}
@@ -1535,8 +1593,7 @@ export const Step3StudentData = ({
               <FormSelect
                 label="RH"
                 name="student_blood_rh"
-                value={data.student_blood_rh}
-                onChange={handleChange}
+                register={register}
                 options={["+", "-"]}
                 placeholder="+/-"
                 required={true}
@@ -1544,8 +1601,7 @@ export const Step3StudentData = ({
               <FormSelect
                 label="Grupo"
                 name="student_blood_abo"
-                value={data.student_blood_abo}
-                onChange={handleChange}
+                register={register}
                 options={["A", "B", "AB", "O"]}
                 placeholder="Tipo"
                 required={true}
@@ -1555,49 +1611,43 @@ export const Step3StudentData = ({
             <FormSelect
               label="¿Tiene celular?"
               name="student_has_cellphone"
-              value={data.student_has_cellphone}
-              onChange={handleChange}
+              register={register}
               options={["Si", "No"]}
               required={true}
             />
-            {data.student_has_cellphone === "Si" && (
+            {studentHasCellphone === "Si" && (
               <FormInput
                 label="Número de celular"
                 name="student_cellphone"
-                value={data.student_cellphone}
-                onChange={handleChange}
+                register={register}
               />
             )}
 
             <FormSelect
               label="¿Tiene hermanos?"
               name="student_has_siblings"
-              value={data.student_has_siblings}
-              onChange={handleChange}
+              register={register}
               options={["Si", "No"]}
               required={true}
             />
             <FormSelect
               label="¿Estudian en la institución?"
               name="student_siblings_in_school"
-              value={data.student_siblings_in_school}
-              onChange={handleChange}
+              register={register}
               options={["Si", "No"]}
-              disabled={data.student_has_siblings !== "Si"}
+              disabled={studentHasSiblings !== "Si"}
             />
             <FormSelect
               label="Religión"
               name="student_religion"
-              value={data.student_religion}
-              onChange={handleChange}
+              register={register}
               options={RELIGIONS}
               required={true}
             />
             <FormSelect
               label="Estado civil de los padres"
               name="parents_marital_status"
-              value={data.parents_marital_status}
-              onChange={handleChange}
+              register={register}
               options={MARITAL_STATUS}
               required={true}
             />
@@ -1612,37 +1662,48 @@ export const Step3StudentData = ({
         >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <ComboBox
-              value={data.residence_country}
-              setValue={(value) => update({ residence_country: value })}
+              value={residenceCountry}
+              setValue={(value) =>
+                setFieldValue("residence_country", value, {
+                  shouldDirty: true,
+                })
+              }
               options={COUNTRIES}
               label="País de Residencia"
               disabled={false}
               required={true}
             />
-            {data.residence_country === "Colombia" ? (
+            {residenceCountry === "Colombia" ? (
               <ComboBox
-                value={data.residence_department}
-                setValue={(value) => update({ residence_department: value })}
+                value={residenceDepartment}
+                setValue={(value) =>
+                  setFieldValue("residence_department", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento"
-                disabled={data.residence_country !== "Colombia"}
+                disabled={residenceCountry !== "Colombia"}
                 required={true}
               />
             ) : (
               <FormInput
                 label="Departamento"
                 name="residence_department"
-                value={data.residence_department}
-                onChange={handleChange}
+                register={register}
                 disabled={false}
                 required={true}
               />
             )}
-            {data.residence_country === "Colombia" &&
-            data.residence_department === "Atlántico" ? (
+            {residenceCountry === "Colombia" &&
+            residenceDepartment === "Atlántico" ? (
               <ComboBox
-                value={data.residence_city}
-                setValue={(value) => update({ residence_city: value })}
+                value={residenceCity}
+                setValue={(value) =>
+                  setFieldValue("residence_city", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad"
                 disabled={false}
@@ -1652,36 +1713,36 @@ export const Step3StudentData = ({
               <FormInput
                 label="Ciudad"
                 name="residence_city"
-                value={data.residence_city}
-                onChange={handleChange}
+                register={register}
                 required={true}
               />
             )}
 
-            {data.residence_city === "Barranquilla" ? (
+            {residenceCity === "Barranquilla" ? (
               <>
                 <ComboBox
-                  value={residenceBarrio}
+                  value={residenceBarrioGate}
                   setValue={(value) => {
-                    setResidenceBarrio(value);
-                    update({ residence_barrio: value });
+                    setResidenceBarrioGate(value);
+                    setFieldValue("residence_barrio", value, {
+                      shouldDirty: true,
+                    });
                   }}
                   options={BARRIOS_BARRANQUILLA}
                   label="Barrio de Residencia"
                   disabled={false}
                   required={true}
                 />
-                {residenceBarrio === "Otro" && (
+                {residenceBarrioGate === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="residence_otro_barrio"
-                    value={residenceOtroBarrio}
-                    onChange={(e) => {
-                      setResidenceOtroBarrio(e.target.value);
-                      update({
-                        residence_otro_barrio: e.target.value,
-                        residence_barrio: e.target.value,
-                      });
+                    register={register}
+                    registerOptions={{
+                      onChange: (e) =>
+                        setFieldValue("residence_barrio", e.target.value, {
+                          shouldDirty: true,
+                        }),
                     }}
                   />
                 )}
@@ -1690,8 +1751,7 @@ export const Step3StudentData = ({
               <FormInput
                 label="Barrio de Residencia"
                 name="residence_barrio"
-                value={data.residence_barrio}
-                onChange={handleChange}
+                register={register}
                 required={true}
               />
             )}
@@ -1699,21 +1759,18 @@ export const Step3StudentData = ({
             <FormInput
               label="Dirección"
               name="residence_address"
-              value={data.residence_address}
-              onChange={handleChange}
+              register={register}
               required={true}
             />
             <FormInput
               label="Complemento (Apto, Torre)"
               name="residence_address_complement"
-              value={data.residence_address_complement}
-              onChange={handleChange}
+              register={register}
             />
             <FormSelect
               label="Estrato"
               name="residence_stratum"
-              value={data.residence_stratum}
-              onChange={handleChange}
+              register={register}
               options={ESTRATOS}
               required={true}
             />
@@ -1730,58 +1787,56 @@ export const Step3StudentData = ({
             <FormSelect
               label="¿Antecedentes médicos?"
               name="medical_has_history"
-              value={data.medical_has_history}
-              onChange={handleChange}
+              register={register}
               options={["Si", "No"]}
               required={true}
             />
-            {data.medical_has_history === "Si" && (
+            {medicalHasHistory === "Si" && (
               <FormInput
                 label="¿Cuál?"
                 name="medical_history_detail"
-                value={data.medical_history_detail}
-                onChange={handleChange}
+                register={register}
               />
             )}
 
             <FormSelect
               label="¿Medicamentos prescritos?"
               name="medical_has_medications"
-              value={data.medical_has_medications}
-              onChange={handleChange}
+              register={register}
               options={["Si", "No"]}
               required={true}
             />
-            {data.medical_has_medications === "Si" && (
+            {medicalHasMedications === "Si" && (
               <FormInput
                 label="¿Cuáles y dosis?"
                 name="medical_medications_detail"
-                value={data.medical_medications_detail}
-                onChange={handleChange}
+                register={register}
               />
             )}
 
             <FormSelect
               label="¿Alergias?"
               name="medical_has_allergies"
-              value={data.medical_has_allergies}
-              onChange={handleChange}
+              register={register}
               options={["Si", "No"]}
               required={true}
             />
-            {data.medical_has_allergies === "Si" && (
+            {medicalHasAllergies === "Si" && (
               <FormInput
                 label="¿A qué?"
                 name="medical_allergies_detail"
-                value={data.medical_allergies_detail}
-                onChange={handleChange}
+                register={register}
               />
             )}
 
             <ComboBox
               label="¿Diagnóstico/Proceso?"
-              value={data.medical_has_diagnosis}
-              setValue={(value) => update({ medical_has_diagnosis: value })}
+              value={medicalHasDiagnosis}
+              setValue={(value) =>
+                setFieldValue("medical_has_diagnosis", value, {
+                  shouldDirty: true,
+                })
+              }
               options={[
                 "TEA - Nivel 1 (requiere apoyo)",
                 "TEA - Nivel 2 (requiere apoyo sustancial)",
@@ -1843,25 +1898,22 @@ export const Step3StudentData = ({
               disabled={false}
               required={true}
             />
-            {data.medical_has_diagnosis === "Otros" && (
+            {medicalHasDiagnosis === "Otros" && (
               <FormInput
                 label="Especifique"
                 name="medical_diagnosis_other"
-                value={data.medical_diagnosis_other}
-                onChange={handleChange}
+                register={register}
               />
             )}
 
-            {data.medical_has_diagnosis &&
-              data.medical_has_diagnosis !== "Ninguno" && (
-                <FormInput
-                  label="Información adicional (Médico o Institución tratante)"
-                  name="medical_diagnosis_additional_info"
-                  value={data.medical_diagnosis_additional_info}
-                  onChange={handleChange}
-                  placeholder="Nombre del médico o institución"
-                />
-              )}
+            {medicalHasDiagnosis && medicalHasDiagnosis !== "Ninguno" && (
+              <FormInput
+                label="Información adicional (Médico o Institución tratante)"
+                name="medical_diagnosis_additional_info"
+                register={register}
+                placeholder="Nombre del médico o institución"
+              />
+            )}
           </div>
         </SectionCard>
 
@@ -1876,9 +1928,7 @@ export const Step3StudentData = ({
               <input
                 type="checkbox"
                 className="checkbox checkbox-primary shrink-0"
-                name="father_lives_with_student"
-                checked={data.father_lives_with_student || false}
-                onChange={handleChange}
+                {...register("father_lives_with_student")}
               />
               <span className="label-text font-normal text-xs leading-tight">
                 ¿El Padre vive con el estudiante?
@@ -1888,9 +1938,7 @@ export const Step3StudentData = ({
               <input
                 type="checkbox"
                 className="checkbox checkbox-primary shrink-0"
-                name="mother_lives_with_student"
-                checked={data.mother_lives_with_student || false}
-                onChange={handleChange}
+                {...register("mother_lives_with_student")}
               />
               <span className="label-text font-normal text-xs leading-tight">
                 ¿La Madre vive con el estudiante?
@@ -1900,18 +1948,14 @@ export const Step3StudentData = ({
               <input
                 type="checkbox"
                 className="checkbox checkbox-primary shrink-0"
-                name="lives_with_other"
-                checked={data.lives_with_other || false}
-                onChange={handleChange}
-                disabled={
-                  data.father_lives_with_student ||
-                  data.mother_lives_with_student
-                }
+                disabled={Boolean(
+                  fatherLivesWithStudent || motherLivesWithStudent,
+                )}
+                {...register("lives_with_other")}
               />
               <span
                 className={`label-text font-normal text-xs leading-tight ${
-                  data.father_lives_with_student ||
-                  data.mother_lives_with_student
+                  fatherLivesWithStudent || motherLivesWithStudent
                     ? "text-gray-400"
                     : ""
                 }`}
@@ -1933,8 +1977,8 @@ export const Step3StudentData = ({
             <div className="row-span-2 mt-3">
               <PhotoUploadField
                 dataKey="father_photo"
-                data={data}
-                update={update}
+                control={control}
+                setValue={setFieldValue}
                 uploadedFiles={uploadedFiles}
                 updateUploadedFiles={updateUploadedFiles}
                 label="Foto de perfil del Padre"
@@ -1945,209 +1989,221 @@ export const Step3StudentData = ({
             <FormInput
               label="Primer Apellido"
               name="father_lastname1"
-              value={data.father_lastname1}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Segundo Apellido"
               name="father_lastname2"
-              value={data.father_lastname2}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Primer Nombre"
               name="father_firstname1"
-              value={data.father_firstname1}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Segundo Nombre"
               name="father_firstname2"
-              value={data.father_firstname2}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
 
             <FormSelect
               label="Tipo de Documento"
               name="father_document_type"
-              value={data.father_document_type}
-              onChange={handleChange}
+              register={register}
               options={DOCUMENT_TYPES}
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Número de ID"
               name="father_id_number"
-              value={data.father_id_number}
-              onChange={handleChange}
+              register={register}
               pattern="[0-9]*"
               inputMode="numeric"
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
 
             <FormInput
               label="Celular"
               name="father_phone"
-              value={data.father_phone}
-              onChange={handleChange}
+              register={register}
               type="tel"
               pattern="[0-9]{10}"
               inputMode="numeric"
               maxLength={10}
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Email"
               name="father_email"
               type="email"
-              value={data.father_email}
-              onChange={handleChange}
-              required={data.father_lives_with_student}
+              register={register}
+              required={fatherLivesWithStudent}
             />
 
             <ComboBox
-              value={data.father_country}
-              setValue={(value) => update({ father_country: value })}
+              value={fatherCountry}
+              setValue={(value) =>
+                setFieldValue("father_country", value, { shouldDirty: true })
+              }
               options={COUNTRIES}
               label="País del Padre"
               disabled={false}
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
-            {data.father_country === "Colombia" ? (
+            {fatherCountry === "Colombia" ? (
               <ComboBox
-                value={data.father_department}
-                setValue={(value) => update({ father_department: value })}
+                value={fatherDepartment}
+                setValue={(value) =>
+                  setFieldValue("father_department", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento de Nacimiento"
-                disabled={data.father_country !== "Colombia"}
-                required={data.father_lives_with_student}
+                disabled={fatherCountry !== "Colombia"}
+                required={fatherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Departamento de Nacimiento"
                 name="father_department"
-                value={data.father_department}
-                onChange={handleChange}
+                register={register}
                 disabled={false}
-                required={data.father_lives_with_student}
+                required={fatherLivesWithStudent}
               />
             )}
-            {data.father_country === "Colombia" &&
-            data.father_department === "Atlántico" ? (
+            {fatherCountry === "Colombia" &&
+            fatherDepartment === "Atlántico" ? (
               <ComboBox
                 value={fatherCity}
-                setValue={(value) => {
-                  setFatherCity(value);
-                  update({ father_city: value });
-                }}
+                setValue={(value) =>
+                  setFieldValue("father_city", value, { shouldDirty: true })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad de Nacimiento"
                 disabled={false}
-                required={data.father_lives_with_student}
+                required={fatherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Ciudad de Nacimiento"
                 name="father_city"
-                value={fatherCity}
-                onChange={(e) => {
-                  setFatherCity(e.target.value);
-                  update({ father_city: e.target.value });
-                }}
+                register={register}
                 disabled={false}
-                required={data.father_lives_with_student}
+                required={fatherLivesWithStudent}
               />
             )}
 
             <FormSelect
               label="Religión"
               name="father_religion"
-              value={data.father_religion}
-              onChange={handleChange}
+              register={register}
               options={RELIGIONS}
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
 
             <ComboBox
-              value={data.father_residence_country}
-              setValue={(value) => update({ father_residence_country: value })}
+              value={fatherResidenceCountry}
+              setValue={(value) =>
+                setFieldValue("father_residence_country", value, {
+                  shouldDirty: true,
+                })
+              }
               options={COUNTRIES}
               label="País de Residencia"
-              disabled={data.father_lives_with_student}
-              required={!data.father_lives_with_student}
+              disabled={fatherLivesWithStudent}
+              required={!fatherLivesWithStudent}
             />
-            {data.father_residence_country === "Colombia" ? (
+            {fatherResidenceCountry === "Colombia" ? (
               <ComboBox
-                value={data.father_residence_department}
+                value={fatherResidenceDepartment}
                 setValue={(value) =>
-                  update({ father_residence_department: value })
+                  setFieldValue("father_residence_department", value, {
+                    shouldDirty: true,
+                  })
                 }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento de Residencia"
-                disabled={data.father_lives_with_student}
-                required={!data.father_lives_with_student}
+                disabled={fatherLivesWithStudent}
+                required={!fatherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Departamento de Residencia"
                 name="father_residence_department"
-                value={data.father_residence_department}
-                onChange={handleChange}
-                disabled={data.father_lives_with_student}
-                required={!data.father_lives_with_student}
+                register={register}
+                disabled={fatherLivesWithStudent}
+                required={!fatherLivesWithStudent}
               />
             )}
-            {data.father_residence_country === "Colombia" &&
-            data.father_residence_department === "Atlántico" ? (
+            {fatherResidenceCountry === "Colombia" &&
+            fatherResidenceDepartment === "Atlántico" ? (
               <ComboBox
-                value={data.father_residence_city}
-                setValue={(value) => update({ father_residence_city: value })}
+                value={fatherResidenceCity}
+                setValue={(value) =>
+                  setFieldValue("father_residence_city", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad de Residencia"
-                disabled={data.father_lives_with_student}
-                required={!data.father_lives_with_student}
+                disabled={fatherLivesWithStudent}
+                required={!fatherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Ciudad de Residencia"
                 name="father_residence_city"
-                value={data.father_residence_city}
-                onChange={handleChange}
-                disabled={data.father_lives_with_student}
-                required={!data.father_lives_with_student}
+                register={register}
+                disabled={fatherLivesWithStudent}
+                required={!fatherLivesWithStudent}
               />
             )}
-            {data.father_residence_city === "Barranquilla" ? (
+            {fatherResidenceCity === "Barranquilla" ? (
               <>
                 <ComboBox
-                  value={data.father_residence_barrio}
+                  value={fatherResidenceBarrioValue}
                   setValue={(value) =>
-                    update({ father_residence_barrio: value })
+                    setFieldValue("father_residence_barrio", value, {
+                      shouldDirty: true,
+                    })
                   }
                   options={BARRIOS_BARRANQUILLA}
                   label="Barrio de Residencia"
-                  disabled={data.father_lives_with_student}
-                  required={!data.father_lives_with_student}
+                  disabled={fatherLivesWithStudent}
+                  required={!fatherLivesWithStudent}
                 />
-                {fatherBarrio === "Otro" && (
+                {/*
+                  Antes de esta migración, este bloque usaba una variable de
+                  estado sombra (`fatherBarrio`) que nunca se sincronizaba con
+                  ningún dato real, así que esta condición nunca era
+                  verdadera y el campo quedaba inalcanzable (bug documentado
+                  en el informe de reconocimiento, §0.4). Al leer
+                  directamente el valor real del campo (el mismo que ya usa
+                  el ComboBox de arriba) el bug queda corregido: ahora si el
+                  usuario elige "Otro" el campo aparece.
+                */}
+                {fatherResidenceBarrioValue === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="father_otro_barrio"
-                    value={fatherOtroBarrio}
-                    onChange={(e) => {
-                      setFatherOtroBarrio(e.target.value);
-                      update({
-                        father_otro_barrio: e.target.value,
-                        father_residence_barrio: e.target.value,
-                      });
+                    register={register}
+                    registerOptions={{
+                      onChange: (e) =>
+                        setFieldValue(
+                          "father_residence_barrio",
+                          e.target.value,
+                          { shouldDirty: true },
+                        ),
                     }}
                   />
                 )}
@@ -2156,68 +2212,60 @@ export const Step3StudentData = ({
               <FormInput
                 label="Barrio de Residencia"
                 name="father_residence_barrio"
-                value={data.father_residence_barrio}
-                onChange={handleChange}
-                disabled={data.father_lives_with_student}
-                required={!data.father_lives_with_student}
+                register={register}
+                disabled={fatherLivesWithStudent}
+                required={!fatherLivesWithStudent}
               />
             )}
             <FormInput
               label="Dirección de Residencia"
               name="father_residence_address"
-              value={data.father_residence_address}
-              onChange={handleChange}
-              disabled={data.father_lives_with_student}
-              required={!data.father_lives_with_student}
+              register={register}
+              disabled={fatherLivesWithStudent}
+              required={!fatherLivesWithStudent}
             />
             <FormInput
               label="Complemento (Apto, Torre)"
               name="father_residence_address_complement"
-              value={data.father_residence_address_complement}
-              onChange={handleChange}
-              disabled={data.father_lives_with_student}
+              register={register}
+              disabled={fatherLivesWithStudent}
             />
             <FormSelect
               label="Estrato"
               name="father_residence_stratum"
-              value={data.father_residence_stratum}
-              onChange={handleChange}
+              register={register}
               options={ESTRATOS}
-              disabled={data.father_lives_with_student}
-              required={!data.father_lives_with_student}
+              disabled={fatherLivesWithStudent}
+              required={!fatherLivesWithStudent}
             />
 
             {/* Información Laboral del Padre */}
             <FormInput
               label="Profesión"
               name="father_profession"
-              value={data.father_profession}
-              onChange={handleChange}
-              required={data.father_lives_with_student}
+              register={register}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Nombre Empresa donde Labora"
               name="father_company_name"
-              value={data.father_company_name}
-              onChange={handleChange}
-              required={data.father_lives_with_student}
+              register={register}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Dirección Empresa donde Labora"
               name="father_company_address"
-              value={data.father_company_address}
-              onChange={handleChange}
-              required={data.father_lives_with_student}
+              register={register}
+              required={fatherLivesWithStudent}
             />
             <FormInput
               label="Número de contacto laboral"
               name="father_work_phone"
               type="tel"
-              value={data.father_work_phone}
-              onChange={handleChange}
+              register={register}
               pattern="[0-9]*"
               inputMode="numeric"
-              required={data.father_lives_with_student}
+              required={fatherLivesWithStudent}
             />
           </div>
         </SectionCard>
@@ -2233,8 +2281,8 @@ export const Step3StudentData = ({
             <div className="row-span-2 mt-3">
               <PhotoUploadField
                 dataKey="mother_photo"
-                data={data}
-                update={update}
+                control={control}
+                setValue={setFieldValue}
                 uploadedFiles={uploadedFiles}
                 updateUploadedFiles={updateUploadedFiles}
                 label="Foto de perfil de la Madre"
@@ -2245,209 +2293,214 @@ export const Step3StudentData = ({
             <FormInput
               label="Primer Apellido"
               name="mother_lastname1"
-              value={data.mother_lastname1}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Segundo Apellido"
               name="mother_lastname2"
-              value={data.mother_lastname2}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Primer Nombre"
               name="mother_firstname1"
-              value={data.mother_firstname1}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Segundo Nombre"
               name="mother_firstname2"
-              value={data.mother_firstname2}
-              onChange={handleChange}
+              register={register}
               pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
 
             <FormSelect
               label="Tipo de Documento"
               name="mother_document_type"
-              value={data.mother_document_type}
-              onChange={handleChange}
+              register={register}
               options={DOCUMENT_TYPES}
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Número de ID"
               name="mother_id_number"
-              value={data.mother_id_number}
-              onChange={handleChange}
+              register={register}
               pattern="[0-9]*"
               inputMode="numeric"
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
 
             <FormInput
               label="Celular"
               name="mother_phone"
-              value={data.mother_phone}
-              onChange={handleChange}
+              register={register}
               type="tel"
               pattern="[0-9]{10}"
               inputMode="numeric"
               maxLength={10}
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Email"
               name="mother_email"
               type="email"
-              value={data.mother_email}
-              onChange={handleChange}
-              required={data.mother_lives_with_student}
+              register={register}
+              required={motherLivesWithStudent}
             />
 
             <ComboBox
-              value={data.mother_country}
-              setValue={(value) => update({ mother_country: value })}
+              value={motherCountry}
+              setValue={(value) =>
+                setFieldValue("mother_country", value, { shouldDirty: true })
+              }
               options={COUNTRIES}
               label="País"
               disabled={false}
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
-            {data.mother_country === "Colombia" ? (
+            {motherCountry === "Colombia" ? (
               <ComboBox
-                value={data.mother_department}
-                setValue={(value) => update({ mother_department: value })}
+                value={motherDepartment}
+                setValue={(value) =>
+                  setFieldValue("mother_department", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento de Nacimiento"
-                disabled={data.mother_country !== "Colombia"}
-                required={data.mother_lives_with_student}
+                disabled={motherCountry !== "Colombia"}
+                required={motherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Departamento de Nacimiento"
                 name="mother_department"
-                value={data.mother_department}
-                onChange={handleChange}
+                register={register}
                 disabled={false}
-                required={data.mother_lives_with_student}
+                required={motherLivesWithStudent}
               />
             )}
-            {data.mother_country === "Colombia" &&
-            data.mother_department === "Atlántico" ? (
+            {motherCountry === "Colombia" &&
+            motherDepartment === "Atlántico" ? (
               <ComboBox
                 value={motherCity}
-                setValue={(value) => {
-                  setMotherCity(value);
-                  update({ mother_city: value });
-                }}
+                setValue={(value) =>
+                  setFieldValue("mother_city", value, { shouldDirty: true })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad de Nacimiento"
                 disabled={false}
-                required={data.mother_lives_with_student}
+                required={motherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Ciudad de Nacimiento"
                 name="mother_city"
-                value={motherCity}
-                onChange={(e) => {
-                  setMotherCity(e.target.value);
-                  update({ mother_city: e.target.value });
-                }}
+                register={register}
                 disabled={false}
-                required={data.mother_lives_with_student}
+                required={motherLivesWithStudent}
               />
             )}
 
             <FormSelect
               label="Religión"
               name="mother_religion"
-              value={data.mother_religion}
-              onChange={handleChange}
+              register={register}
               options={RELIGIONS}
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
 
             <ComboBox
-              value={data.mother_residence_country}
-              setValue={(value) => update({ mother_residence_country: value })}
+              value={motherResidenceCountry}
+              setValue={(value) =>
+                setFieldValue("mother_residence_country", value, {
+                  shouldDirty: true,
+                })
+              }
               options={COUNTRIES}
               label="País de Residencia"
-              disabled={data.mother_lives_with_student}
-              required={!data.mother_lives_with_student}
+              disabled={motherLivesWithStudent}
+              required={!motherLivesWithStudent}
             />
-            {data.mother_residence_country === "Colombia" ? (
+            {motherResidenceCountry === "Colombia" ? (
               <ComboBox
-                value={data.mother_residence_department}
+                value={motherResidenceDepartment}
                 setValue={(value) =>
-                  update({ mother_residence_department: value })
+                  setFieldValue("mother_residence_department", value, {
+                    shouldDirty: true,
+                  })
                 }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento de Residencia"
-                disabled={data.mother_lives_with_student}
-                required={!data.mother_lives_with_student}
+                disabled={motherLivesWithStudent}
+                required={!motherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Departamento de Residencia"
                 name="mother_residence_department"
-                value={data.mother_residence_department}
-                onChange={handleChange}
-                disabled={data.mother_lives_with_student}
-                required={!data.mother_lives_with_student}
+                register={register}
+                disabled={motherLivesWithStudent}
+                required={!motherLivesWithStudent}
               />
             )}
-            {data.mother_residence_country === "Colombia" &&
-            data.mother_residence_department === "Atlántico" ? (
+            {motherResidenceCountry === "Colombia" &&
+            motherResidenceDepartment === "Atlántico" ? (
               <ComboBox
-                value={data.mother_residence_city}
-                setValue={(value) => update({ mother_residence_city: value })}
+                value={motherResidenceCity}
+                setValue={(value) =>
+                  setFieldValue("mother_residence_city", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad de Residencia"
-                disabled={data.mother_lives_with_student}
-                required={!data.mother_lives_with_student}
+                disabled={motherLivesWithStudent}
+                required={!motherLivesWithStudent}
               />
             ) : (
               <FormInput
                 label="Ciudad de Residencia"
                 name="mother_residence_city"
-                value={data.mother_residence_city}
-                onChange={handleChange}
-                disabled={data.mother_lives_with_student}
-                required={!data.mother_lives_with_student}
+                register={register}
+                disabled={motherLivesWithStudent}
+                required={!motherLivesWithStudent}
               />
             )}
-            {data.mother_residence_city === "Barranquilla" ? (
+            {motherResidenceCity === "Barranquilla" ? (
               <>
                 <ComboBox
-                  value={data.mother_residence_barrio}
+                  value={motherResidenceBarrioValue}
                   setValue={(value) =>
-                    update({ mother_residence_barrio: value })
+                    setFieldValue("mother_residence_barrio", value, {
+                      shouldDirty: true,
+                    })
                   }
                   options={BARRIOS_BARRANQUILLA}
                   label="Barrio de Residencia"
-                  disabled={data.mother_lives_with_student}
-                  required={!data.mother_lives_with_student}
+                  disabled={motherLivesWithStudent}
+                  required={!motherLivesWithStudent}
                 />
-                {motherBarrio === "Otro" && (
+                {/* Ver comentario equivalente en la sección "Padre": bug de
+                    barrio "Otro" inalcanzable, corregido leyendo el valor
+                    real del campo en vez de un estado sombra. */}
+                {motherResidenceBarrioValue === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="mother_otro_barrio"
-                    value={motherOtroBarrio}
-                    onChange={(e) => {
-                      setMotherOtroBarrio(e.target.value);
-                      update({
-                        mother_otro_barrio: e.target.value,
-                        mother_residence_barrio: e.target.value,
-                      });
+                    register={register}
+                    registerOptions={{
+                      onChange: (e) =>
+                        setFieldValue(
+                          "mother_residence_barrio",
+                          e.target.value,
+                          { shouldDirty: true },
+                        ),
                     }}
                   />
                 )}
@@ -2456,68 +2509,60 @@ export const Step3StudentData = ({
               <FormInput
                 label="Barrio de Residencia"
                 name="mother_residence_barrio"
-                value={data.mother_residence_barrio}
-                onChange={handleChange}
-                disabled={data.mother_lives_with_student}
-                required={!data.mother_lives_with_student}
+                register={register}
+                disabled={motherLivesWithStudent}
+                required={!motherLivesWithStudent}
               />
             )}
             <FormInput
               label="Dirección de Residencia"
               name="mother_residence_address"
-              value={data.mother_residence_address}
-              onChange={handleChange}
-              disabled={data.mother_lives_with_student}
-              required={!data.mother_lives_with_student}
+              register={register}
+              disabled={motherLivesWithStudent}
+              required={!motherLivesWithStudent}
             />
             <FormInput
               label="Complemento (Apto, Torre)"
               name="mother_residence_address_complement"
-              value={data.mother_residence_address_complement}
-              onChange={handleChange}
-              disabled={data.mother_lives_with_student}
+              register={register}
+              disabled={motherLivesWithStudent}
             />
             <FormSelect
               label="Estrato"
               name="mother_residence_stratum"
-              value={data.mother_residence_stratum}
-              onChange={handleChange}
+              register={register}
               options={ESTRATOS}
-              disabled={data.mother_lives_with_student}
-              required={!data.mother_lives_with_student}
+              disabled={motherLivesWithStudent}
+              required={!motherLivesWithStudent}
             />
 
             {/* Información Laboral de la Madre */}
             <FormInput
               label="Profesión"
               name="mother_profession"
-              value={data.mother_profession}
-              onChange={handleChange}
-              required={data.mother_lives_with_student}
+              register={register}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Nombre Empresa donde Labora"
               name="mother_company_name"
-              value={data.mother_company_name}
-              onChange={handleChange}
-              required={data.mother_lives_with_student}
+              register={register}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Dirección Empresa donde Labora"
               name="mother_company_address"
-              value={data.mother_company_address}
-              onChange={handleChange}
-              required={data.mother_lives_with_student}
+              register={register}
+              required={motherLivesWithStudent}
             />
             <FormInput
               label="Número de contacto laboral"
               name="mother_work_phone"
               type="tel"
-              value={data.mother_work_phone}
-              onChange={handleChange}
+              register={register}
               pattern="[0-9]*"
               inputMode="numeric"
-              required={data.mother_lives_with_student}
+              required={motherLivesWithStudent}
             />
           </div>
         </SectionCard>
@@ -2532,28 +2577,25 @@ export const Step3StudentData = ({
             <FormSelect
               label="¿Quién es el acudiente?"
               name="guardian_type"
-              value={data.guardian_type}
-              onChange={handleChange}
+              register={register}
               options={["Padre", "Madre", "Otro", "Empresa"]}
               placeholder="Seleccionar..."
               required={true}
             />
 
             {/* Campos para Empresa */}
-            {data.guardian_type === "Empresa" && (
+            {guardianType === "Empresa" && (
               <>
                 <FormInput
                   label="Razón Social"
                   name="guardian_full_name"
-                  value={data.guardian_full_name}
-                  onChange={handleChange}
+                  register={register}
                   required={true}
                 />
                 <FormInput
                   label="NIT"
                   name="guardian_id_number"
-                  value={data.guardian_id_number}
-                  onChange={handleChange}
+                  register={register}
                   placeholder="Ej: 900123456-7"
                   required={true}
                 />
@@ -2561,80 +2603,68 @@ export const Step3StudentData = ({
             )}
 
             {/* Campos para Persona Natural (Padre, Madre, Otro) */}
-            {data.guardian_type !== "Empresa" && (
+            {guardianType !== "Empresa" && (
               <>
                 <FormInput
                   label="Primer Apellido"
                   name="guardian_lastname1"
-                  value={data.guardian_lastname1}
-                  onChange={handleChange}
+                  register={register}
                   pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
                 />
                 <FormInput
                   label="Segundo Apellido"
                   name="guardian_lastname2"
-                  value={data.guardian_lastname2}
-                  onChange={handleChange}
+                  register={register}
                   pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
                 />
                 <FormInput
                   label="Primer Nombre"
                   name="guardian_firstname1"
-                  value={data.guardian_firstname1}
-                  onChange={handleChange}
+                  register={register}
                   pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
                 />
                 <FormInput
                   label="Segundo Nombre"
                   name="guardian_firstname2"
-                  value={data.guardian_firstname2}
-                  onChange={handleChange}
+                  register={register}
                   pattern="[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+"
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
                 />
 
                 <FormSelect
                   label="Tipo de Documento"
                   name="guardian_document_type"
-                  value={data.guardian_document_type}
-                  onChange={handleChange}
+                  register={register}
                   options={DOCUMENT_TYPES}
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
                 />
                 <FormInput
                   label="Número de ID"
                   name="guardian_id_number"
-                  value={data.guardian_id_number}
-                  onChange={handleChange}
+                  register={register}
                   pattern="[0-9]*"
                   inputMode="numeric"
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
                 />
               </>
@@ -2642,231 +2672,211 @@ export const Step3StudentData = ({
 
             <FormInput
               label={
-                data.guardian_type === "Empresa"
-                  ? "Teléfono de contacto"
-                  : "Celular"
+                guardianType === "Empresa" ? "Teléfono de contacto" : "Celular"
               }
               name="guardian_phone"
-              value={data.guardian_phone}
-              onChange={handleChange}
+              register={register}
               type="tel"
-              pattern={
-                data.guardian_type === "Empresa" ? "[0-9]*" : "[0-9]{10}"
-              }
+              pattern={guardianType === "Empresa" ? "[0-9]*" : "[0-9]{10}"}
               inputMode="numeric"
-              maxLength={data.guardian_type === "Empresa" ? 15 : 10}
-              required={
-                data.guardian_type === "Otro" ||
-                data.guardian_type === "Empresa"
-              }
-              disabled={
-                data.guardian_type === "Padre" || data.guardian_type === "Madre"
-              }
+              maxLength={guardianType === "Empresa" ? 15 : 10}
+              required={guardianType === "Otro" || guardianType === "Empresa"}
+              disabled={guardianType === "Padre" || guardianType === "Madre"}
             />
             <FormInput
-              label={
-                data.guardian_type === "Empresa" ? "Email corporativo" : "Email"
-              }
+              label={guardianType === "Empresa" ? "Email corporativo" : "Email"}
               name="guardian_email"
               type="email"
-              value={data.guardian_email}
-              onChange={handleChange}
-              required={
-                data.guardian_type === "Otro" ||
-                data.guardian_type === "Empresa"
-              }
-              disabled={
-                data.guardian_type === "Padre" || data.guardian_type === "Madre"
-              }
+              register={register}
+              required={guardianType === "Otro" || guardianType === "Empresa"}
+              disabled={guardianType === "Padre" || guardianType === "Madre"}
             />
 
             {/* Campos de lugar de nacimiento y religión - Solo para personas naturales */}
-            {data.guardian_type !== "Empresa" && (
+            {guardianType !== "Empresa" && (
               <>
                 <ComboBox
-                  value={data.guardian_country}
-                  setValue={(value) => update({ guardian_country: value })}
+                  value={guardianCountry}
+                  setValue={(value) =>
+                    setFieldValue("guardian_country", value, {
+                      shouldDirty: true,
+                    })
+                  }
                   options={COUNTRIES}
                   label="País de nacimiento"
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
-                {data.guardian_country === "Colombia" ? (
+                {guardianCountry === "Colombia" ? (
                   <ComboBox
-                    value={data.guardian_department}
-                    setValue={(value) => update({ guardian_department: value })}
+                    value={guardianDepartment}
+                    setValue={(value) =>
+                      setFieldValue("guardian_department", value, {
+                        shouldDirty: true,
+                      })
+                    }
                     options={COLOMBIA_DEPARTMENTS}
                     label="Departamento"
                     disabled={
-                      data.guardian_type === "Padre" ||
-                      data.guardian_type === "Madre"
+                      guardianType === "Padre" || guardianType === "Madre"
                     }
-                    required={data.guardian_type === "Otro"}
+                    required={guardianType === "Otro"}
                   />
                 ) : (
                   <FormInput
                     label="Departamento"
                     name="guardian_department"
-                    value={data.guardian_department}
-                    onChange={handleChange}
+                    register={register}
                     disabled={
-                      data.guardian_type === "Padre" ||
-                      data.guardian_type === "Madre"
+                      guardianType === "Padre" || guardianType === "Madre"
                     }
-                    required={data.guardian_type === "Otro"}
+                    required={guardianType === "Otro"}
                   />
                 )}
-                {data.guardian_country === "Colombia" &&
-                data.guardian_department === "Atlántico" ? (
+                {guardianCountry === "Colombia" &&
+                guardianDepartment === "Atlántico" ? (
                   <ComboBox
-                    value={data.guardian_city}
-                    setValue={(value) => update({ guardian_city: value })}
+                    value={guardianCity}
+                    setValue={(value) =>
+                      setFieldValue("guardian_city", value, {
+                        shouldDirty: true,
+                      })
+                    }
                     options={ATLANTICO_CITIES}
                     label="Ciudad"
                     disabled={
-                      data.guardian_type === "Padre" ||
-                      data.guardian_type === "Madre"
+                      guardianType === "Padre" || guardianType === "Madre"
                     }
-                    required={data.guardian_type === "Otro"}
+                    required={guardianType === "Otro"}
                   />
                 ) : (
                   <FormInput
                     label="Ciudad"
                     name="guardian_city"
-                    value={data.guardian_city}
-                    onChange={handleChange}
+                    register={register}
                     disabled={
-                      data.guardian_type === "Padre" ||
-                      data.guardian_type === "Madre"
+                      guardianType === "Padre" || guardianType === "Madre"
                     }
-                    required={data.guardian_type === "Otro"}
+                    required={guardianType === "Otro"}
                   />
                 )}
 
                 <FormSelect
                   label="Religión"
                   name="guardian_religion"
-                  value={data.guardian_religion}
-                  onChange={handleChange}
+                  register={register}
                   options={RELIGIONS}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
               </>
             )}
 
             <ComboBox
-              value={data.guardian_residence_country}
+              value={guardianResidenceCountry}
               setValue={(value) =>
-                update({ guardian_residence_country: value })
+                setFieldValue("guardian_residence_country", value, {
+                  shouldDirty: true,
+                })
               }
               options={COUNTRIES}
               label={
-                data.guardian_type === "Empresa"
-                  ? "País de la sede"
-                  : "País de Residencia"
+                guardianType === "Empresa" ? "País de la sede" : "País de Residencia"
               }
-              disabled={
-                data.guardian_type === "Padre" || data.guardian_type === "Madre"
-              }
-              required={
-                data.guardian_type === "Otro" ||
-                data.guardian_type === "Empresa"
-              }
+              disabled={guardianType === "Padre" || guardianType === "Madre"}
+              required={guardianType === "Otro" || guardianType === "Empresa"}
             />
-            {data.guardian_residence_country === "Colombia" ? (
+            {guardianResidenceCountry === "Colombia" ? (
               <ComboBox
-                value={data.guardian_residence_department}
+                value={guardianResidenceDepartment}
                 setValue={(value) =>
-                  update({ guardian_residence_department: value })
+                  setFieldValue("guardian_residence_department", value, {
+                    shouldDirty: true,
+                  })
                 }
                 options={COLOMBIA_DEPARTMENTS}
                 label="Departamento"
                 disabled={
-                  data.guardian_type === "Padre" ||
-                  data.guardian_type === "Madre"
+                  guardianType === "Padre" || guardianType === "Madre"
                 }
                 required={
-                  data.guardian_type === "Otro" ||
-                  data.guardian_type === "Empresa"
+                  guardianType === "Otro" || guardianType === "Empresa"
                 }
               />
             ) : (
               <FormInput
                 label="Departamento"
                 name="guardian_residence_department"
-                value={data.guardian_residence_department}
-                onChange={handleChange}
+                register={register}
                 disabled={
-                  data.guardian_type === "Padre" ||
-                  data.guardian_type === "Madre"
+                  guardianType === "Padre" || guardianType === "Madre"
                 }
-                required={data.guardian_type === "Otro"}
+                required={guardianType === "Otro"}
               />
             )}
-            {data.guardian_residence_country === "Colombia" &&
-            data.guardian_residence_department === "Atlántico" ? (
+            {guardianResidenceCountry === "Colombia" &&
+            guardianResidenceDepartment === "Atlántico" ? (
               <ComboBox
-                value={data.guardian_residence_city}
-                setValue={(value) => update({ guardian_residence_city: value })}
+                value={guardianResidenceCity}
+                setValue={(value) =>
+                  setFieldValue("guardian_residence_city", value, {
+                    shouldDirty: true,
+                  })
+                }
                 options={ATLANTICO_CITIES}
                 label="Ciudad"
                 disabled={
-                  data.guardian_type === "Padre" ||
-                  data.guardian_type === "Madre"
+                  guardianType === "Padre" || guardianType === "Madre"
                 }
-                required={data.guardian_type === "Otro"}
+                required={guardianType === "Otro"}
               />
             ) : (
               <FormInput
                 label="Ciudad"
                 name="guardian_residence_city"
-                value={data.guardian_residence_city}
-                onChange={handleChange}
+                register={register}
                 disabled={
-                  data.guardian_type === "Padre" ||
-                  data.guardian_type === "Madre"
+                  guardianType === "Padre" || guardianType === "Madre"
                 }
-                required={data.guardian_type === "Otro"}
+                required={guardianType === "Otro"}
               />
             )}
-            {data.guardian_residence_city === "Barranquilla" ? (
+            {guardianResidenceCity === "Barranquilla" ? (
               <>
                 <ComboBox
-                  value={data.guardian_residence_barrio}
+                  value={guardianBarrioGate}
                   setValue={(value) => {
-                    setGuardianBarrio(value);
-                    update({ guardian_residence_barrio: value });
+                    setGuardianBarrioGate(value);
+                    setFieldValue("guardian_residence_barrio", value, {
+                      shouldDirty: true,
+                    });
                   }}
                   options={BARRIOS_BARRANQUILLA}
                   label="Barrio"
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
-                {guardianBarrio === "Otro" && (
+                {guardianBarrioGate === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="guardian_otro_barrio"
-                    value={guardianOtroBarrio}
-                    onChange={(e) => {
-                      setGuardianOtroBarrio(e.target.value);
-                      update({
-                        guardian_otro_barrio: e.target.value,
-                        guardian_residence_barrio: e.target.value,
-                      });
+                    register={register}
+                    registerOptions={{
+                      onChange: (e) =>
+                        setFieldValue(
+                          "guardian_residence_barrio",
+                          e.target.value,
+                          { shouldDirty: true },
+                        ),
                     }}
                     disabled={
-                      data.guardian_type === "Padre" ||
-                      data.guardian_type === "Madre"
+                      guardianType === "Padre" || guardianType === "Madre"
                     }
                   />
                 )}
@@ -2875,122 +2885,99 @@ export const Step3StudentData = ({
               <FormInput
                 label="Barrio"
                 name="guardian_residence_barrio"
-                value={data.guardian_residence_barrio}
-                onChange={handleChange}
+                register={register}
                 disabled={
-                  data.guardian_type === "Padre" ||
-                  data.guardian_type === "Madre"
+                  guardianType === "Padre" || guardianType === "Madre"
                 }
-                required={data.guardian_type === "Otro"}
+                required={guardianType === "Otro"}
               />
             )}
             <FormInput
               label={
-                data.guardian_type === "Empresa"
+                guardianType === "Empresa"
                   ? "Dirección de la sede"
                   : "Dirección de Residencia"
               }
               name="guardian_residence_address"
-              value={data.guardian_residence_address}
-              onChange={handleChange}
-              disabled={
-                data.guardian_type === "Padre" || data.guardian_type === "Madre"
-              }
-              required={
-                data.guardian_type === "Otro" ||
-                data.guardian_type === "Empresa"
-              }
+              register={register}
+              disabled={guardianType === "Padre" || guardianType === "Madre"}
+              required={guardianType === "Otro" || guardianType === "Empresa"}
             />
             <FormInput
               label="Complemento (Apto, Torre)"
               name="guardian_residence_address_complement"
-              value={data.guardian_residence_address_complement}
-              onChange={handleChange}
-              disabled={
-                data.guardian_type === "Padre" || data.guardian_type === "Madre"
-              }
+              register={register}
+              disabled={guardianType === "Padre" || guardianType === "Madre"}
             />
             {/* Estrato - Solo para personas naturales */}
-            {data.guardian_type !== "Empresa" && (
+            {guardianType !== "Empresa" && (
               <FormSelect
                 label="Estrato"
                 name="guardian_residence_stratum"
-                value={data.guardian_residence_stratum}
-                onChange={handleChange}
+                register={register}
                 options={ESTRATOS}
                 disabled={
-                  data.guardian_type === "Padre" ||
-                  data.guardian_type === "Madre"
+                  guardianType === "Padre" || guardianType === "Madre"
                 }
-                required={data.guardian_type === "Otro"}
+                required={guardianType === "Otro"}
               />
             )}
 
-            {data.guardian_type === "Otro" && (
+            {guardianType === "Otro" && (
               <FormInput
                 label="Parentesco"
                 name="guardian_relationship"
-                value={data.guardian_relationship}
-                onChange={handleChange}
+                register={register}
                 required={true}
               />
             )}
 
             {/* Información Laboral del Acudiente - Solo para personas naturales */}
-            {data.guardian_type !== "Empresa" && (
+            {guardianType !== "Empresa" && (
               <>
                 <FormInput
                   label="Profesión"
                   name="guardian_profession"
-                  value={data.guardian_profession}
-                  onChange={handleChange}
+                  register={register}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
                 <FormInput
                   label="Nombre Empresa donde Labora"
                   name="guardian_company_name"
-                  value={data.guardian_company_name}
-                  onChange={handleChange}
+                  register={register}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
                 <FormInput
                   label="Dirección Empresa donde Labora"
                   name="guardian_company_address"
-                  value={data.guardian_company_address}
-                  onChange={handleChange}
+                  register={register}
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
                 <FormInput
                   label="Número de contacto laboral"
                   name="guardian_work_phone"
                   type="tel"
-                  value={data.guardian_work_phone}
-                  onChange={handleChange}
+                  register={register}
                   pattern="[0-9]*"
                   inputMode="numeric"
                   disabled={
-                    data.guardian_type === "Padre" ||
-                    data.guardian_type === "Madre"
+                    guardianType === "Padre" || guardianType === "Madre"
                   }
-                  required={data.guardian_type === "Otro"}
+                  required={guardianType === "Otro"}
                 />
               </>
             )}
 
-            {(data.guardian_type === "Otro" ||
-              data.guardian_type === "Empresa") && (
+            {(guardianType === "Otro" || guardianType === "Empresa") && (
               <>
                 <div className="col-span-1 md:col-span-2 lg:col-span-3 mt-2 mb-1">
                   <div className="alert alert-info py-2">
@@ -3002,8 +2989,7 @@ export const Step3StudentData = ({
                 <FormSelect
                   label="¿Quién firma como segunda persona?"
                   name="guardian_second_signer"
-                  value={data.guardian_second_signer}
-                  onChange={handleChange}
+                  register={register}
                   options={["Madre", "Padre", "No aplica"]}
                   required={true}
                 />
@@ -3041,33 +3027,33 @@ export const Step3StudentData = ({
           <p className="text-justify">
             Al hacer clic en el botón <strong>"ACEPTO"</strong>, yo{" "}
             <strong>
-              {data.guardian_full_name ||
+              {legalModalSnapshot.guardian_full_name ||
                 [
-                  data.guardian_firstname1,
-                  data.guardian_firstname2,
-                  data.guardian_lastname1,
-                  data.guardian_lastname2,
+                  legalModalSnapshot.guardian_firstname1,
+                  legalModalSnapshot.guardian_firstname2,
+                  legalModalSnapshot.guardian_lastname1,
+                  legalModalSnapshot.guardian_lastname2,
                 ]
                   .filter(Boolean)
                   .join(" ") ||
                 "[NOMBRE COMPLETO]"}
             </strong>
             , identificado(a) con{" "}
-            <strong>{data.guardian_document_type || "[TIPO]"}</strong> No.{" "}
-            <strong>{data.guardian_id_number || "[NÚMERO]"}</strong>, quien
+            <strong>{legalModalSnapshot.guardian_document_type || "[TIPO]"}</strong> No.{" "}
+            <strong>{legalModalSnapshot.guardian_id_number || "[NÚMERO]"}</strong>, quien
             realiza el proceso de matrícula del(la) estudiante{" "}
             <strong>
               {[
-                data.student_firstname1,
-                data.student_firstname2,
-                data.student_lastname1,
-                data.student_lastname2,
+                legalModalSnapshot.student_firstname1,
+                legalModalSnapshot.student_firstname2,
+                legalModalSnapshot.student_lastname1,
+                legalModalSnapshot.student_lastname2,
               ]
                 .filter(Boolean)
                 .join(" ") || "[NOMBRE DEL ESTUDIANTE]"}
             </strong>{" "}
-            (<strong>{data.student_id_type || "[TI/RC/CC]"}</strong> No.{" "}
-            <strong>{data.student_id_number || "[NÚMERO]"}</strong>), declaro
+            (<strong>{legalModalSnapshot.student_id_type || "[TI/RC/CC]"}</strong> No.{" "}
+            <strong>{legalModalSnapshot.student_id_number || "[NÚMERO]"}</strong>), declaro
             que actúo como padre/madre/acudiente y/o responsable y que cuento
             con autorización suficiente para adelantar este trámite y
             cargar/anexar en la plataforma los documentos requeridos, incluidos
