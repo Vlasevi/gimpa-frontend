@@ -154,7 +154,7 @@ export const Step1Verification = ({
         un código al correo del acudiente registrado.
       </p>
 
-      {error && (
+      {!tokenSent && error && (
         <div className="alert alert-error">
           <span>{error}</span>
         </div>
@@ -181,6 +181,7 @@ export const Step1Verification = ({
               onChange={setInputToken}
               disabled={loading}
               onComplete={handleValidateToken}
+              error={error || undefined}
             />
           </div>
 
@@ -199,15 +200,17 @@ export const Step1Verification = ({
             )}
           </button>
 
-          {/* Resend OTP button - separated */}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm w-full"
-            onClick={handleRequestToken}
-            disabled={loading}
-          >
-            ¿No recibiste el código? Reenviar
-          </button>
+          <p className="text-center text-sm text-base-content/60">
+            ¿No recibiste el código?{" "}
+            <button
+              type="button"
+              onClick={handleRequestToken}
+              disabled={loading}
+              className="font-medium text-primary transition-colors hover:text-primary/80 hover:underline disabled:cursor-not-allowed disabled:text-base-content/40 disabled:no-underline"
+            >
+              Reenviar
+            </button>
+          </p>
         </div>
       )}
     </div>

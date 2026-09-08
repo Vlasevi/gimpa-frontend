@@ -47,6 +47,16 @@ export interface OtpInputProps {
    * se dispara por cambios que no vengan de una edición real (solo hay un `onChange` de
    * DOM real por interacción, así que no hace falta deduplicar contra el `value` previo). */
   onComplete?: () => void;
+  /**
+   * Mensaje de error (ej. "Código incorrecto"). Referencia de diseño pegada por el
+   * usuario: casillas y dígitos en rojo (`otp-error`/`text-error` en vez de
+   * `otp-primary`/`text-primary`) + el mensaje centrado justo debajo de las casillas —
+   * no en un `alert` aparte arriba del formulario, que es donde vivía antes en los 3
+   * consumidores con `alert alert-error`. Los consumidores deciden cuándo pasar esto
+   * (típicamente su propio estado `error`, limpiado al reintentar) y siguen dueños del
+   * texto exacto.
+   */
+  error?: string;
 }
 
 export function OtpInput({
@@ -60,9 +70,11 @@ export function OtpInput({
   disabled,
   required = true,
   onComplete,
+  error,
 }: OtpInputProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
+  const hasError = !!error;
 
   return (
     <div className="form-control w-full">
@@ -71,7 +83,7 @@ export function OtpInput({
           {label}
         </label>
       )}
-      <label className="otp otp-lg otp-primary mx-auto">
+      <label className={`otp otp-lg mx-auto ${hasError ? "otp-error" : "otp-primary"}`}>
         {Array.from({ length }).map((_, i) => (
           <span key={i} />
         ))}
@@ -86,10 +98,12 @@ export function OtpInput({
           disabled={disabled}
           autoFocus={autoFocus}
           value={value}
-          // Color primario en los dígitos: la CSS de daisyUI (`--input-color`) solo tiñe
-          // el borde/outline de las casillas, nunca el texto del `<input>` real — sin
-          // esto los dígitos se ven negros (`base-content`) pese a `otp-primary`.
-          className="font-bold text-primary"
+          aria-invalid={hasError || undefined}
+          // Color de los dígitos: la CSS de daisyUI (`--input-color`, movido por
+          // `otp-error`) solo tiñe el borde/outline de las casillas, nunca el texto del
+          // `<input>` real — sin esto los dígitos se ven negros (`base-content`) pese a
+          // `otp-primary`/`otp-error`.
+          className={`font-bold ${hasError ? "text-error" : "text-primary"}`}
           onChange={(e) => {
             const next = e.target.value.replace(/\D/g, "").slice(0, length);
             onChange(next);
@@ -97,6 +111,7 @@ export function OtpInput({
           }}
         />
       </label>
+      {error && <p className="mt-2 text-center text-sm text-error">{error}</p>}
     </div>
   );
 }

@@ -227,7 +227,7 @@ const StepOTP = ({ next }: { next: () => void }) => {
       <p className="text-base-content/60">
         Enviaremos un código de verificación a tu correo para iniciar tu contratación.
       </p>
-      {error && <div className="alert alert-error"><span>{error}</span></div>}
+      {!sent && error && <div className="alert alert-error"><span>{error}</span></div>}
       {!sent ? (
         <button className="btn btn-primary" onClick={request} disabled={loading}>
           {loading ? <span className="loading loading-spinner" /> : "Enviar Código"}
@@ -241,14 +241,23 @@ const StepOTP = ({ next }: { next: () => void }) => {
               onChange={setCode}
               disabled={loading}
               onComplete={validate}
+              error={error || undefined}
             />
           </div>
           <button className="btn btn-secondary w-full mb-2" onClick={validate} disabled={loading || code.length !== 6}>
             {loading ? <span className="loading loading-spinner loading-sm" /> : "Validar y Continuar"}
           </button>
-          <button className="btn btn-ghost btn-sm w-full" onClick={request} disabled={loading}>
-            Reenviar código
-          </button>
+          <p className="text-center text-sm text-base-content/60">
+            ¿No recibiste el código?{" "}
+            <button
+              type="button"
+              onClick={request}
+              disabled={loading}
+              className="font-medium text-primary transition-colors hover:text-primary/80 hover:underline disabled:cursor-not-allowed disabled:text-base-content/40 disabled:no-underline"
+            >
+              Reenviar
+            </button>
+          </p>
         </div>
       )}
     </div>

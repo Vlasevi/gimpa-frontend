@@ -716,7 +716,7 @@ export default function Login() {
                   </p>
                 </div>
 
-                {notice && (
+                {notice && notice.tone !== "error" && (
                   <div className="mb-5">
                     <Notice message={notice.text} tone={notice.tone} />
                   </div>
@@ -732,6 +732,7 @@ export default function Login() {
                       onChange={setCode}
                       autoFocus
                       onComplete={() => verifyFormRef.current?.requestSubmit()}
+                      error={notice?.tone === "error" ? notice.text : undefined}
                     />
                     <p className="mt-2 text-center text-xs text-base-content/50">
                       El código vence en 5 minutos.
@@ -824,7 +825,7 @@ export default function Login() {
                   subtitle="Escribe el código que recibiste y tu nueva contraseña."
                 />
 
-                {notice && (
+                {notice && notice.tone !== "error" && (
                   <div className="mb-5">
                     <Notice message={notice.text} tone={notice.tone} />
                   </div>
@@ -847,6 +848,7 @@ export default function Login() {
                       onComplete={() => {
                         if (newPassword) resetConfirmFormRef.current?.requestSubmit();
                       }}
+                      error={notice?.tone === "error" ? notice.text : undefined}
                     />
                   </div>
                   <PasswordField
