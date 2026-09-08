@@ -39,6 +39,12 @@ export interface OtpInputProps {
    * caso de Login.tsx, que ya muestra el texto equivalente en un `<h1>` cercano. */
   hideLabel?: boolean;
   id?: string;
+  /** Default `true`: el campo aparece siempre justo después de una acción del usuario
+   * (pedir/reenviar código), así que lo natural es que el cursor ya esté puesto ahí —
+   * sin esto, Backspace/dígitos no hacían nada hasta hacer clic manualmente en las
+   * casillas. Antes solo `Login.tsx` lo pasaba explícito; ahora es el comportamiento por
+   * defecto de las 4 instancias, pasar `false` para desactivarlo si algún consumidor
+   * futuro lo necesita. */
   autoFocus?: boolean;
   disabled?: boolean;
   required?: boolean;
@@ -66,7 +72,7 @@ export function OtpInput({
   label,
   hideLabel = false,
   id,
-  autoFocus,
+  autoFocus = true,
   disabled,
   required = true,
   onComplete,
