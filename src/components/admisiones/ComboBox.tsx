@@ -16,6 +16,7 @@ export function ComboBox({
   placeholder,
   disabled,
   loading = false,
+  required,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -25,6 +26,14 @@ export function ComboBox({
   disabled?: boolean;
   /** True mientras se cargan las opciones desde la DB (departamentos/ciudades). */
   loading?: boolean;
+  /**
+   * Opcional, aditivo: sin pasarla el comportamiento no cambia para ningún consumidor
+   * existente (ningún uso actual en Admisiones la pasa). Mismo patrón que el `ComboBox`
+   * local de `matriculas/Step3StudentData.tsx:505-604` (línea 603,
+   * `required={required}` en su `<input>`), necesario para que `GeoCascadeField`
+   * (rama `static`, que reproduce Matrículas) pueda propagar `required` real.
+   */
+  required?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -71,6 +80,7 @@ export function ComboBox({
         placeholder={placeholder ?? label}
         value={query}
         disabled={disabled}
+        required={required}
         title={value}
         onChange={(e) => {
           setQuery(e.target.value);

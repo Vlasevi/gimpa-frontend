@@ -120,7 +120,14 @@ export interface GeoCascadeFieldProps {
   register: UseFormRegister<SectionValues>;
   setValue: UseFormSetValue<SectionValues>;
   disabled?: boolean; // ej. cuando guardian_type === "Padre"/"Madre"
-  requiredWhen?: FieldCondition; // ej. !father_lives_with_student
+  /**
+   * `boolean` para un `required` incondicional (ej. Matrículas: TODAS las 9 instancias
+   * de cascada usan `required={true}` fijo en país/depto/ciudad/barrio — ver
+   * `Step3StudentData.tsx:1620,1629,1638,1649,1657,1672,1695`) o `FieldCondition` para
+   * un `required` condicional (ej. `!father_lives_with_student`). Único lugar de verdad
+   * de "requerido" para este componente — no lo dupliques con un segundo campo.
+   */
+  requiredWhen?: boolean | FieldCondition;
   /** Textos por defecto "País/Departamento/Ciudad/Barrio de Residencia"; sobreescribible
    * para los casos "de Nacimiento"/"de Expedición"/"de la sede". */
   labels?: Partial<
@@ -207,6 +214,10 @@ export type FieldDescriptor =
       prefix: string;
       hasBarrio: boolean;
       source: GeoCascadeSource;
+      /** Reenviado tal cual a `GeoCascadeFieldProps["labels"]` — ver ese tipo arriba.
+       * Sin esto el descriptor no tenía forma de pedir "de Nacimiento"/"de Expedición"/
+       * "de la sede" en vez de los defaults "...de Residencia". */
+      labels?: GeoCascadeFieldProps["labels"];
     })
   | (FieldDescriptorBase & { type: "photo"; dataKey: string; preloadedUrlKey?: string })
   | (FieldDescriptorBase & { type: "file"; dataKey: string; accept?: string });

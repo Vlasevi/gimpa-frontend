@@ -331,6 +331,7 @@ export function ComboBoxField({
   disabled,
   placeholder,
   full,
+  required,
 }: {
   name: string;
   label: string;
@@ -339,6 +340,7 @@ export function ComboBoxField({
   disabled?: boolean;
   placeholder?: string;
   full?: boolean;
+  required?: boolean;
 }) {
   const isAsync = typeof options === "function";
   const [resolvedOptions, setResolvedOptions] = useState<readonly string[]>(
@@ -377,6 +379,7 @@ export function ComboBoxField({
             disabled={disabled}
             loading={loading}
             placeholder={placeholder}
+            required={required}
           />
         </div>
       )}

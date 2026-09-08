@@ -47,7 +47,25 @@
  * informe §3.1). Este componente usa `barrio_other` (la convención de la referencia
  * `GeoResidenceFields`, que es la única de las dos ya migrada a RHF). Quien migre
  * Matrículas (Paso 3/4) deberá decidir si renombra el campo o si este componente gana
- * una opción de sufijo — ver "Hallazgos pendientes" del Paso 1.
+ * una opción de sufijo — no es una decisión de este Paso 1 (fundación), que solo deja
+ * constancia del desajuste sin resolverlo.
+ *
+ * Limpieza en cascada al cambiar un campo padre: SOLO ocurre en la rama `kind: "api"`
+ * (reproduce `GeoResidenceFields`/Admisiones, que sí limpia hijos hoy —
+ * `guardianFields.tsx:102-120`). La rama `kind: "static"` (Matrículas) NO limpia hijos:
+ * sus 9 instancias reales (`Step3StudentData.tsx`, p.ej. líneas 1614-1650) hacen
+ * `update({ residence_country: value })` sin tocar `residence_department`/`city`/
+ * `barrio`. Es una diferencia real de comportamiento entre los dos módulos hoy, no un
+ * descuido de este componente — el plan exige cero cambio de comportamiento al migrar,
+ * aunque dejar datos obsoletos tras cambiar el país/departamento sea una rareza de UX
+ * de Matrículas. Arreglarla no es objeto de este paso.
+ *
+ * `required`: `GeoCascadeFieldProps.requiredWhen` acepta `boolean | FieldCondition`.
+ * Matrículas usa `required={true}` incondicional en país/depto/ciudad/barrio de sus 9
+ * cascadas (mismo archivo, mismas líneas) — un `requiredWhen` que solo aceptara
+ * `FieldCondition` perdería ese `true` en silencio. El `required` resultante se aplica
+ * a los 4 campos (país/depto/ciudad/barrio) en sus dos variantes, combobox e `<input>`
+ * libre.
  */
 
 import { useEffect, useState } from "react";
@@ -99,11 +117,13 @@ export function GeoCascadeField({
   const barrio = (useWatch({ control, name: k("barrio") }) as string) ?? "";
   const departmentId = useWatch({ control, name: k("department_id") }) as number | undefined;
 
-  const requiredDeps = requiredWhen ? conditionDependencies(requiredWhen) : [];
+  const requiredDeps =
+    typeof requiredWhen === "object" ? conditionDependencies(requiredWhen) : [];
   const requiredWatched = useWatch({ control, name: requiredDeps });
-  const required = requiredWhen
-    ? evaluateCondition(requiredWhen, watchedValuesFrom(requiredDeps, requiredWatched))
-    : false;
+  const required: boolean =
+    typeof requiredWhen === "object"
+      ? evaluateCondition(requiredWhen, watchedValuesFrom(requiredDeps, requiredWatched))
+      : (requiredWhen ?? false);
 
   // ---- Rama "api": fetch real de departamentos/ciudades (igual que GeoResidenceFields)
   const fetchDepartments = source.kind === "api" ? source.fetchDepartments : undefined;
@@ -158,28 +178,36 @@ export function GeoCascadeField({
   const showBarrioCombo = hasBarrio && !!barrioList;
 
   // ---- Limpieza en cascada (setValue de los hijos es responsabilidad de este
-  // componente, nunca de ComboBoxField/TextField genéricos)
+  // componente, nunca de ComboBoxField/TextField genéricos).
+  //
+  // SOLO se limpia cuando `source.kind === "api"` (reproduce Admisiones,
+  // `guardianFields.tsx:102-120`, fielmente). Cuando `source.kind === "static"` NO se
+  // limpia nada (reproduce Matrículas fielmente — ver comentario de cabecera del
+  // archivo): es una diferencia de comportamiento real entre los dos módulos hoy, no
+  // un descuido de este componente.
   const set = (name: string, value: unknown) => setValue(k(name), value, { shouldDirty: true });
 
   const onCountryChange = (v: string) => {
     set("country", v);
-    set("department", "");
-    if (isApi) set("department_id", undefined);
-    set("city", "");
-    if (hasBarrio) set("barrio", "");
+    if (isApi) {
+      set("department", "");
+      set("department_id", undefined);
+      set("city", "");
+      if (hasBarrio) set("barrio", "");
+    }
   };
   const onDepartmentChange = (name: string) => {
     set("department", name);
     if (isApi) {
       const found = apiDepartments.find((d) => d.name === name);
       set("department_id", found ? found.id : undefined);
+      set("city", "");
+      if (hasBarrio) set("barrio", "");
     }
-    set("city", "");
-    if (hasBarrio) set("barrio", "");
   };
   const onCityChange = (name: string) => {
     set("city", name);
-    if (hasBarrio) set("barrio", "");
+    if (isApi && hasBarrio) set("barrio", "");
   };
   const onBarrioChange = (v: string) => set("barrio", v);
 
@@ -191,6 +219,7 @@ export function GeoCascadeField({
         onChange={onCountryChange}
         options={COUNTRIES}
         disabled={disabled}
+        required={required}
       />
 
       {/* Departamento: rama "static" siempre lo renderiza (combobox o texto, igual que
@@ -204,6 +233,7 @@ export function GeoCascadeField({
           options={departmentOptions}
           disabled={disabled}
           loading={isApi ? loadingDepts : false}
+          required={required}
         />
       ) : !isApi || country ? (
         <TextField
@@ -224,6 +254,7 @@ export function GeoCascadeField({
           options={cityOptions}
           disabled={disabled || (isApi && !departmentId)}
           loading={isApi ? loadingCities : false}
+          required={required}
         />
       ) : !isApi || country ? (
         <TextField
@@ -246,6 +277,7 @@ export function GeoCascadeField({
               onChange={onBarrioChange}
               options={barrioList ?? []}
               disabled={disabled}
+              required={required}
             />
             {barrio === "Otro" && (
               <TextField

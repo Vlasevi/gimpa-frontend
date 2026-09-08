@@ -50,8 +50,9 @@ export interface SchemaFieldProps {
    * subirlo (informe §3.2/§3.3). Ningún otro tipo lo necesita: su valor ya vive 100% en
    * el formulario. Esta es la única pieza de plomería que NO estaba en el
    * `FieldDescriptor`/`GeoCascadeFieldProps`/`PhotoFieldProps` del informe — hace falta
-   * para que "photo"/"file" sean utilizables a través de `<SchemaSection>` (ver
-   * "Hallazgos pendientes" del Paso 1). */
+   * para que "photo"/"file" sean utilizables a través de `<SchemaSection>`: un gap real
+   * entre el diseño del informe y esta implementación, documentado aquí en vez de en un
+   * archivo aparte. */
   onFileStaged?: (dataKey: string, file: File | null) => void;
 }
 
@@ -130,6 +131,7 @@ function ComboBoxTypeField(props: SchemaFieldProps) {
       disabled={props.disabled}
       placeholder={d.placeholder}
       full={d.full}
+      required={props.required}
     />
   );
 }
@@ -177,7 +179,12 @@ function GeoCascadeTypeField(props: SchemaFieldProps) {
       register={props.register}
       setValue={props.setValue}
       disabled={props.disabled}
-      requiredWhen={typeof d.required === "object" ? d.required : undefined}
+      // `GeoCascadeFieldProps.requiredWhen` acepta `boolean | FieldCondition` (mismo
+      // tipo que `d.required`), así que se reenvía tal cual — antes se descartaba el
+      // caso `required: true` incondicional (Matrículas lo usa en sus 9 cascadas) por
+      // solo aceptar el caso `object` (FieldCondition).
+      requiredWhen={d.required}
+      labels={d.labels}
     />
   );
 }
