@@ -4,6 +4,7 @@ import { ChevronDown, Camera, Loader2 } from "lucide-react";
 import { apiUrl, API_ENDPOINTS, apiFetch, buildHeaders } from "@/utils/api";
 import { useAuth } from "@/components/Login/loginLogic";
 import { PdfModal, embedImagesInPdf, type FieldOverlay } from "@/components/pdf/PdfSignViewer";
+import { OtpInput } from "@/components/ui/OtpInput";
 import { FieldWidget } from "./FieldWidget";
 import {
   DATA_FIELDS,
@@ -233,15 +234,15 @@ const StepOTP = ({ next }: { next: () => void }) => {
         </button>
       ) : (
         <div className="form-control w-full max-w-xs">
-          <label className="label"><span className="label-text">Código recibido</span></label>
-          <input
-            type="text"
-            placeholder="123456"
-            className="input input-bordered w-full mb-4"
-            value={code}
-            maxLength={6}
-            onChange={(e) => setCode(e.target.value)}
-          />
+          <div className="mb-4">
+            <OtpInput
+              label="Código recibido"
+              value={code}
+              onChange={setCode}
+              disabled={loading}
+              onComplete={validate}
+            />
+          </div>
           <button className="btn btn-secondary w-full mb-2" onClick={validate} disabled={loading || code.length !== 6}>
             {loading ? <span className="loading loading-spinner loading-sm" /> : "Validar y Continuar"}
           </button>

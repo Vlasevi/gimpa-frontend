@@ -1,6 +1,7 @@
 // components/matriculas/steps/Step1Verification.tsx
 import { useState } from "react";
 import { apiUrl, API_ENDPOINTS, buildHeaders } from "@/utils/api";
+import { OtpInput } from "@/components/ui/OtpInput";
 
 export const Step1Verification = ({
   next,
@@ -173,18 +174,15 @@ export const Step1Verification = ({
         </button>
       ) : (
         <div className="form-control w-full max-w-xs animate-fade-in">
-          <label className="label">
-            <span className="label-text">Ingresa el código recibido</span>
-          </label>
-          <input
-            type="text"
-            placeholder="123456"
-            className="input input-bordered w-full mb-4"
-            value={inputToken}
-            onChange={(e) => setInputToken(e.target.value)}
-            maxLength={6}
-            disabled={loading}
-          />
+          <div className="mb-4">
+            <OtpInput
+              label="Ingresa el código recibido"
+              value={inputToken}
+              onChange={setInputToken}
+              disabled={loading}
+              onComplete={handleValidateToken}
+            />
+          </div>
 
           <button
             className="btn btn-secondary w-full mb-2"

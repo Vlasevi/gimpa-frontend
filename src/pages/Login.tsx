@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Loader2,
   Eye,
@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import heroImage from "@/assets/login-hero.webp";
 import Logo from "@/assets/logo.png";
 import { useAuth } from "@/components/Login/loginLogic";
+import { OtpInput } from "@/components/ui/OtpInput";
 import { apiUrl, AUTH_PATHS, API_ENDPOINTS } from "@/utils/api";
 
 // ---- Clases compartidas (ver DESIGN_SYSTEM.md) --------------------------
@@ -20,11 +21,6 @@ const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
 
 const inputClass =
   "h-12 w-full rounded-lg border border-base-300 bg-base-200 px-4 text-base text-base-content placeholder:text-base-content/40 transition-colors focus:border-primary focus:bg-base-100 focus:outline-none focus:ring-2 focus:ring-primary/40";
-
-// El campo del código replica el panel del correo (primary, grande, espaciado):
-// misma pieza visual en el email y en la app.
-const otpInputClass =
-  "h-16 w-full rounded-xl border border-base-300 bg-base-200 text-center font-display text-3xl font-bold tracking-[0.4em] text-primary placeholder:text-base-content/25 transition-colors focus:border-primary focus:bg-base-100 focus:outline-none focus:ring-2 focus:ring-primary/40";
 
 const primaryBtnClass =
   "flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
@@ -209,6 +205,12 @@ export default function Login() {
     null,
   );
   const [rememberMe, setRememberMe] = useState(false);
+
+  // Refs a los 2 `<form>` con OTP, para que `OtpInput.onComplete` pueda autoenviar
+  // (`requestSubmit()`) reutilizando el `onSubmit` real de cada uno tal cual, sin
+  // duplicar su lógica de validación/POST.
+  const verifyFormRef = useRef<HTMLFormElement>(null);
+  const resetConfirmFormRef = useRef<HTMLFormElement>(null);
 
   // Login por correo
   const [email, setEmail] = useState("");
@@ -720,23 +722,16 @@ export default function Login() {
                   </div>
                 )}
 
-                <form onSubmit={handleVerifySubmit} className="space-y-5">
+                <form ref={verifyFormRef} onSubmit={handleVerifySubmit} className="space-y-5">
                   <div>
-                    <label htmlFor="otp" className="sr-only">
-                      Código de verificación
-                    </label>
-                    <input
+                    <OtpInput
                       id="otp"
+                      label="Código de verificación"
+                      hideLabel
                       value={code}
-                      onChange={(e) =>
-                        setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                      }
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="000000"
-                      className={otpInputClass}
+                      onChange={setCode}
                       autoFocus
+                      onComplete={() => verifyFormRef.current?.requestSubmit()}
                     />
                     <p className="mt-2 text-center text-xs text-base-content/50">
                       El código vence en 5 minutos.
@@ -835,23 +830,23 @@ export default function Login() {
                   </div>
                 )}
 
-                <form onSubmit={handleResetConfirm} className="space-y-5">
+                <form ref={resetConfirmFormRef} onSubmit={handleResetConfirm} className="space-y-5">
                   <div>
-                    <label htmlFor="reset-otp" className="sr-only">
-                      Código de recuperación
-                    </label>
-                    <input
+                    <OtpInput
                       id="reset-otp"
+                      label="Código de recuperación"
+                      hideLabel
                       value={code}
-                      onChange={(e) =>
-                        setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                      }
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="000000"
-                      className={otpInputClass}
+                      onChange={setCode}
                       autoFocus
+                      // A diferencia del form de verificación, aquí el código NO es el
+                      // único campo requerido — `PasswordField` no tiene `required`
+                      // nativo (por el toggle mostrar/ocultar), así que sin esta guarda
+                      // `requestSubmit()` no lo bloquearía y se enviaría
+                      // `new_password: ""` apenas se completa el código.
+                      onComplete={() => {
+                        if (newPassword) resetConfirmFormRef.current?.requestSubmit();
+                      }}
                     />
                   </div>
                   <PasswordField
