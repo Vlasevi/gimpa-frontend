@@ -14,11 +14,17 @@
  *
  * Interacción rediseñada sobre el layout anterior (botón "Subir Foto"/"Cambiar" aparte,
  * al lado del avatar) tomando la idea del patrón "image input" de Metronic
- * (keenthemes.com/metronic): la foto MISMA es el disparador del selector de archivo (un
- * `<label>` envolviendo el `<input type="file">` oculto), con un overlay de cámara que
- * aparece al pasar el mouse — una sola zona de interacción en vez de dos. Se mantiene
- * cuadrado (`rounded-lg`), no circular como en la referencia — decisión explícita, no
- * se copia el círculo. El botón "✕" de quitar en la esquina se mantiene igual.
+ * (keenthemes.com/metronic): la foto MISMA es el disparador del selector de archivo, con
+ * un overlay de cámara que aparece al pasar el mouse — una sola zona de interacción en
+ * vez de dos. Se mantiene cuadrado (`rounded-lg`), no circular como en la referencia —
+ * decisión explícita, no se copia el círculo. El botón "✕" de quitar en la esquina se
+ * mantiene igual.
+ *
+ * El disparador es un `<button onClick>` que llama `inputRef.current.click()`, NO un
+ * `<label>` envolviendo el `<input type="file">` oculto (el diseño original) — reportado
+ * en vivo que el click no abría el selector. Disparar el picker programáticamente desde
+ * el propio handler de click (conserva el gesto de usuario "confiable" que el navegador
+ * exige) es robusto sin depender de la semántica implícita label-para-input oculto.
  *
  * Previsualización: `URL.createObjectURL(file)` para un archivo recién elegido en esta
  * sesión; `preloadedUrl` (string, típicamente base64, ver `preview_base64` del backend)
@@ -39,7 +45,7 @@
  * cuadro fijo de 80px) ahora muestra los requisitos y, si aplica, el error.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 
 import type { PhotoFieldProps } from "./types";
@@ -57,6 +63,7 @@ const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png"];
 export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Blob URL solo para un archivo recién elegido en esta sesión; se revoca al
   // reemplazarlo o al desmontar. `preloadedUrl` (base64) no pasa por aquí.
@@ -110,8 +117,18 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
       <div className="flex items-start gap-4">
         <div className="group relative w-20 shrink-0">
           {/* La foto es el disparador: click en cualquier parte del cuadro abre el
-              selector de archivo, sin un botón "Cambiar" aparte. */}
-          <label
+              selector de archivo, sin un botón "Cambiar" aparte.
+              `onClick` explícito con `inputRef.current.click()` en vez de depender solo
+              de que un `<label>` envolviendo el `<input>` lo dispare implícitamente —
+              reportado en vivo que el click no hacía nada; disparar el picker
+              programáticamente desde el propio evento de click (mantiene el gesto de
+              usuario "confiable" que el navegador exige para abrir el selector) es
+              robusto sin importar la causa exacta del label. El `<label htmlFor>` se
+              mantiene solo por accesibilidad (asocia el texto "Foto de perfil" de arriba),
+              ya no es lo que dispara el picker. */}
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
             className="block h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-base-300 bg-base-200 shadow-sm"
             title={preview ? "Cambiar foto" : "Subir foto"}
           >
@@ -129,13 +146,14 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
                 <Camera className="h-3.5 w-3.5 text-white" aria-hidden="true" />
               </div>
             )}
-            <input
-              type="file"
-              className="hidden"
-              accept="image/jpeg,image/png,.jpg,.jpeg,.png"
-              onChange={handleFileChange}
-            />
-          </label>
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            className="hidden"
+            accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+            onChange={handleFileChange}
+          />
           {preview && (
             <button
               type="button"
@@ -156,6 +174,7 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
             Muestra los requisitos reales de formato/tamaño y, si aplica, el error de la
             última selección rechazada. */}
         <div className="flex-1 pt-1">
+          <p className="text-xs font-semibold text-base-content/60">Formato y tamaño:</p>
           <p className="text-xs text-base-content/50">JPG, JPEG, PNG</p>
           <p className="text-xs text-base-content/50">Máx. 3MB</p>
           {error && <p className="mt-1.5 text-xs font-medium text-error">{error}</p>}
