@@ -145,15 +145,28 @@ export interface PhotoFieldValue {
   removed: boolean; // equivalente al "_manually_removed" de hoy
 }
 
+/**
+ * CORRECCIÓN (encontrada al conectar el primer consumidor real, Matrículas): la versión
+ * original de este componente guardaba `PhotoFieldValue` (con el `File` adentro) como el
+ * valor de un `Controller` de RHF — es decir, dentro de `data`, el mismo objeto que se
+ * serializa a JSON en cada autoguardado. Un `File` no sobrevive `JSON.stringify` (se
+ * convierte en `{}`), así que eso habría metido basura en el payload de
+ * `save-student-data` en cada guardado después de elegir una foto — justo lo que el
+ * propio diseño original decía que había que evitar ("un File no debe ir al JSON que se
+ * autoguarda"). Nadie lo notó antes porque no tenía consumidor real todavía.
+ *
+ * Fix: `PhotoField` ya NO usa `Controller`/`control` — es un componente controlado desde
+ * afuera (`value`/`onChange`), igual que `uploadedFiles`/`updateUploadedFiles` ya
+ * funcionan hoy en Matrículas. Ni `file` ni `removed` tocan RHF; quien lo consuma decide
+ * dónde vive ese estado (objeto local fuera de RHF, como en Matrículas — nunca dentro de
+ * `data`).
+ */
 export interface PhotoFieldProps {
   dataKey: string; // "student_photo" | "father_photo" | "mother_photo"
   label: string;
-  control: Control<SectionValues>; // vía Controller — un `File` no cabe en `register`
+  value: PhotoFieldValue;
+  onChange: (next: PhotoFieldValue) => void;
   preloadedUrl?: string; // base64 o URL absoluta de una foto ya guardada
-  /** Notifica al padre para que la incluya en el FormData del envío final — el
-   * componente NO decide cuándo se sube (ver informe §3.2/§3.3, los 3 modelos de
-   * timing de subida que ya conviven en el repo). */
-  onFileStaged: (file: File | null) => void;
 }
 
 // ---------------------------------------------------------- Tipos y descriptor

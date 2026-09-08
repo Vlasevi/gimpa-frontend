@@ -7,6 +7,7 @@ import {
 } from "react-hook-form";
 import { Alert } from "@/components/ui/Alert";
 import { ComboBox } from "@/components/ui/ComboBox";
+import { PhotoField } from "@/components/ui/fields/PhotoField";
 import { API_ENDPOINTS, apiFetch } from "@/utils/api";
 
 // --- CONSTANTES (Listas para desplegables) ---
@@ -401,147 +402,6 @@ const FormSelect = ({
   </div>
 );
 
-const PhotoUploadField = ({
-  dataKey,
-  control,
-  setValue,
-  uploadedFiles,
-  updateUploadedFiles,
-  label,
-  preloadedUrl,
-}: {
-  dataKey: string;
-  control: Control<any>;
-  setValue: UseFormSetValue<any>;
-  uploadedFiles: any;
-  updateUploadedFiles: Function;
-  label: string;
-  preloadedUrl?: string;
-}) => {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [useExisting, setUseExisting] = useState(!!preloadedUrl);
-
-  // Key to track if photo was manually removed (persists in data object)
-  const removedKey = `${dataKey}_manually_removed`;
-
-  // Valores del formulario que le corresponden a esta foto (viven en RHF, no en
-  // `uploadedFiles` — ese objeto es siempre el File real, aparte).
-  const photoValue = useWatch({ control, name: dataKey });
-  const removedFlag = useWatch({ control, name: removedKey });
-
-  // Helper function to check if a value is empty (null, undefined, or empty object)
-  const isEmpty = (value: any) => {
-    if (!value) return true;
-    if (typeof value === "object" && !(value instanceof File)) {
-      return Object.keys(value).length === 0;
-    }
-    return false;
-  };
-
-  // Update useExisting when preloadedUrl changes (e.g., when photos are loaded)
-  useEffect(() => {
-    // Only set useExisting if the user hasn't manually removed the photo
-    if (preloadedUrl && isEmpty(photoValue) && !removedFlag) {
-      setUseExisting(true);
-    }
-  }, [preloadedUrl, photoValue, removedFlag]);
-
-  useEffect(() => {
-    // Check if there's an uploaded file
-    const uploadedFile = uploadedFiles[dataKey];
-
-    if (uploadedFile instanceof File) {
-      // Show preview of uploaded file
-      const objectUrl = URL.createObjectURL(uploadedFile);
-      setPreview(objectUrl);
-      setUseExisting(false);
-      return () => URL.revokeObjectURL(objectUrl);
-    }
-
-    // No uploaded file - check if we should show preloaded photo
-    if (preloadedUrl && useExisting && !removedFlag) {
-      setPreview(preloadedUrl);
-    } else {
-      setPreview(null);
-    }
-  }, [uploadedFiles, dataKey, preloadedUrl, useExisting, removedFlag]);
-
-  const handleRemovePhoto = () => {
-    // Mark as manually removed in the form values (persists across navigation)
-    setValue(dataKey, null, { shouldDirty: true });
-    setValue(`${dataKey}_uploaded`, false, { shouldDirty: true });
-    setValue(removedKey, true, { shouldDirty: true });
-
-    // Also remove from uploaded files
-    updateUploadedFiles({
-      [dataKey]: null,
-    });
-
-    setUseExisting(false);
-    setPreview(null);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      // Store the File object separately (not in formData JSON)
-      updateUploadedFiles({
-        [dataKey]: selectedFile,
-      });
-
-      // Mark that we have a new file (for form validation)
-      setValue(`${dataKey}_uploaded`, true, { shouldDirty: true });
-      setValue(removedKey, false, { shouldDirty: true }); // Reset manually removed flag
-    }
-  };
-
-  return (
-    <div className="form-control w-full bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-sm col-span-1">
-      <label className="label pt-0">
-        <span className="label-text font-medium text-gray-600">{label}</span>
-      </label>
-      <div className="flex items-center gap-4">
-        <div className="avatar relative group shrink-0">
-          <div className="w-20 h-20 rounded-lg bg-gray-200 shadow-md overflow-hidden border border-gray-300">
-            {preview ? (
-              <img
-                src={preview}
-                alt="Foto"
-                className="object-cover w-full h-full"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                {/* SVG omitido */}
-              </div>
-            )}
-          </div>
-          {preview && (
-            <button
-              type="button"
-              onClick={handleRemovePhoto}
-              className="absolute -top-1 -right-1 btn btn-circle btn-xs btn-error text-white shadow-md"
-              title="Eliminar foto"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-        <label className="flex flex-col cursor-pointer">
-          <span className="btn btn-sm btn-outline btn-primary gap-2">
-            {preview ? "Cambiar" : "Subir Foto"}
-          </span>
-          <input
-            type="file"
-            className="hidden"
-            accept="image/*"
-            onChange={handleFileChange}
-          />
-        </label>
-      </div>
-    </div>
-  );
-};
-
 const SectionCard = ({ title, isOpen, onToggle, children }: any) => (
   <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md">
     <button
@@ -637,6 +497,22 @@ export const Step3StudentData = ({
   // reactivo (edad, auto-copias). El resto de los campos usa `register()` sin
   // watch, para no re-renderizar el formulario completo en cada tecla — esa
   // era la razón original para migrar Matrículas a react-hook-form.
+  // Flags "_manually_removed" de las 3 fotos (PhotoField, controlado desde afuera — el
+  // File real vive en `uploadedFiles`, fuera de RHF; solo el booleano de "quitada
+  // manualmente" vive en el formulario, igual que en la versión anterior).
+  const studentPhotoRemoved = useWatch({
+    control,
+    name: "student_photo_manually_removed",
+  });
+  const fatherPhotoRemoved = useWatch({
+    control,
+    name: "father_photo_manually_removed",
+  });
+  const motherPhotoRemoved = useWatch({
+    control,
+    name: "mother_photo_manually_removed",
+  });
+
   const studentBirthDate = useWatch({ control, name: "student_birth_date" });
   // `as string`: `useForm<Record<string, unknown>>` (línea 592) hace que `useWatch`
   // devuelva `unknown` para cualquier campo — no cambia el valor real en tiempo de
@@ -1248,13 +1124,19 @@ export const Step3StudentData = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Foto */}
             <div className="row-span-2 mt-3">
-              <PhotoUploadField
+              <PhotoField
                 dataKey="student_photo"
-                control={control}
-                setValue={setFieldValue}
-                uploadedFiles={uploadedFiles}
-                updateUploadedFiles={updateUploadedFiles}
                 label="Foto de perfil"
+                value={{
+                  file: uploadedFiles.student_photo ?? null,
+                  removed: !!studentPhotoRemoved,
+                }}
+                onChange={(next) => {
+                  updateUploadedFiles({ student_photo: next.file });
+                  setFieldValue("student_photo_manually_removed", next.removed, {
+                    shouldDirty: true,
+                  });
+                }}
                 preloadedUrl={preloadedDocuments?.student_photo?.preview_base64}
               />
             </div>
@@ -1851,13 +1733,19 @@ export const Step3StudentData = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Foto del Padre */}
             <div className="row-span-2 mt-3">
-              <PhotoUploadField
+              <PhotoField
                 dataKey="father_photo"
-                control={control}
-                setValue={setFieldValue}
-                uploadedFiles={uploadedFiles}
-                updateUploadedFiles={updateUploadedFiles}
                 label="Foto de perfil del Padre"
+                value={{
+                  file: uploadedFiles.father_photo ?? null,
+                  removed: !!fatherPhotoRemoved,
+                }}
+                onChange={(next) => {
+                  updateUploadedFiles({ father_photo: next.file });
+                  setFieldValue("father_photo_manually_removed", next.removed, {
+                    shouldDirty: true,
+                  });
+                }}
                 preloadedUrl={preloadedDocuments?.father_photo?.preview_base64}
               />
             </div>
@@ -2151,13 +2039,19 @@ export const Step3StudentData = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Foto de la Madre */}
             <div className="row-span-2 mt-3">
-              <PhotoUploadField
+              <PhotoField
                 dataKey="mother_photo"
-                control={control}
-                setValue={setFieldValue}
-                uploadedFiles={uploadedFiles}
-                updateUploadedFiles={updateUploadedFiles}
                 label="Foto de perfil de la Madre"
+                value={{
+                  file: uploadedFiles.mother_photo ?? null,
+                  removed: !!motherPhotoRemoved,
+                }}
+                onChange={(next) => {
+                  updateUploadedFiles({ mother_photo: next.file });
+                  setFieldValue("mother_photo_manually_removed", next.removed, {
+                    shouldDirty: true,
+                  });
+                }}
                 preloadedUrl={preloadedDocuments?.mother_photo?.preview_base64}
               />
             </div>

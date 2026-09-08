@@ -8,7 +8,6 @@
 
 import { useMemo, type ComponentType } from "react";
 import {
-  Controller,
   useWatch,
   type Control,
   type UseFormRegister,
@@ -33,8 +32,11 @@ import {
   watchedValuesFrom,
   type FieldDescriptor,
   type FieldType,
+  type PhotoFieldValue,
   type SectionValues,
 } from "./types";
+
+const EMPTY_PHOTO_VALUE: PhotoFieldValue = { file: null, removed: false };
 
 export interface SchemaFieldProps {
   descriptor: FieldDescriptor;
@@ -45,15 +47,21 @@ export interface SchemaFieldProps {
   required?: boolean;
   /** dataKey (de un descriptor "photo"/"file") -> URL/base64 de un archivo ya guardado. */
   preloadedUrls?: Readonly<Record<string, string>>;
-  /** Notifica que un descriptor "photo"/"file" tiene un archivo nuevo (o fue quitado) —
-   * mismo patrón de "staged upload" que ya usa Matrículas hoy; el padre decide cuándo
-   * subirlo (informe §3.2/§3.3). Ningún otro tipo lo necesita: su valor ya vive 100% en
-   * el formulario. Esta es la única pieza de plomería que NO estaba en el
+  /**
+   * dataKey -> `{file, removed}` actual de cada campo "photo"/"file" — `PhotoField` es
+   * controlado desde afuera (nunca guarda el `File` en RHF, ver `PhotoFieldProps` en
+   * `./types.ts`), así que quien use `<SchemaSection>` con un descriptor "photo" debe
+   * mantener este estado él mismo (fuera de RHF, igual que `uploadedFiles` en Matrículas)
+   * y pasarlo aquí para que el campo sepa qué mostrar. Ningún otro tipo lo necesita: su
+   * valor ya vive 100% en el formulario. Esta plomería no estaba en el
    * `FieldDescriptor`/`GeoCascadeFieldProps`/`PhotoFieldProps` del informe — hace falta
-   * para que "photo"/"file" sean utilizables a través de `<SchemaSection>`: un gap real
-   * entre el diseño del informe y esta implementación, documentado aquí en vez de en un
-   * archivo aparte. */
-  onFileStaged?: (dataKey: string, file: File | null) => void;
+   * para que "photo"/"file" sean utilizables a través de `<SchemaSection>`, documentado
+   * aquí en vez de en un archivo aparte.
+   */
+  photoValues?: Readonly<Record<string, PhotoFieldValue>>;
+  /** Notifica un cambio en un campo "photo"/"file" (archivo nuevo o quitado) — el padre
+   * decide dónde persistir `photoValues` y cuándo subir el archivo (informe §3.2/§3.3). */
+  onPhotoChange?: (dataKey: string, next: PhotoFieldValue) => void;
 }
 
 // ---------------------------------------------------------------- Adaptadores
@@ -193,13 +201,14 @@ function PhotoTypeField(props: SchemaFieldProps) {
   const d = props.descriptor;
   if (d.type !== "photo") return null;
   const preloadedUrl = props.preloadedUrls?.[d.preloadedUrlKey ?? d.dataKey];
+  const value = props.photoValues?.[d.dataKey] ?? EMPTY_PHOTO_VALUE;
   return (
     <PhotoField
       dataKey={d.dataKey}
       label={d.label}
-      control={props.control}
+      value={value}
       preloadedUrl={preloadedUrl}
-      onFileStaged={(file) => props.onFileStaged?.(d.dataKey, file)}
+      onChange={(next) => props.onPhotoChange?.(d.dataKey, next)}
     />
   );
 }
@@ -208,67 +217,49 @@ function PhotoTypeField(props: SchemaFieldProps) {
  * `type: "file"` — fuera de alcance de este esfuerzo (informe §3.3/§5.2: la subida de
  * archivos "tipo Admisiones" solo aplica a Step5Documents, no a Step3, y el plan no pide
  * tocar Step5). Implementación mínima, sin consumidor real hoy: misma forma de valor que
- * `photo` (`{file, removed}`) pero sin previsualización de imagen — solo el nombre del
- * archivo.
+ * `photo` (`{file, removed}`, reutiliza `PhotoFieldValue`) pero sin previsualización de
+ * imagen — solo el nombre del archivo. Controlado desde afuera vía `photoValues`/
+ * `onPhotoChange` (mismo mecanismo que `photo` — ver la corrección de diseño en
+ * `PhotoFieldProps`, `./types.ts`: un `File` nunca debe vivir dentro de RHF/`Controller`,
+ * porque se serializaría a `{}` en el JSON del autoguardado).
  */
-interface FileFieldValue {
-  file: File | null;
-  removed: boolean;
-}
-const EMPTY_FILE_VALUE: FileFieldValue = { file: null, removed: false };
-
 function FileTypeField(props: SchemaFieldProps) {
   const d = props.descriptor;
   if (d.type !== "file") return null;
   const preloadedUrl = props.preloadedUrls?.[d.dataKey];
+  const value = props.photoValues?.[d.dataKey] ?? EMPTY_PHOTO_VALUE;
+  const hasFile = !!value.file || (!value.removed && !!preloadedUrl);
   return (
-    <Controller
-      name={d.dataKey}
-      control={props.control}
-      defaultValue={EMPTY_FILE_VALUE}
-      render={({ field }) => {
-        const value = (field.value as FileFieldValue | undefined) ?? EMPTY_FILE_VALUE;
-        const hasFile = !!value.file || (!value.removed && !!preloadedUrl);
-        return (
-          <div className={d.full ? "sm:col-span-2" : undefined}>
-            <label className={labelClass}>{d.label}</label>
-            <div className="flex items-center gap-3">
-              <span className="truncate text-sm text-base-content/70">
-                {value.file ? value.file.name : hasFile ? "Archivo cargado" : "Sin archivo"}
-              </span>
-              <label className="btn btn-sm btn-outline btn-primary cursor-pointer gap-2">
-                {hasFile ? "Cambiar" : "Subir archivo"}
-                <input
-                  type="file"
-                  className="hidden"
-                  accept={d.accept}
-                  onChange={(e) => {
-                    const selected = e.target.files?.[0] ?? null;
-                    if (selected) {
-                      field.onChange({ file: selected, removed: false });
-                      props.onFileStaged?.(d.dataKey, selected);
-                    }
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              {hasFile && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm text-error"
-                  onClick={() => {
-                    field.onChange({ file: null, removed: true });
-                    props.onFileStaged?.(d.dataKey, null);
-                  }}
-                >
-                  Quitar
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      }}
-    />
+    <div className={d.full ? "sm:col-span-2" : undefined}>
+      <label className={labelClass}>{d.label}</label>
+      <div className="flex items-center gap-3">
+        <span className="truncate text-sm text-base-content/70">
+          {value.file ? value.file.name : hasFile ? "Archivo cargado" : "Sin archivo"}
+        </span>
+        <label className="btn btn-sm btn-outline btn-primary cursor-pointer gap-2">
+          {hasFile ? "Cambiar" : "Subir archivo"}
+          <input
+            type="file"
+            className="hidden"
+            accept={d.accept}
+            onChange={(e) => {
+              const selected = e.target.files?.[0] ?? null;
+              if (selected) props.onPhotoChange?.(d.dataKey, { file: selected, removed: false });
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {hasFile && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm text-error"
+            onClick={() => props.onPhotoChange?.(d.dataKey, { file: null, removed: true })}
+          >
+            Quitar
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -303,7 +294,8 @@ export interface SchemaSectionProps {
   register: UseFormRegister<SectionValues>;
   setValue: UseFormSetValue<SectionValues>;
   preloadedUrls?: Readonly<Record<string, string>>;
-  onFileStaged?: (dataKey: string, file: File | null) => void;
+  photoValues?: Readonly<Record<string, PhotoFieldValue>>;
+  onPhotoChange?: (dataKey: string, next: PhotoFieldValue) => void;
 }
 
 function descriptorKey(d: FieldDescriptor, index: number): string {
@@ -326,7 +318,8 @@ export function SchemaSection({
   register,
   setValue,
   preloadedUrls,
-  onFileStaged,
+  photoValues,
+  onPhotoChange,
 }: SchemaSectionProps) {
   const watchNames = useMemo(() => {
     const names = new Set<string>();
@@ -374,7 +367,8 @@ export function SchemaSection({
             disabled={disabled}
             required={required}
             preloadedUrls={preloadedUrls}
-            onFileStaged={onFileStaged}
+            photoValues={photoValues}
+            onPhotoChange={onPhotoChange}
           />
         );
       })}
