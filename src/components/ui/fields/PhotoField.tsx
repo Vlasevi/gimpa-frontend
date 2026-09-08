@@ -12,17 +12,19 @@
  * tocar directamente — ver la corrección de diseño sobre `Controller`/RHF documentada en
  * `PhotoFieldProps`, `./types.ts`).
  *
- * HISTORIA (por qué esto es un `<input className="file-input">` plano y no la foto misma
- * como disparador): las primeras 3 versiones probaban que la foto/avatar fuera el
- * disparador del selector — un `<label>` envolviendo un input oculto, luego un
- * `<button onClick>` con `inputRef.current.click()`, luego el input real transparente
- * superpuesto (`opacity-0` + `absolute inset-0`). Las tres fallaban en el navegador real
- * del usuario (confirmado sin ser problema de caché ni de bundle desactualizado), pese a
- * que las pruebas automatizadas vía Chrome DevTools/CDP sí las validaban. Se abandona
- * toda esa indirección: ahora es literalmente el ejemplo de la documentación de daisyUI
- * (`<input type="file" className="file-input ...">`, clase confirmada en
- * `node_modules/daisyui/components/fileinput.css`) — visible, sin trucos de posición ni
- * de opacidad, cero JS entre el click del usuario y el input nativo.
+ * HISTORIA del disparador (por qué esto NO es un `<label>` ni un `<button onClick>` con
+ * `inputRef.current.click()`): esos dos intentos, más un input real transparente
+ * superpuesto (`opacity-0` + `absolute inset-0` sobre una capa visual separada), fallaban
+ * en el navegador real del usuario — confirmado sin ser problema de caché ni de bundle
+ * desactualizado, pese a que las pruebas automatizadas vía Chrome DevTools/CDP sí los
+ * validaban. Teoría (no confirmada): algún bloqueador/extensión de privacidad neutraliza
+ * específicamente inputs invisibles superpuestos sobre otro contenido — el patrón que
+ * usan los clickjacks reales — mientras que un `<input type="file">` normal, aunque esté
+ * "disfrazado" con estilos, no dispara esa protección porque no hay una SEGUNDA capa
+ * separada debajo de la que sea invisible; el input ES el cuadro (la foto es su propio
+ * `background-image`), no algo transparente puesto ENCIMA de la foto. Con esta variante,
+ * si el navegador del usuario también la bloquea, no hay vuelta atrás sin admitirlo — de
+ * ahí que quede documentado el riesgo, aceptado explícitamente por el usuario.
  *
  * Previsualización: `URL.createObjectURL(file)` para un archivo recién elegido en esta
  * sesión; `preloadedUrl` (string, típicamente base64, ver `preview_base64` del backend)
@@ -42,7 +44,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Camera, X } from "lucide-react";
 
 import type { PhotoFieldProps } from "./types";
 
@@ -109,29 +111,49 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
   return (
     <div className="form-control w-full rounded-lg border border-base-300 bg-base-200/40 p-4 shadow-sm">
       <span className="label-text mb-2 block font-medium text-base-content/70">{label}</span>
-      <div className="flex items-center gap-3">
-        {preview && (
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-base-300 bg-base-200 shadow-sm">
-            <img src={preview} alt="Foto" className="h-full w-full object-cover" />
-            <button
-              type="button"
-              onClick={handleRemove}
-              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-error text-error-content shadow-sm transition-colors hover:bg-error/90"
-              title="Eliminar foto"
-            >
-              <X className="h-3 w-3" aria-hidden="true" />
-            </button>
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-4">
+        <div className="group relative h-20 w-20 shrink-0">
+          {/* El input ES el cuadro — la foto es su propio `background-image`, no una capa
+              aparte debajo de un input transparente (ver HISTORIA arriba). `file:hidden`
+              quita el botón nativo "Seleccionar archivo"; `text-transparent` esconde el
+              texto nativo "Sin archivos seleccionados" (mismo color que ya viene del
+              navegador, no se puede quitar el texto en sí, solo su color). */}
           <input
             type="file"
             accept="image/jpeg,image/png,.jpg,.jpeg,.png"
             onChange={handleFileChange}
-            className="file-input file-input-sm w-full"
+            title={preview ? "Cambiar foto" : "Subir foto"}
+            style={preview ? { backgroundImage: `url(${preview})` } : undefined}
+            className="file-input h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-base-300 bg-base-200 bg-cover bg-center p-0 text-transparent shadow-sm file:hidden"
           />
-          <p className="mt-1 text-xs text-base-content/50">JPG, JPEG, PNG · Máx. 3MB</p>
-          {error && <p className="mt-1 text-xs font-medium text-error">{error}</p>}
+          {!preview && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-base-content/40">
+              <Camera className="h-6 w-6" aria-hidden="true" />
+            </div>
+          )}
+          {/* Overlay de cámara al hover, visible solo si ya hay una foto (si no la hay, el
+              ícono de la cámara ya está a la vista dentro del cuadro). */}
+          {preview && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-6 items-center justify-center rounded-b-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera className="h-3.5 w-3.5 text-white" aria-hidden="true" />
+            </div>
+          )}
+          {preview && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-error text-error-content shadow-sm transition-colors hover:bg-error/90"
+              title="Eliminar foto"
+            >
+              <X className="h-3 w-3" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 pt-1">
+          <p className="text-xs text-bold-content/50">Formato y tamaño</p>
+          <p className="text-xs text-base-content/50">JPG, JPEG, PNG</p>
+          <p className="text-xs text-base-content/50">Máx. 3MB</p>
+          {error && <p className="mt-1.5 text-xs font-medium text-error">{error}</p>}
         </div>
       </div>
     </div>
