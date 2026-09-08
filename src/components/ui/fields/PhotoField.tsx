@@ -111,7 +111,7 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
       <span className="label-text mb-2 block font-medium text-base-content/70">{label}</span>
       <div className="flex items-center gap-3">
         {preview && (
-          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-base-300 bg-base-200 shadow-sm">
+          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-base-300 bg-base-200 shadow-sm">
             <img src={preview} alt="Foto" className="h-full w-full object-cover" />
             <button
               type="button"
