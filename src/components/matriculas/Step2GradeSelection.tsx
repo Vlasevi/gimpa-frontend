@@ -1,5 +1,6 @@
 // components/matriculas/steps/Step2GradeSelection.tsx
 
+import { useAuth } from "@/components/Login/loginLogic";
 import type { EnrollmentResponse } from "@/components/matriculas/MatriculasEstudiantes";
 
 interface Step2Props {
@@ -18,6 +19,15 @@ export const Step2GradeSelection = ({
   const actualEnrollment = enrollmentInfo?.actual_enrollment;
 
   const isFirstEnrollment = actualEnrollment?.is_first_enrollment === true;
+
+  // La cuenta que inicia sesión en este wizard ES la del estudiante (el campo
+  // guardián/acudiente vive aparte, en `guardian_*`) — `displayname` siempre existe
+  // desde que se crea la cuenta, a diferencia de `eligibility.existing_data`
+  // (`student_firstname1`/`student_lastname1`), que queda vacío hasta que el
+  // estudiante guarda el Paso 3 al menos una vez. Mismo campo que ya usa Navbar.tsx
+  // para mostrar el nombre de la sesión activa.
+  const { user } = useAuth();
+  const studentName = user?.displayname ?? "";
 
   return (
     <div className="space-y-6">
@@ -52,57 +62,55 @@ export const Step2GradeSelection = ({
       )}
 
       {/* Nueva Matrícula */}
-      <div className="card bg-base-200 shadow-xl">
-        <div className="card-body">
-          <h3 className="card-title text-primary">Nueva Matrícula</h3>
+      <div>
+        <h3 className="text-lg font-bold text-primary mb-4">Nueva Matrícula</h3>
 
-          <div className="space-y-4">
-            {/* Año Académico */}
-            <div className="form-control flex items-center space-x-1">
-              <label className="label">
-                <span className="label-text font-semibold">Año Académico</span>
+        <div className="space-y-4">
+          {/* Estudiante — solo si ya hay dato (ver comentario de studentName arriba) */}
+          {studentName && (
+            <div className="form-control flex items-center gap-2">
+              <label htmlFor="step2-student-name" className="label w-36 shrink-0">
+                <span className="label-text font-semibold">Estudiante</span>
               </label>
               <input
+                id="step2-student-name"
+                name="student_name"
                 type="text"
-                value={targetYear ?? ""}
-                className="input input-bordered bg-base-100 w-40"
+                value={studentName}
+                className="input input-bordered w-64"
                 disabled
               />
             </div>
+          )}
 
-            {/* Grado sugerido */}
-            <div className="form-control flex items-center space-x-1">
-              <label className="label">
-                <span className="label-text font-semibold">Grado a Cursar</span>
-              </label>
-              <input
-                type="text"
-                value={suggestedGrade?.description ?? ""}
-                className="input input-bordered bg-base-100 w-40"
-                disabled
-              />
-            </div>
+          {/* Año Académico */}
+          <div className="form-control flex items-center gap-2">
+            <label htmlFor="step2-academic-year" className="label w-36 shrink-0">
+              <span className="label-text font-semibold">Año Académico</span>
+            </label>
+            <input
+              id="step2-academic-year"
+              name="academic_year"
+              type="text"
+              value={targetYear ?? ""}
+              className="input input-bordered w-40"
+              disabled
+            />
           </div>
 
-          <div className="alert alert-success mt-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="stroke-current shrink-0 h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>
-              Puedes matricularte en el grado{" "}
-              <strong>{suggestedGrade?.description}</strong> para el año{" "}
-              <strong>{targetYear}</strong>.
-            </span>
+          {/* Grado sugerido */}
+          <div className="form-control flex items-center gap-2">
+            <label htmlFor="step2-grade" className="label w-36 shrink-0">
+              <span className="label-text font-semibold">Grado a Cursar</span>
+            </label>
+            <input
+              id="step2-grade"
+              name="grade"
+              type="text"
+              value={suggestedGrade?.description ?? ""}
+              className="input input-bordered w-40"
+              disabled
+            />
           </div>
         </div>
       </div>
