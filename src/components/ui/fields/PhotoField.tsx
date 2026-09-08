@@ -20,11 +20,15 @@
  * decisión explícita, no se copia el círculo. El botón "✕" de quitar en la esquina se
  * mantiene igual.
  *
- * El disparador es un `<button onClick>` que llama `inputRef.current.click()`, NO un
- * `<label>` envolviendo el `<input type="file">` oculto (el diseño original) — reportado
- * en vivo que el click no abría el selector. Disparar el picker programáticamente desde
- * el propio handler de click (conserva el gesto de usuario "confiable" que el navegador
- * exige) es robusto sin depender de la semántica implícita label-para-input oculto.
+ * El disparador es el propio `<input type="file">` REAL, transparente (`opacity-0`) y
+ * superpuesto exactamente sobre el cuadro visual (`absolute inset-0`) — no un `<label>`
+ * envolviendo un input oculto (`display:none`) ni un botón que llama
+ * `inputRef.current.click()` programáticamente (los dos intentos anteriores; ninguno
+ * abría el selector en al menos un navegador real, aunque sí en las pruebas automatizadas
+ * de Chrome DevTools vía CDP — soportar el click sintético/label-forwarding
+ * aparentemente no es universal). Con el input real recibiendo el click directo del
+ * usuario no hay ninguna capa de indirección de la que depender: es el patrón más básico
+ * y compatible de "custom file input" que existe.
  *
  * Previsualización: `URL.createObjectURL(file)` para un archivo recién elegido en esta
  * sesión; `preloadedUrl` (string, típicamente base64, ver `preview_base64` del backend)
@@ -45,7 +49,7 @@
  * cuadro fijo de 80px) ahora muestra los requisitos y, si aplica, el error.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Camera, X } from "lucide-react";
 
 import type { PhotoFieldProps } from "./types";
@@ -63,7 +67,6 @@ const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png"];
 export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // Blob URL solo para un archivo recién elegido en esta sesión; se revoca al
   // reemplazarlo o al desmontar. `preloadedUrl` (base64) no pasa por aquí.
@@ -116,41 +119,36 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
       <span className="label-text mb-2 block font-medium text-base-content/70">{label}</span>
       <div className="flex items-start gap-4">
         <div className="group relative w-20 shrink-0">
-          {/* La foto es el disparador: click en cualquier parte del cuadro abre el
-              selector de archivo, sin un botón "Cambiar" aparte.
-              `onClick` explícito con `inputRef.current.click()` en vez de depender solo
-              de que un `<label>` envolviendo el `<input>` lo dispare implícitamente —
-              reportado en vivo que el click no hacía nada; disparar el picker
-              programáticamente desde el propio evento de click (mantiene el gesto de
-              usuario "confiable" que el navegador exige para abrir el selector) es
-              robusto sin importar la causa exacta del label. El `<label htmlFor>` se
-              mantiene solo por accesibilidad (asocia el texto "Foto de perfil" de arriba),
-              ya no es lo que dispara el picker. */}
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="block h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-base-300 bg-base-200 shadow-sm"
-            title={preview ? "Cambiar foto" : "Subir foto"}
+          {/* Caja puramente visual — ya no es ella la que recibe el click, solo pinta el
+              contenido debajo del input real transparente. */}
+          <div
+            className="pointer-events-none block h-20 w-20 overflow-hidden rounded-lg border border-base-300 bg-base-200 shadow-sm"
+            aria-hidden="true"
           >
             {preview ? (
-              <img src={preview} alt="Foto" className="h-full w-full object-cover" />
+              <img src={preview} alt="" className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-base-content/40">
-                <Camera className="h-6 w-6" aria-hidden="true" />
+                <Camera className="h-6 w-6" />
               </div>
             )}
             {/* Overlay de cámara al hover, visible solo si ya hay una foto (si no la
                 hay, el ícono de la cámara ya está a la vista dentro del cuadro). */}
             {preview && (
               <div className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                <Camera className="h-3.5 w-3.5 text-white" aria-hidden="true" />
+                <Camera className="h-3.5 w-3.5 text-white" />
               </div>
             )}
-          </button>
+          </div>
+          {/* El disparador real: el propio `<input type="file">`, transparente y
+              superpuesto exacto sobre la caja visual — ver comentario del encabezado del
+              archivo sobre por qué NO es un `<label>` ni un `<button onClick>` con
+              `.click()` programático. */}
           <input
-            ref={inputRef}
             type="file"
-            className="hidden"
+            aria-label={preview ? "Cambiar foto" : "Subir foto"}
+            title={preview ? "Cambiar foto" : "Subir foto"}
+            className="absolute inset-0 h-20 w-20 cursor-pointer rounded-lg opacity-0"
             accept="image/jpeg,image/png,.jpg,.jpeg,.png"
             onChange={handleFileChange}
           />
@@ -158,7 +156,7 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
             <button
               type="button"
               onClick={handleRemove}
-              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-error text-error-content shadow-sm transition-colors hover:bg-error/90"
+              className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-error text-error-content shadow-sm transition-colors hover:bg-error/90"
               title="Eliminar foto"
             >
               <X className="h-3 w-3" aria-hidden="true" />
