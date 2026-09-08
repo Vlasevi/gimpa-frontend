@@ -5,6 +5,7 @@ import {
   type Control,
   type UseFormSetValue,
 } from "react-hook-form";
+import { ChevronDown } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { ComboBox } from "@/components/ui/ComboBox";
 import { PhotoField } from "@/components/ui/fields/PhotoField";
@@ -402,20 +403,43 @@ const FormSelect = ({
   </div>
 );
 
+/**
+ * FIX (verificación en vivo tras el commit `b48b1c0`): la versión anterior usaba el
+ * `collapse` de daisyUI, que esconde el contenido cerrado con `content-visibility` —
+ * eso vuelve esos campos NO-focuseables para el navegador, y `form.checkValidity()`
+ * (Step3 valida con la API nativa del navegador, no con RHF) tira un error de consola
+ * por cada campo requerido y vacío que quede dentro de una sección cerrada (~26 errores
+ * reproducidos con varias secciones colapsadas). Se reemplaza por la misma técnica
+ * `grid-rows-[0fr]/[1fr]` que ya usa `components/ui/SubSection.tsx` (Admisiones,
+ * probada): anima la altura a 0 con `overflow-hidden`, pero SIN `content-visibility` ni
+ * `visibility:hidden` — los campos siguen siendo focuseables aunque no se vean, así que
+ * la validación nativa puede seguir apuntando a ellos sin que el navegador se queje.
+ * Mismo `isOpen`/`onToggle` de siempre, ya no hay `<input type="checkbox">` de por
+ * medio — el toggle es un `<button>` directo.
+ */
 const SectionCard = ({ title, isOpen, onToggle, children }: any) => (
-  <div className="collapse collapse-arrow bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md">
-    <input
-      type="checkbox"
-      id={`section-${title}`}
-      checked={isOpen}
-      onChange={onToggle}
-      aria-label={title}
-    />
-    <div className="collapse-title font-bold text-lg text-primary uppercase tracking-wide bg-gray-50">
-      {title}
-    </div>
-    <div className="collapse-content text-sm border-t border-gray-100">
-      <div className="pt-6">{children}</div>
+  <div className="rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      className="flex w-full items-center justify-between gap-3 rounded-t-lg bg-gray-50 px-6 py-4 text-left"
+    >
+      <h3 className="text-lg font-bold uppercase tracking-wide text-primary">{title}</h3>
+      <ChevronDown
+        className={`h-5 w-5 shrink-0 text-base-content/40 transition-transform duration-200 ${
+          isOpen ? "rotate-180" : ""
+        }`}
+      />
+    </button>
+    <div
+      className={`grid transition-all duration-300 ease-in-out motion-reduce:transition-none ${
+        isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+      }`}
+    >
+      <div className="overflow-hidden">
+        <div className="border-t border-gray-100 p-6 text-sm">{children}</div>
+      </div>
     </div>
   </div>
 );
