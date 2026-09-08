@@ -233,7 +233,11 @@ const StepOTP = ({ next }: { next: () => void }) => {
           {loading ? <span className="loading loading-spinner" /> : "Enviar Código"}
         </button>
       ) : (
-        <div className="form-control w-full max-w-xs">
+        // `w-fit` en vez de `w-full max-w-xs`: ver Step1Verification.tsx (misma
+        // instancia unificada) — el ancho real de las casillas del OTP es menor que el
+        // de la tarjeta, así que con `w-full` el botón y el link de reenviar quedaban
+        // más anchos que las casillas.
+        <div className="mx-auto flex w-fit flex-col">
           <div className="mb-4">
             <OtpInput
               label="Código recibido"

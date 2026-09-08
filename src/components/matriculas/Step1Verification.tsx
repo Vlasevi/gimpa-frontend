@@ -173,7 +173,13 @@ export const Step1Verification = ({
           )}
         </button>
       ) : (
-        <div className="form-control w-full max-w-xs animate-fade-in">
+        /* `w-fit` en vez de `w-full max-w-xs`: el ancho real de las 6 casillas del OTP
+           (~264px) es menor que el de la tarjeta (320px) — con `w-full` el botón y el
+           link de reenviar quedaban visiblemente más anchos que las casillas. Al ser
+           flex-col con `w-fit`, el contenedor se ajusta al hijo más ancho (las
+           casillas) y el resto (`items-stretch`, default) se estira a ese mismo ancho,
+           sin números mágicos. */
+        <div className="mx-auto flex w-fit flex-col animate-fade-in">
           <div className="mb-4">
             <OtpInput
               label="Ingresa el código recibido"
