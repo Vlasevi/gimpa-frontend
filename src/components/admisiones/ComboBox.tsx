@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { labelClass } from "./formFields";
@@ -39,6 +39,11 @@ export function ComboBox({
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  // Antes usaba `id={label}` — con 4+ cascadas geográficas compartiendo el mismo label por
+  // defecto ("País de Residencia", etc.) el DOM terminaba con ids duplicados (hallazgo de
+  // DevTools en la verificación del Paso 2 del plan de esquema declarativo). `useId()`
+  // genera un id único por instancia sin depender del texto del label.
+  const inputId = useId();
 
   // Sincroniza el texto con el valor cuando está cerrado.
   useEffect(() => {
@@ -70,10 +75,10 @@ export function ComboBox({
 
   return (
     <div className="form-control relative w-full">
-      <label htmlFor={label} className={labelClass}>{label}</label>
+      <label htmlFor={inputId} className={labelClass}>{label}</label>
       <input
         ref={inputRef}
-        id={label}
+        id={inputId}
         type="text"
         autoComplete="off"
         className="input input-bordered w-full truncate transition-all focus:input-primary"

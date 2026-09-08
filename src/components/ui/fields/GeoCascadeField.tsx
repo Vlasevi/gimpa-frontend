@@ -68,9 +68,12 @@
  * libre.
  *
  * `country_other` (añadido en el Paso 2 del plan, al conectar el primer consumidor
- * real): las 13 instancias de hoy (9 Matrículas, 4 Admisiones) muestran un
- * `<input>` "¿Cuál país?" cuando `country === "Otro"`, ANTES del campo de
- * departamento (mismo lugar en las 13). El informe del Paso 0 (§3.1/§4) no lo listó
+ * real): corrección respecto a un comentario anterior de este archivo — solo las 4
+ * instancias de Admisiones muestran hoy un `<input>` "¿Cuál país?" cuando
+ * `country === "Otro"` (verificado en la revisión del Paso 2: Matrículas, con país
+ * distinto de Colombia, solo cae departamento/ciudad a texto libre, sin ningún campo
+ * "¿Cuál país?"). Se agrega igual en este componente compartido, ANTES del campo de
+ * departamento. El informe del Paso 0 (§3.1/§4) no lo listó
  * como parte de `GeoCascadeFieldProps`/`DEFAULT_LABELS` — un vacío real de la
  * fundación, no una decisión deliberada de omitirlo — así que se agrega aquí mismo
  * (mismo componente, sin nueva prop: se activa solo con `country === "Otro"`, igual
