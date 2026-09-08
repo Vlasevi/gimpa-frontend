@@ -66,6 +66,17 @@
  * `FieldCondition` perdería ese `true` en silencio. El `required` resultante se aplica
  * a los 4 campos (país/depto/ciudad/barrio) en sus dos variantes, combobox e `<input>`
  * libre.
+ *
+ * `country_other` (añadido en el Paso 2 del plan, al conectar el primer consumidor
+ * real): las 13 instancias de hoy (9 Matrículas, 4 Admisiones) muestran un
+ * `<input>` "¿Cuál país?" cuando `country === "Otro"`, ANTES del campo de
+ * departamento (mismo lugar en las 13). El informe del Paso 0 (§3.1/§4) no lo listó
+ * como parte de `GeoCascadeFieldProps`/`DEFAULT_LABELS` — un vacío real de la
+ * fundación, no una decisión deliberada de omitirlo — así que se agrega aquí mismo
+ * (mismo componente, sin nueva prop: se activa solo con `country === "Otro"`, igual
+ * que `barrio_other` ya hace con `barrio === "Otro"`) en vez de en el consumidor, para
+ * no duplicar la posición exacta en el layout en cada `FieldGrid` que use esta
+ * cascada.
  */
 
 import { useEffect, useState } from "react";
@@ -221,6 +232,14 @@ export function GeoCascadeField({
         disabled={disabled}
         required={required}
       />
+      {country === "Otro" && (
+        <TextField
+          name={k("country_other")}
+          label="¿Cuál país?"
+          register={register}
+          disabled={disabled}
+        />
+      )}
 
       {/* Departamento: rama "static" siempre lo renderiza (combobox o texto, igual que
        * Matrículas hoy); rama "api" lo oculta hasta elegir país (igual que
