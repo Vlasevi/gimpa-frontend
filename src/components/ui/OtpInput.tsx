@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { labelClass } from "@/components/ui/formStyles";
 
@@ -81,6 +81,19 @@ export function OtpInput({
   const autoId = useId();
   const inputId = id ?? autoId;
   const hasError = !!error;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wasDisabled = useRef(disabled);
+
+  // El navegador quita el foco solo (sin evento que lo delate) apenas un <input> pasa a
+  // `disabled` — pasa aquí durante `loading` mientras se valida el código (ver
+  // consumidores: `disabled={loading}`). Al terminar la validación el campo vuelve a
+  // habilitarse pero el foco no vuelve solo, así que justo cuando aparece "Código
+  // incorrecto" el usuario se queda sin poder corregir sin hacer clic de nuevo. Se
+  // restaura explícitamente en la transición disabled→enabled.
+  useEffect(() => {
+    if (wasDisabled.current && !disabled) inputRef.current?.focus();
+    wasDisabled.current = disabled;
+  }, [disabled]);
 
   return (
     <div className="form-control w-full">
@@ -94,6 +107,7 @@ export function OtpInput({
           <span key={i} />
         ))}
         <input
+          ref={inputRef}
           id={inputId}
           type="text"
           inputMode="numeric"
