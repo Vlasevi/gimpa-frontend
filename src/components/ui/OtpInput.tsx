@@ -50,8 +50,8 @@ export interface OtpInputProps {
   /**
    * Mensaje de error (ej. "Código incorrecto"). Referencia de diseño pegada por el
    * usuario: casillas y dígitos en rojo (`otp-error`/`text-error` en vez de
-   * `otp-primary`/`text-primary`) + el mensaje centrado justo debajo de las casillas —
-   * no en un `alert` aparte arriba del formulario, que es donde vivía antes en los 3
+   * `otp-primary`/`text-primary`) + el mensaje alineado a la izquierda justo debajo de
+   * las casillas — no en un `alert` aparte arriba del formulario, que es donde vivía antes en los 3
    * consumidores con `alert alert-error`. Los consumidores deciden cuándo pasar esto
    * (típicamente su propio estado `error`, limpiado al reintentar) y siguen dueños del
    * texto exacto.
@@ -111,7 +111,7 @@ export function OtpInput({
           }}
         />
       </label>
-      {error && <p className="mt-2 text-center text-sm text-error">{error}</p>}
+      {error && <p className="mt-2 text-left text-sm text-error">{error}</p>}
     </div>
   );
 }

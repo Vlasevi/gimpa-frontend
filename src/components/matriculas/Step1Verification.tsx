@@ -155,7 +155,7 @@ export const Step1Verification = ({
       </p>
 
       {!tokenSent && error && (
-        <div className="alert alert-error">
+        <div className="text-left alert alert-error">
           <span>{error}</span>
         </div>
       )}
