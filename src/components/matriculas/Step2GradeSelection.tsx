@@ -63,8 +63,6 @@ export const Step2GradeSelection = ({
 
       {/* Nueva Matrícula */}
       <div>
-        <h3 className="text-lg font-bold text-primary mb-4">Nueva Matrícula</h3>
-
         <div className="space-y-4">
           {/* Estudiante — solo si ya hay dato (ver comentario de studentName arriba) */}
           {studentName && (
@@ -117,7 +115,10 @@ export const Step2GradeSelection = ({
 
       {/* Botones navegación */}
       <div className="flex justify-between mt-8">
-        <button className="btn btn-ghost" onClick={back}>
+        {/* `btn-outline btn-primary` en vez de `btn-ghost`: sin borde, "Atrás" quedaba
+            practicamente invisible sobre el fondo blanco de la tarjeta hasta el hover.
+            Mismo patron que ya usa el "Atrás" de Step3StudentData.tsx. */}
+        <button className="btn btn-outline btn-primary" onClick={back}>
           Atrás
         </button>
         <button className="btn btn-primary" onClick={next}>
