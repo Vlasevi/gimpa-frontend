@@ -14,7 +14,7 @@
  * `admisiones/steps.tsx`: mismas clases de radio-pill `sr-only`, un solo componente con
  * `mode?: "string" | "boolean"`.
  *
- * `ComboBoxField` envuelve `components/admisiones/ComboBox.tsx` con `Controller`: queda
+ * `ComboBoxField` envuelve `components/ui/ComboBox.tsx` con `Controller`: queda
  * autocontenido (el consumidor no hace `setValue` a mano para el valor del propio
  * combo). Distinto del uso de `ComboBox` dentro de `GeoCascadeField`, que sí necesita
  * `setValue` propio porque además debe limpiar los campos hijos de la cascada — esa
@@ -34,7 +34,7 @@ import {
   selectClass,
   textareaClass,
 } from "@/components/ui/formStyles";
-import { ComboBox } from "@/components/admisiones/ComboBox";
+import { ComboBox } from "@/components/ui/ComboBox";
 import type { SectionValues } from "./types";
 
 interface FieldBaseProps {
@@ -313,7 +313,7 @@ export function CheckboxGroupField({
 }
 
 /**
- * Envuelve `components/admisiones/ComboBox.tsx` (dropdown buscable) con `Controller`.
+ * Envuelve `components/ui/ComboBox.tsx` (dropdown buscable) con `Controller`.
  * Autocontenido: el consumidor solo pasa `control`/`options`, sin `setValue` manual
  * (a diferencia de `GeoResidenceFields` hoy, que usa `useWatch`+`setValue` porque
  * además coordina campos hijos — ver `GeoCascadeField.tsx` para ese caso).

@@ -86,7 +86,7 @@ import { useEffect, useState } from "react";
 import { useWatch } from "react-hook-form";
 
 import { COUNTRIES } from "@/components/shared/formLists";
-import { ComboBox } from "@/components/admisiones/ComboBox";
+import { ComboBox } from "@/components/ui/ComboBox";
 import { TextField, SelectField } from "./primitives";
 import {
   conditionDependencies,

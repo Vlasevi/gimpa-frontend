@@ -6,6 +6,7 @@ import {
   type UseFormSetValue,
 } from "react-hook-form";
 import { Alert } from "@/components/ui/Alert";
+import { ComboBox } from "@/components/ui/ComboBox";
 import { API_ENDPOINTS, apiFetch } from "@/utils/api";
 
 // --- CONSTANTES (Listas para desplegables) ---
@@ -570,147 +571,6 @@ const SectionCard = ({ title, isOpen, onToggle, children }: any) => (
   </div>
 );
 
-const ComboBox = ({
-  value,
-  setValue,
-  options,
-  label,
-  disabled,
-  required,
-}: any) => {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLUListElement>(null);
-
-  // Sincronizar query con value cuando el dropdown está cerrado
-  useEffect(() => {
-    if (!open) {
-      setQuery(value || "");
-    }
-  }, [value, open]);
-
-  // Cerrar el dropdown cuando se hace scroll en la página (no en el dropdown)
-  useEffect(() => {
-    const handleScroll = (e: Event) => {
-      // No cerrar si el scroll es dentro del dropdown
-      if (
-        dropdownRef.current &&
-        dropdownRef.current.contains(e.target as Node)
-      ) {
-        return;
-      }
-
-      if (open) {
-        setOpen(false);
-      }
-    };
-
-    if (open) {
-      window.addEventListener("scroll", handleScroll, true);
-    }
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll, true);
-    };
-  }, [open]);
-
-  const inputValue = typeof query === "string" ? query : "";
-
-  // Función para normalizar texto (eliminar tildes)
-  const normalizeText = (text: string) => {
-    return text
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-  };
-
-  const filteredOptions =
-    inputValue === ""
-      ? options
-      : options.filter((o) => {
-          const normalizedOption = normalizeText(o);
-          const normalizedInput = normalizeText(inputValue);
-
-          // Buscar si el nombre completo empieza con el input O si alguna palabra empieza con el input
-          if (normalizedOption.startsWith(normalizedInput)) {
-            return true;
-          }
-
-          // Buscar si alguna palabra del barrio empieza con el input
-          const words = normalizedOption.split(" ");
-          return words.some((word) => word.startsWith(normalizedInput));
-        });
-
-  return (
-    <div className="form-control w-full relative">
-      <label className="label">
-        <span className="label-text font-medium text-gray-600">
-          {label}
-          {required && <span className="text-error ml-1">*</span>}
-        </span>
-      </label>
-      <input
-        ref={inputRef}
-        type="text"
-        className={`input input-bordered w-full focus:input-primary transition-all truncate ${
-          disabled ? "!bg-base-200 text-gray-500 cursor-not-allowed" : ""
-        }`}
-        placeholder={label}
-        value={inputValue}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          setOpen(true);
-          setQuery(value || "");
-        }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        disabled={disabled}
-        required={required}
-        autoComplete="off"
-        title={value}
-      />
-      {open && filteredOptions.length > 0 && (
-        <ul
-          ref={dropdownRef}
-          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto"
-          style={{
-            top: inputRef.current
-              ? inputRef.current.getBoundingClientRect().bottom + 4
-              : 0,
-            left: inputRef.current
-              ? inputRef.current.getBoundingClientRect().left
-              : 0,
-            width: inputRef.current
-              ? inputRef.current.getBoundingClientRect().width
-              : "auto",
-          }}
-        >
-          {filteredOptions.map((o) => (
-            <li
-              key={o}
-              className={`px-4 py-2 cursor-pointer hover:bg-primary hover:text-white truncate ${
-                o === value ? "bg-primary text-white" : ""
-              }`}
-              onMouseDown={() => {
-                setValue(o);
-                setQuery(o);
-                setOpen(false);
-                if (inputRef.current) inputRef.current.blur();
-              }}
-              title={o}
-            >
-              {o}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
-
 // --- COMPONENTE PRINCIPAL ---
 export const Step3StudentData = ({
   next,
@@ -778,22 +638,35 @@ export const Step3StudentData = ({
   // watch, para no re-renderizar el formulario completo en cada tecla — esa
   // era la razón original para migrar Matrículas a react-hook-form.
   const studentBirthDate = useWatch({ control, name: "student_birth_date" });
+  // `as string`: `useForm<Record<string, unknown>>` (línea 592) hace que `useWatch`
+  // devuelva `unknown` para cualquier campo — no cambia el valor real en tiempo de
+  // ejecución, solo permite pasarlo al `ComboBox` compartido (`value: string`), que
+  // ahora tipa en serio a diferencia de la copia local `:any` que reemplaza.
   const studentBirthCountry = useWatch({
     control,
     name: "student_birth_country",
-  });
+  }) as string;
   const studentBirthDepartment = useWatch({
     control,
     name: "student_birth_department",
-  });
-  const studentBirthCity = useWatch({ control, name: "student_birth_city" });
-  const studentIdCountry = useWatch({ control, name: "student_id_country" });
+  }) as string;
+  const studentBirthCity = useWatch({
+    control,
+    name: "student_birth_city",
+  }) as string;
+  const studentIdCountry = useWatch({
+    control,
+    name: "student_id_country",
+  }) as string;
   const studentIdDepartment = useWatch({
     control,
     name: "student_id_department",
-  });
-  const studentIdCity = useWatch({ control, name: "student_id_city" });
-  const studentHealthEps = useWatch({ control, name: "student_health_eps" });
+  }) as string;
+  const studentIdCity = useWatch({ control, name: "student_id_city" }) as string;
+  const studentHealthEps = useWatch({
+    control,
+    name: "student_health_eps",
+  }) as string;
   const studentHasCellphone = useWatch({
     control,
     name: "student_has_cellphone",
@@ -806,7 +679,7 @@ export const Step3StudentData = ({
   const residenceForCopy = useWatch({
     control,
     name: RESIDENCE_COPY_SUFFIXES.map((s) => `residence_${s}`),
-  }) as unknown[];
+  }) as string[];
   const [
     residenceCountry,
     residenceDepartment,
@@ -828,24 +701,30 @@ export const Step3StudentData = ({
   const medicalHasDiagnosis = useWatch({
     control,
     name: "medical_has_diagnosis",
-  });
+  }) as string;
 
+  // `as boolean`: mismo motivo que el `as string` de arriba — `fatherLivesWithStudent`/
+  // `motherLivesWithStudent` alimentan `required`/`disabled` (tipados `boolean` en el
+  // `ComboBox` compartido); el valor real que persiste el formulario no cambia.
   const fatherLivesWithStudent = useWatch({
     control,
     name: "father_lives_with_student",
-  });
+  }) as boolean;
   const motherLivesWithStudent = useWatch({
     control,
     name: "mother_lives_with_student",
-  });
+  }) as boolean;
 
-  const fatherCountry = useWatch({ control, name: "father_country" });
-  const fatherDepartment = useWatch({ control, name: "father_department" });
-  const fatherCity = useWatch({ control, name: "father_city" });
+  const fatherCountry = useWatch({ control, name: "father_country" }) as string;
+  const fatherDepartment = useWatch({
+    control,
+    name: "father_department",
+  }) as string;
+  const fatherCity = useWatch({ control, name: "father_city" }) as string;
   const fatherResidenceForCopy = useWatch({
     control,
     name: RESIDENCE_COPY_SUFFIXES.map((s) => `father_residence_${s}`),
-  }) as unknown[];
+  }) as string[];
   const [
     fatherResidenceCountry,
     fatherResidenceDepartment,
@@ -859,13 +738,16 @@ export const Step3StudentData = ({
     name: GUARDIAN_WATCHED_SUFFIXES.map((s) => `father_${s}`),
   }) as unknown[];
 
-  const motherCountry = useWatch({ control, name: "mother_country" });
-  const motherDepartment = useWatch({ control, name: "mother_department" });
-  const motherCity = useWatch({ control, name: "mother_city" });
+  const motherCountry = useWatch({ control, name: "mother_country" }) as string;
+  const motherDepartment = useWatch({
+    control,
+    name: "mother_department",
+  }) as string;
+  const motherCity = useWatch({ control, name: "mother_city" }) as string;
   const motherResidenceForCopy = useWatch({
     control,
     name: RESIDENCE_COPY_SUFFIXES.map((s) => `mother_residence_${s}`),
-  }) as unknown[];
+  }) as string[];
   const [
     motherResidenceCountry,
     motherResidenceDepartment,
@@ -880,28 +762,31 @@ export const Step3StudentData = ({
   }) as unknown[];
 
   const guardianType = useWatch({ control, name: "guardian_type" });
-  const guardianCountry = useWatch({ control, name: "guardian_country" });
+  const guardianCountry = useWatch({
+    control,
+    name: "guardian_country",
+  }) as string;
   const guardianDepartment = useWatch({
     control,
     name: "guardian_department",
-  });
-  const guardianCity = useWatch({ control, name: "guardian_city" });
+  }) as string;
+  const guardianCity = useWatch({ control, name: "guardian_city" }) as string;
   const guardianResidenceCountry = useWatch({
     control,
     name: "guardian_residence_country",
-  });
+  }) as string;
   const guardianResidenceDepartment = useWatch({
     control,
     name: "guardian_residence_department",
-  });
+  }) as string;
   const guardianResidenceCity = useWatch({
     control,
     name: "guardian_residence_city",
-  });
+  }) as string;
   const guardianResidenceBarrioValue = useWatch({
     control,
     name: "guardian_residence_barrio",
-  });
+  }) as string;
 
   // --- EFFECT: edad del estudiante (persistida, no solo derivada) ---
   useEffect(() => {
@@ -1434,7 +1319,7 @@ export const Step3StudentData = ({
             <FormInput label="Edad" name="student_age" register={register} disabled />
             <ComboBox
               value={studentBirthCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("student_birth_country", value, {
                   shouldDirty: true,
                 })
@@ -1447,7 +1332,7 @@ export const Step3StudentData = ({
             {studentBirthCountry === "Colombia" ? (
               <ComboBox
                 value={studentBirthDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("student_birth_department", value, {
                     shouldDirty: true,
                   })
@@ -1470,7 +1355,7 @@ export const Step3StudentData = ({
             studentBirthDepartment === "Atlántico" ? (
               <ComboBox
                 value={studentBirthCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("student_birth_city", value, {
                     shouldDirty: true,
                   })
@@ -1510,7 +1395,7 @@ export const Step3StudentData = ({
             {/* Expedición */}
             <ComboBox
               value={studentIdCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("student_id_country", value, {
                   shouldDirty: true,
                 })
@@ -1523,7 +1408,7 @@ export const Step3StudentData = ({
             {studentIdCountry === "Colombia" ? (
               <ComboBox
                 value={studentIdDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("student_id_department", value, {
                     shouldDirty: true,
                   })
@@ -1546,7 +1431,7 @@ export const Step3StudentData = ({
             studentIdDepartment === "Atlántico" ? (
               <ComboBox
                 value={studentIdCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("student_id_city", value, {
                     shouldDirty: true,
                   })
@@ -1576,7 +1461,7 @@ export const Step3StudentData = ({
             {/* Salud y familiares */}
             <ComboBox
               value={studentHealthEps}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("student_health_eps", value, {
                   shouldDirty: true,
                 })
@@ -1661,7 +1546,7 @@ export const Step3StudentData = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <ComboBox
               value={residenceCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("residence_country", value, {
                   shouldDirty: true,
                 })
@@ -1674,7 +1559,7 @@ export const Step3StudentData = ({
             {residenceCountry === "Colombia" ? (
               <ComboBox
                 value={residenceDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("residence_department", value, {
                     shouldDirty: true,
                   })
@@ -1697,7 +1582,7 @@ export const Step3StudentData = ({
             residenceDepartment === "Atlántico" ? (
               <ComboBox
                 value={residenceCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("residence_city", value, {
                     shouldDirty: true,
                   })
@@ -1720,7 +1605,7 @@ export const Step3StudentData = ({
               <>
                 <ComboBox
                   value={residenceBarrioValue}
-                  setValue={(value) =>
+                  onChange={(value) =>
                     setFieldValue("residence_barrio", value, {
                       shouldDirty: true,
                     })
@@ -1823,7 +1708,7 @@ export const Step3StudentData = ({
             <ComboBox
               label="¿Diagnóstico/Proceso?"
               value={medicalHasDiagnosis}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("medical_has_diagnosis", value, {
                   shouldDirty: true,
                 })
@@ -2042,7 +1927,7 @@ export const Step3StudentData = ({
 
             <ComboBox
               value={fatherCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("father_country", value, { shouldDirty: true })
               }
               options={COUNTRIES}
@@ -2053,7 +1938,7 @@ export const Step3StudentData = ({
             {fatherCountry === "Colombia" ? (
               <ComboBox
                 value={fatherDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("father_department", value, {
                     shouldDirty: true,
                   })
@@ -2076,7 +1961,7 @@ export const Step3StudentData = ({
             fatherDepartment === "Atlántico" ? (
               <ComboBox
                 value={fatherCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("father_city", value, { shouldDirty: true })
                 }
                 options={ATLANTICO_CITIES}
@@ -2104,7 +1989,7 @@ export const Step3StudentData = ({
 
             <ComboBox
               value={fatherResidenceCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("father_residence_country", value, {
                   shouldDirty: true,
                 })
@@ -2117,7 +2002,7 @@ export const Step3StudentData = ({
             {fatherResidenceCountry === "Colombia" ? (
               <ComboBox
                 value={fatherResidenceDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("father_residence_department", value, {
                     shouldDirty: true,
                   })
@@ -2140,7 +2025,7 @@ export const Step3StudentData = ({
             fatherResidenceDepartment === "Atlántico" ? (
               <ComboBox
                 value={fatherResidenceCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("father_residence_city", value, {
                     shouldDirty: true,
                   })
@@ -2163,7 +2048,7 @@ export const Step3StudentData = ({
               <>
                 <ComboBox
                   value={fatherResidenceBarrioValue}
-                  setValue={(value) =>
+                  onChange={(value) =>
                     setFieldValue("father_residence_barrio", value, {
                       shouldDirty: true,
                     })
@@ -2342,7 +2227,7 @@ export const Step3StudentData = ({
 
             <ComboBox
               value={motherCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("mother_country", value, { shouldDirty: true })
               }
               options={COUNTRIES}
@@ -2353,7 +2238,7 @@ export const Step3StudentData = ({
             {motherCountry === "Colombia" ? (
               <ComboBox
                 value={motherDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("mother_department", value, {
                     shouldDirty: true,
                   })
@@ -2376,7 +2261,7 @@ export const Step3StudentData = ({
             motherDepartment === "Atlántico" ? (
               <ComboBox
                 value={motherCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("mother_city", value, { shouldDirty: true })
                 }
                 options={ATLANTICO_CITIES}
@@ -2404,7 +2289,7 @@ export const Step3StudentData = ({
 
             <ComboBox
               value={motherResidenceCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("mother_residence_country", value, {
                   shouldDirty: true,
                 })
@@ -2417,7 +2302,7 @@ export const Step3StudentData = ({
             {motherResidenceCountry === "Colombia" ? (
               <ComboBox
                 value={motherResidenceDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("mother_residence_department", value, {
                     shouldDirty: true,
                   })
@@ -2440,7 +2325,7 @@ export const Step3StudentData = ({
             motherResidenceDepartment === "Atlántico" ? (
               <ComboBox
                 value={motherResidenceCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("mother_residence_city", value, {
                     shouldDirty: true,
                   })
@@ -2463,7 +2348,7 @@ export const Step3StudentData = ({
               <>
                 <ComboBox
                   value={motherResidenceBarrioValue}
-                  setValue={(value) =>
+                  onChange={(value) =>
                     setFieldValue("mother_residence_barrio", value, {
                       shouldDirty: true,
                     })
@@ -2678,7 +2563,7 @@ export const Step3StudentData = ({
               <>
                 <ComboBox
                   value={guardianCountry}
-                  setValue={(value) =>
+                  onChange={(value) =>
                     setFieldValue("guardian_country", value, {
                       shouldDirty: true,
                     })
@@ -2693,7 +2578,7 @@ export const Step3StudentData = ({
                 {guardianCountry === "Colombia" ? (
                   <ComboBox
                     value={guardianDepartment}
-                    setValue={(value) =>
+                    onChange={(value) =>
                       setFieldValue("guardian_department", value, {
                         shouldDirty: true,
                       })
@@ -2720,7 +2605,7 @@ export const Step3StudentData = ({
                 guardianDepartment === "Atlántico" ? (
                   <ComboBox
                     value={guardianCity}
-                    setValue={(value) =>
+                    onChange={(value) =>
                       setFieldValue("guardian_city", value, {
                         shouldDirty: true,
                       })
@@ -2759,7 +2644,7 @@ export const Step3StudentData = ({
 
             <ComboBox
               value={guardianResidenceCountry}
-              setValue={(value) =>
+              onChange={(value) =>
                 setFieldValue("guardian_residence_country", value, {
                   shouldDirty: true,
                 })
@@ -2774,7 +2659,7 @@ export const Step3StudentData = ({
             {guardianResidenceCountry === "Colombia" ? (
               <ComboBox
                 value={guardianResidenceDepartment}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("guardian_residence_department", value, {
                     shouldDirty: true,
                   })
@@ -2803,7 +2688,7 @@ export const Step3StudentData = ({
             guardianResidenceDepartment === "Atlántico" ? (
               <ComboBox
                 value={guardianResidenceCity}
-                setValue={(value) =>
+                onChange={(value) =>
                   setFieldValue("guardian_residence_city", value, {
                     shouldDirty: true,
                   })
@@ -2830,7 +2715,7 @@ export const Step3StudentData = ({
               <>
                 <ComboBox
                   value={guardianResidenceBarrioValue}
-                  setValue={(value) =>
+                  onChange={(value) =>
                     setFieldValue("guardian_residence_barrio", value, {
                       shouldDirty: true,
                     })
