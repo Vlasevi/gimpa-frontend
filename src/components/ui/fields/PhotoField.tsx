@@ -29,12 +29,24 @@
  * Este componente NO decide cuándo se sube el archivo — solo expone `onFileStaged` para
  * que el padre lo recoja (el mismo patrón de "staged upload" que ya usa Matrículas hoy,
  * pero sin la subida en bloque de Step6; eso sigue siendo decisión del consumidor).
+ *
+ * Validación de formato/tamaño (JPG/JPEG/PNG, máx. 3MB) real en JS, no solo cosmética:
+ * `accept` en el `<input>` es apenas un filtro del selector nativo del SO, no una
+ * validación — no impide que un archivo inválido llegue a `onChange` (drag&drop,
+ * selectores que ignoran `accept`, etc.). El chequeo real vive en `handleFileChange`,
+ * antes de llamar `onChange`; un archivo rechazado nunca se propaga al padre. El espacio
+ * a la derecha del avatar (antes vacío — la tarjeta es `w-full` pero el avatar es un
+ * cuadro fijo de 80px) ahora muestra los requisitos y, si aplica, el error.
  */
 
 import { useEffect, useState } from "react";
 import { Camera, X } from "lucide-react";
 
 import type { PhotoFieldProps } from "./types";
+
+const MAX_FILE_SIZE_BYTES = 3 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png"];
+const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png"];
 
 /**
  * Componente controlado desde afuera (`value`/`onChange`) — sin `Controller`, sin
@@ -44,6 +56,7 @@ import type { PhotoFieldProps } from "./types";
  */
 export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Blob URL solo para un archivo recién elegido en esta sesión; se revoca al
   // reemplazarlo o al desmontar. `preloadedUrl` (base64) no pasa por aquí.
@@ -61,17 +74,40 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0] ?? null;
-    if (selected) onChange({ file: selected, removed: false });
-    // Permite volver a elegir el mismo archivo dos veces seguidas.
+    // Permite volver a elegir el mismo archivo dos veces seguidas (ej. tras corregir un
+    // rechazo, re-seleccionar el mismo nombre de archivo debe volver a disparar onChange).
     e.target.value = "";
+    if (!selected) return;
+
+    // Extensión como respaldo del MIME type: algunos selectores (drag&drop, ciertos
+    // gestores de archivos) dejan `file.type` vacío pese a ser un JPG/PNG real.
+    const extension = selected.name.split(".").pop()?.toLowerCase() ?? "";
+    const validType =
+      ALLOWED_MIME_TYPES.includes(selected.type) || ALLOWED_EXTENSIONS.includes(extension);
+
+    if (!validType) {
+      setError("Formato no permitido. Usa JPG, JPEG o PNG.");
+      return;
+    }
+    if (selected.size > MAX_FILE_SIZE_BYTES) {
+      const sizeMb = (selected.size / (1024 * 1024)).toFixed(1);
+      setError(`El archivo pesa ${sizeMb}MB. El máximo permitido es 3MB.`);
+      return;
+    }
+
+    setError(null);
+    onChange({ file: selected, removed: false });
   };
 
-  const handleRemove = () => onChange({ file: null, removed: true });
+  const handleRemove = () => {
+    setError(null);
+    onChange({ file: null, removed: true });
+  };
 
   return (
     <div className="form-control w-full rounded-lg border border-base-300 bg-base-200/40 p-4 shadow-sm">
       <span className="label-text mb-2 block font-medium text-base-content/70">{label}</span>
-      <div className="inline-block">
+      <div className="flex items-start gap-4">
         <div className="group relative w-20 shrink-0">
           {/* La foto es el disparador: click en cualquier parte del cuadro abre el
               selector de archivo, sin un botón "Cambiar" aparte. */}
@@ -93,7 +129,12 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
                 <Camera className="h-3.5 w-3.5 text-white" aria-hidden="true" />
               </div>
             )}
-            <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+            <input
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+              onChange={handleFileChange}
+            />
           </label>
           {preview && (
             <button
@@ -105,6 +146,19 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
               <X className="h-3 w-3" aria-hidden="true" />
             </button>
           )}
+        </div>
+
+        {/* Espacio antes vacío a la derecha del avatar (la tarjeta es `w-full`, pero de
+            una columna angosta — 250px medidos en vivo dentro del grid de 3 columnas de
+            Step3StudentData — y el avatar un cuadro fijo de 80px, dejaban ~120px sin
+            usar). Texto corto a propósito: con ese ancho, frases más largas como
+            "Formatos permitidos: ..." quedaban en una escalera de una palabra por línea.
+            Muestra los requisitos reales de formato/tamaño y, si aplica, el error de la
+            última selección rechazada. */}
+        <div className="flex-1 pt-1">
+          <p className="text-xs text-base-content/50">JPG, JPEG, PNG</p>
+          <p className="text-xs text-base-content/50">Máx. 3MB</p>
+          {error && <p className="mt-1.5 text-xs font-medium text-error">{error}</p>}
         </div>
       </div>
     </div>
