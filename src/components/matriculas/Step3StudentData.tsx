@@ -332,11 +332,12 @@ const FormInput = ({
   label,
   name,
   register,
-  // Opciones extra para `register(name, registerOptions)` — p.ej. un
-  // `onChange` adicional para los 4 campos "Especifique el barrio" (que además
-  // de guardar su propio texto, deben reflejarlo en el campo de barrio real).
-  // Nunca se spreadea al DOM (a diferencia de `...props`): RHF ya se encarga
-  // de invocar el `onChange` propio del campo Y el de `registerOptions` juntos.
+  // Opciones extra para `register(name, registerOptions)`. Nunca se
+  // spreadea al DOM (a diferencia de `...props`). Ya no se usa para los 4
+  // campos "Especifique el barrio" (antes tenían aquí un `onChange` que
+  // reescribía el campo de barrio real con cada tecla, corrompiéndolo — bug
+  // corregido; ver la nota junto a las "compuertas" más abajo). Se deja el
+  // soporte genérico por si algún otro campo lo necesita en el futuro.
   registerOptions,
   type = "text",
   placeholder,
@@ -1330,28 +1331,25 @@ export const Step3StudentData = ({
     setShowLegalModal(false);
   };
 
-  // --- ESTADOS "COMPUERTA" PARA EL BARRIO "OTRO" (residencia y acudiente) ---
-  // Estas 2 (no 4) siguen existiendo como estado local puro de UI, exactamente
-  // como en el código pre-RHF: el ComboBox de barrio muestra esta "compuerta"
-  // (no el valor real del campo) para que, al escribir el barrio libre en
-  // "Especifique el barrio", el combo no se destape de "Otro" a mitad de
-  // tecleo (el campo real SÍ cambia con cada tecla, pero la compuerta solo se
-  // resincroniza en un efecto aparte). Padre/Madre NO tienen esta compuerta —
-  // ver el comentario en la sección "Padre" más abajo sobre el bug corregido.
-  const [residenceBarrioGate, setResidenceBarrioGate] = useState("");
-  const [guardianBarrioGate, setGuardianBarrioGate] = useState("");
-
-  useEffect(() => {
-    if (residenceBarrioValue) {
-      setResidenceBarrioGate(residenceBarrioValue as string);
-    }
-  }, [residenceBarrioValue]);
-
-  useEffect(() => {
-    if (guardianResidenceBarrioValue) {
-      setGuardianBarrioGate(guardianResidenceBarrioValue as string);
-    }
-  }, [guardianResidenceBarrioValue]);
+  // --- NOTA: bug corregido del barrio "Otro" (las 4 secciones) ---
+  // Antes, el `<input>` libre "Especifique el barrio" tenía en `registerOptions`
+  // un `onChange` extra que, además de guardar su propio texto en
+  // `*_otro_barrio`, reescribía el campo del COMBO (`*_residence_barrio` /
+  // `residence_barrio` / `guardian_residence_barrio`) con ese mismo texto en
+  // cada tecla. Apenas el usuario tecleaba una letra, ese campo dejaba de
+  // valer "Otro" y la condición `watch(...) === "Otro"` que mantiene visible
+  // el input dejaba de cumplirse, desmontando el campo con el texto truncado
+  // ya guardado (bug confirmado en vivo: "Las Nieves" quedaba grabado como
+  // "La"). En Residencia y Acudiente esto se enmascaraba parcialmente con una
+  // "compuerta" de estado local que no seguía al campo real mientras se
+  // tecleaba — el campo real igual quedaba corrompido, solo la UI no se
+  // desmontaba.
+  //
+  // Fix (igual al patrón ya usado en `GeoCascadeField.tsx`): el combo escribe
+  // SOLO en el campo de barrio; el input libre escribe SOLO en `*_otro_barrio`
+  // (ya no lleva `registerOptions`); la condición de visibilidad lee
+  // `watch(campo_barrio) === "Otro"` directamente, sin compuerta — ahora es
+  // segura porque nada más escribe en ese campo salvo el combo.
 
   return (
     <form onSubmit={handleSubmit} noValidate={true}>
@@ -1721,29 +1719,22 @@ export const Step3StudentData = ({
             {residenceCity === "Barranquilla" ? (
               <>
                 <ComboBox
-                  value={residenceBarrioGate}
-                  setValue={(value) => {
-                    setResidenceBarrioGate(value);
+                  value={residenceBarrioValue}
+                  setValue={(value) =>
                     setFieldValue("residence_barrio", value, {
                       shouldDirty: true,
-                    });
-                  }}
+                    })
+                  }
                   options={BARRIOS_BARRANQUILLA}
                   label="Barrio de Residencia"
                   disabled={false}
                   required={true}
                 />
-                {residenceBarrioGate === "Otro" && (
+                {residenceBarrioValue === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="residence_otro_barrio"
                     register={register}
-                    registerOptions={{
-                      onChange: (e) =>
-                        setFieldValue("residence_barrio", e.target.value, {
-                          shouldDirty: true,
-                        }),
-                    }}
                   />
                 )}
               </>
@@ -2190,21 +2181,17 @@ export const Step3StudentData = ({
                   en el informe de reconocimiento, §0.4). Al leer
                   directamente el valor real del campo (el mismo que ya usa
                   el ComboBox de arriba) el bug queda corregido: ahora si el
-                  usuario elige "Otro" el campo aparece.
+                  usuario elige "Otro" el campo aparece. El `<input>` ya NO
+                  lleva `registerOptions` (ver nota sobre el bug de corrupción
+                  del barrio "Otro" más arriba): escribe solo en
+                  `father_otro_barrio`, sin reescribir
+                  `father_residence_barrio`.
                 */}
                 {fatherResidenceBarrioValue === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="father_otro_barrio"
                     register={register}
-                    registerOptions={{
-                      onChange: (e) =>
-                        setFieldValue(
-                          "father_residence_barrio",
-                          e.target.value,
-                          { shouldDirty: true },
-                        ),
-                    }}
                   />
                 )}
               </>
@@ -2488,20 +2475,14 @@ export const Step3StudentData = ({
                 />
                 {/* Ver comentario equivalente en la sección "Padre": bug de
                     barrio "Otro" inalcanzable, corregido leyendo el valor
-                    real del campo en vez de un estado sombra. */}
+                    real del campo en vez de un estado sombra, y sin
+                    `registerOptions` (ya no reescribe
+                    `mother_residence_barrio`). */}
                 {motherResidenceBarrioValue === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="mother_otro_barrio"
                     register={register}
-                    registerOptions={{
-                      onChange: (e) =>
-                        setFieldValue(
-                          "mother_residence_barrio",
-                          e.target.value,
-                          { shouldDirty: true },
-                        ),
-                    }}
                   />
                 )}
               </>
@@ -2848,13 +2829,12 @@ export const Step3StudentData = ({
             {guardianResidenceCity === "Barranquilla" ? (
               <>
                 <ComboBox
-                  value={guardianBarrioGate}
-                  setValue={(value) => {
-                    setGuardianBarrioGate(value);
+                  value={guardianResidenceBarrioValue}
+                  setValue={(value) =>
                     setFieldValue("guardian_residence_barrio", value, {
                       shouldDirty: true,
-                    });
-                  }}
+                    })
+                  }
                   options={BARRIOS_BARRANQUILLA}
                   label="Barrio"
                   disabled={
@@ -2862,19 +2842,11 @@ export const Step3StudentData = ({
                   }
                   required={guardianType === "Otro"}
                 />
-                {guardianBarrioGate === "Otro" && (
+                {guardianResidenceBarrioValue === "Otro" && (
                   <FormInput
                     label="Especifique el barrio"
                     name="guardian_otro_barrio"
                     register={register}
-                    registerOptions={{
-                      onChange: (e) =>
-                        setFieldValue(
-                          "guardian_residence_barrio",
-                          e.target.value,
-                          { shouldDirty: true },
-                        ),
-                    }}
                     disabled={
                       guardianType === "Padre" || guardianType === "Madre"
                     }
