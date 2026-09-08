@@ -201,7 +201,11 @@ const StepOTP = ({ next }: { next: () => void }) => {
     }
   };
 
-  const validate = async () => {
+  // `codeOverride`: ver el comentario equivalente en Step1Verification.tsx —
+  // `OtpInput.onComplete` manda el valor recién completado en vez de depender del
+  // estado `code`, que al pegar el código todavía no se actualizó en este punto.
+  const validate = async (codeOverride?: string) => {
+    const otpCode = codeOverride ?? code;
     setLoading(true);
     setError("");
     try {
@@ -209,7 +213,7 @@ const StepOTP = ({ next }: { next: () => void }) => {
         method: "POST",
         credentials: "include",
         headers: buildHeaders(),
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: otpCode }),
       });
       const data = await res.json();
       if (res.ok && data.valid) next();
@@ -248,7 +252,7 @@ const StepOTP = ({ next }: { next: () => void }) => {
               error={error || undefined}
             />
           </div>
-          <button className="btn btn-secondary w-full mb-2" onClick={validate} disabled={loading || code.length !== 6}>
+          <button className="btn btn-secondary w-full mb-2" onClick={() => validate()} disabled={loading || code.length !== 6}>
             {loading ? <span className="loading loading-spinner loading-sm" /> : "Validar y Continuar"}
           </button>
           <p className="text-center text-sm text-base-content/60">

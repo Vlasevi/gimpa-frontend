@@ -48,11 +48,24 @@ export interface OtpInputProps {
   autoFocus?: boolean;
   disabled?: boolean;
   required?: boolean;
-  /** Se dispara cuando, tras un cambio del usuario, el valor filtrado alcanza `length`
+  /**
+   * Se dispara cuando, tras un cambio del usuario, el valor filtrado alcanza `length`
    * dígitos — pensado para autosubmit del formulario contenedor (ver consumidores). No
    * se dispara por cambios que no vengan de una edición real (solo hay un `onChange` de
-   * DOM real por interacción, así que no hace falta deduplicar contra el `value` previo). */
-  onComplete?: () => void;
+   * DOM real por interacción, así que no hace falta deduplicar contra el `value` previo).
+   *
+   * Recibe el valor ya completo como argumento — a propósito, NO hay que leerlo de vuelta
+   * del estado del consumidor (`value`/la prop `onChange`). Bug real encontrado con
+   * pegar el código (Ctrl+V): `onChange(next)` solo AGENDA el `setState` del consumidor
+   * (React no lo aplica hasta que este handler termina), así que si `onComplete` leyera
+   * el código desde el cierre de una función del consumidor (closure sobre su propio
+   * estado), seguiría viendo el valor ANTERIOR — vacío en el caso de pegar de un tirón,
+   * lo que mandaba `code: ""` al backend ("Código requerido"). Con tipeo letra por letra
+   * pasaba lo mismo pero corría un dígito atrás, indistinguible de un código real
+   * incorrecto. Pasar `next` explícito evita depender de que el re-render ya haya
+   * ocurrido.
+   */
+  onComplete?: (value: string) => void;
   /**
    * Mensaje de error (ej. "Código incorrecto"). Referencia de diseño pegada por el
    * usuario: casillas y dígitos en rojo (`otp-error`/`text-error` en vez de
@@ -127,7 +140,7 @@ export function OtpInput({
           onChange={(e) => {
             const next = e.target.value.replace(/\D/g, "").slice(0, length);
             onChange(next);
-            if (next.length === length) onComplete?.();
+            if (next.length === length) onComplete?.(next);
           }}
         />
       </label>

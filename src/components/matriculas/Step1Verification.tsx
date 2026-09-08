@@ -46,7 +46,13 @@ export const Step1Verification = ({
     }
   };
 
-  const handleValidateToken = async () => {
+  // `codeOverride`: usado por `OtpInput.onComplete` (autosubmit al pegar/completar el
+  // código) para mandar el valor recién completado en vez de leer `inputToken` del
+  // estado — justo después de `setInputToken(...)`, React todavía no aplicó ese cambio,
+  // así que leerlo aquí daría el valor ANTERIOR (vacío si se pegó de un tirón). El botón
+  // "Validar y Continuar" sigue llamando sin argumento y usa el estado normalmente.
+  const handleValidateToken = async (codeOverride?: string) => {
+    const code = codeOverride ?? inputToken;
     setLoading(true);
     setLoadingMessage("Validando...");
     setError("");
@@ -57,7 +63,7 @@ export const Step1Verification = ({
         method: "POST",
         credentials: "include",
         headers: buildHeaders(),
-        body: JSON.stringify({ code: inputToken }),
+        body: JSON.stringify({ code }),
       });
 
       const data = await response.json();
@@ -193,7 +199,7 @@ export const Step1Verification = ({
 
           <button
             className="btn btn-secondary w-full mb-2"
-            onClick={handleValidateToken}
+            onClick={() => handleValidateToken()}
             disabled={loading || inputToken.length !== 6}
           >
             {loading ? (

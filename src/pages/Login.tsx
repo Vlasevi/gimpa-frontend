@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Loader2,
   Eye,
@@ -206,12 +206,6 @@ export default function Login() {
   );
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Refs a los 2 `<form>` con OTP, para que `OtpInput.onComplete` pueda autoenviar
-  // (`requestSubmit()`) reutilizando el `onSubmit` real de cada uno tal cual, sin
-  // duplicar su lógica de validación/POST.
-  const verifyFormRef = useRef<HTMLFormElement>(null);
-  const resetConfirmFormRef = useRef<HTMLFormElement>(null);
-
   // Login por correo
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -330,14 +324,19 @@ export default function Login() {
   };
 
   // Verificación del correo: activa la cuenta y entra directo.
-  const handleVerifySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // `codeOverride`: usado por `OtpInput.onComplete` (autosubmit al completar/pegar el
+  // código) para mandar el valor recién completado en vez de leer `code` del estado —
+  // en ese punto React todavía no aplicó el `setCode(...)` que disparó este completado
+  // (bug real: al pegar el código de un tirón, `code` seguía vacío aquí y el backend
+  // respondía "código requerido"). El submit manual del `<form>` sigue sin pasar nada,
+  // así que usa `code` normalmente.
+  const verifyOtp = async (codeOverride?: string) => {
     setSubmitting(true);
     setNotice(null);
     try {
       const [ok, data] = await postJson(API_ENDPOINTS.admissionsVerifyOtp, {
         email: pendingEmail,
-        code,
+        code: codeOverride ?? code,
       });
       if (ok) {
         loginWithPayload(data);
@@ -349,6 +348,11 @@ export default function Login() {
     } catch {
       fail("No pudimos conectar con el servidor. Intenta de nuevo.");
     }
+  };
+
+  const handleVerifySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    verifyOtp();
   };
 
   const handleResend = async () => {
@@ -387,14 +391,14 @@ export default function Login() {
   };
 
   // Recuperación: confirmar código + nueva contraseña.
-  const handleResetConfirm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // `codeOverride`: mismo motivo que en `verifyOtp` — ver ese comentario.
+  const resetPasswordWithCode = async (codeOverride?: string) => {
     setSubmitting(true);
     setNotice(null);
     try {
       const [ok, data] = await postJson(
         API_ENDPOINTS.admissionsPasswordResetConfirm,
-        { email: pendingEmail, code, new_password: newPassword },
+        { email: pendingEmail, code: codeOverride ?? code, new_password: newPassword },
       );
       if (ok) {
         setEmail(pendingEmail);
@@ -411,6 +415,11 @@ export default function Login() {
     } catch {
       fail("No pudimos conectar con el servidor. Intenta de nuevo.");
     }
+  };
+
+  const handleResetConfirm = (e: React.FormEvent) => {
+    e.preventDefault();
+    resetPasswordWithCode();
   };
 
   return (
@@ -722,7 +731,7 @@ export default function Login() {
                   </div>
                 )}
 
-                <form ref={verifyFormRef} onSubmit={handleVerifySubmit} className="space-y-5">
+                <form onSubmit={handleVerifySubmit} className="space-y-5">
                   <div>
                     <OtpInput
                       id="otp"
@@ -731,7 +740,7 @@ export default function Login() {
                       value={code}
                       onChange={setCode}
                       autoFocus
-                      onComplete={() => verifyFormRef.current?.requestSubmit()}
+                      onComplete={verifyOtp}
                       error={notice?.tone === "error" ? notice.text : undefined}
                     />
                     <p className="mt-2 text-center text-xs text-base-content/50">
@@ -831,7 +840,7 @@ export default function Login() {
                   </div>
                 )}
 
-                <form ref={resetConfirmFormRef} onSubmit={handleResetConfirm} className="space-y-5">
+                <form onSubmit={handleResetConfirm} className="space-y-5">
                   <div>
                     <OtpInput
                       id="reset-otp"
@@ -843,10 +852,9 @@ export default function Login() {
                       // A diferencia del form de verificación, aquí el código NO es el
                       // único campo requerido — `PasswordField` no tiene `required`
                       // nativo (por el toggle mostrar/ocultar), así que sin esta guarda
-                      // `requestSubmit()` no lo bloquearía y se enviaría
-                      // `new_password: ""` apenas se completa el código.
-                      onComplete={() => {
-                        if (newPassword) resetConfirmFormRef.current?.requestSubmit();
+                      // se enviaría `new_password: ""` apenas se completa el código.
+                      onComplete={(value) => {
+                        if (newPassword) resetPasswordWithCode(value);
                       }}
                       error={notice?.tone === "error" ? notice.text : undefined}
                     />
