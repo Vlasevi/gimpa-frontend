@@ -9,30 +9,36 @@
   prefersdark: false;
   color-scheme: light;
 
-  /* Colores principales */
-  --color-primary: #3b4aa0;
+  /* Colores principales — manual de marca (confirmado con el usuario:
+     #1F3A5F primary, #2E75B6 secondary, #003496 info, #59AF4E accent). */
+  --color-primary: #1F3A5F;
   --color-primary-content: #ffffff;
-  --color-secondary: #2d3561;
+  --color-secondary: #2E75B6;
   --color-secondary-content: #ffffff;
-  --color-accent: #52b455;
+  --color-accent: #59AF4E;
   --color-accent-content: #ffffff;
-  --color-neutral: #2a2a2a;
+  /* --color-neutral: sin dato en el manual para este rol específico — se usa
+     el gris medio de los "colores secundarios" (#6B7280). */
+  --color-neutral: #6B7280;
   --color-neutral-content: #ffffff;
 
-  /* Colores base */
-  --color-base-100: #ffffff;
-  --color-base-200: #f8f9fa;
+  /* Colores base — manual de marca (grises secundarios). */
+  --color-base-100: #FAFAFA;
+  --color-base-200: #F3F4F6;
+  /* --color-base-300: el manual no trae un tercer gris para bordes; se deja
+     el valor previo (#e9ecef), muy cercano en tono a base-200. */
   --color-base-300: #e9ecef;
-  --color-base-content: #2a2a2a;
+  --color-base-content: #374151;
 
-  /* Colores de estado */
-  --color-info: #ffcd3c;
-  --color-info-content: #2a2a2a;
-  --color-success: #52b455;
+  /* Colores de estado — manual de marca. */
+  --color-info: #003496;
+  --color-info-content: #ffffff;
+  --color-success: #166534;
   --color-success-content: #ffffff;
+  /* --color-warning: sin dato en el manual — se deja el valor previo. */
   --color-warning: #ff6b35;
   --color-warning-content: #ffffff;
-  --color-error: #dc3545;
+  --color-error: #B91C1C;
   --color-error-content: #ffffff;
 
   /* Border radius */
@@ -56,14 +62,23 @@
 }
 
 /* Variables personalizadas para el Sidebar (usadas vía bg-[hsl(var(--...))]).
-   No borrar: Sidebar.tsx depende de --accent y --accentlight. */
+   No borrar: Sidebar.tsx depende de --accentlight y --accent-dark (fondo
+   completo del sidebar y resaltado del link activo, respectivamente) — la
+   única razón de que este duplicado en HSL siga existiendo en vez de que
+   Sidebar use el token `accent` de daisyUI directamente.
+   --accentlight/--accent-dark recalculados a partir del nuevo accent de
+   marca (#59AF4E → hsl(113 38% 50%)), con la misma relación de
+   saturación/luminosidad que tenían antes respecto al accent viejo. --accent,
+   --primary-light y --primary-dark NO se usan en ningún lado (grep en
+   src/) — se dejan tal cual, ya estaban marcados como resto muerto en
+   DESIGN_SYSTEM.md §9. */
 @layer base {
   :root {
-    --accentlight: 120 56% 80%;
+    --accentlight: 113 55% 80%;
     --accent: 122 39% 52%;
     --primary-light: 231 41% 54%;
     --primary-dark: 230 50% 35%;
-    --accent-dark: 123 44% 38%;
+    --accent-dark: 113 43% 36%;
   }
 }
 
