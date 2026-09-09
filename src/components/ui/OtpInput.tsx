@@ -115,7 +115,12 @@ export function OtpInput({
           {label}
         </label>
       )}
-      <label className={`otp otp-lg mx-auto ${hasError ? "otp-error" : "otp-primary"}`}>
+      {/* `otp-sm sm:otp-lg` (no `otp-lg` fijo): 6 casillas en `otp-lg` miden ~288px de
+          ancho — se desbordan en un teléfono de 320px (iPhone SE y similares) con el
+          padding del formulario. `otp-sm` (~216px) entra con margen de sobra ahí;
+          `sm:otp-lg` recupera el tamaño grande desde 640px (tablets/desktop), sin
+          cambiar nada en pantallas que ya se veían bien. */}
+      <label className={`otp otp-sm sm:otp-lg mx-auto ${hasError ? "otp-error" : "otp-primary"}`}>
         {Array.from({ length }).map((_, i) => (
           <span key={i} />
         ))}

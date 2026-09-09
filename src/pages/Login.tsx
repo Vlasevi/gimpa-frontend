@@ -8,25 +8,76 @@ import {
   AlertCircle,
   CheckCircle2,
   MailCheck,
+  User,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import heroImage from "@/assets/login-hero.webp";
 import Logo from "@/assets/logo.png";
+import LoginTexture from "@/assets/login-log.svg";
 import { useAuth } from "@/components/Login/loginLogic";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { apiUrl, AUTH_PATHS, API_ENDPOINTS } from "@/utils/api";
 
 // ---- Clases compartidas (ver DESIGN_SYSTEM.md) --------------------------
-const labelClass = "mb-1.5 block text-sm font-medium text-base-content/70";
+// Rediseño (mesa de trabajo "Login web" en Illustrator, revisada vía MCP):
+// campos con línea inferior en vez de caja, CTA principal verde (accent) en
+// vez de navy (primary) — el navy queda para el panel izquierdo y la
+// pestaña "Login". Colores verificados 1:1 contra el archivo: el fill del
+// botón "Entrar" es RGB(89,175,78) = #59AF4E, exactamente --color-accent.
+
+// Degradado del panel izquierdo. UNA sola fuente de verdad para los dos
+// colores — antes `#274978` (el color final) estaba repetido a mano en 3
+// lugares sueltos (el propio degradado, el fondo de la pestaña y los dos
+// parches de la curva), sin ninguna relación explícita entre ellos: cambiar
+// el degradado sin acordarse de los otros 3 sitios los habría desincronizado
+// en silencio. PANEL_GRADIENT_FROM ya es --color-primary del theme (mismo
+// valor, pero como string literal porque Tailwind no puede leer una var()
+// dentro de un degradado armado en JS/inline-style).
+const PANEL_GRADIENT_FROM = "#1F3A5F";
+const PANEL_GRADIENT_TO = "#274978";
+
+// Geometría de la pestaña "Login" — ver el comentario largo junto al panel
+// derecho para el porqué de este enfoque (mordisco recortado, no una pieza
+// separada). Medidas fijas (no "auto"): un `clip-path` con `path()` necesita
+// coordenadas absolutas, así que el ancho de la pestaña deja de ajustarse
+// sola al texto — 150px entra con margen para "Login" + el ícono.
+const TAB_TOP = 64; // = top-16 de las versiones anteriores
+const TAB_WIDTH = 150;
+const TAB_HEIGHT = 54;
+const TAB_CORNER_RADIUS = 18;
+const CLIP_FAR = 4000; // "infinito" práctico — cualquier panel real es más angosto
+// Silueta del panel derecho: un rectángulo (sobredimensionado a propósito;
+// el navegador de todos modos no pinta más allá de la caja real del div)
+// con un mordisco recortado en la esquina superior izquierda.
+// CUATRO esquinas con radio, no dos: además de las dos "normales" donde el
+// corte se topa con el material que queda a la derecha (redondeo convexo de
+// toda la vida), las otras DOS —donde el corte se topa con la propia costura
+// (x=0)— TAMBIÉN llevan radio. Sin esas dos, la conexión con el panel
+// izquierdo se veía recta (regresión real: antes, con la técnica vieja de
+// dos piezas, sí tenía esa curva en ambos extremos — "se abre hacia afuera
+// en los dos lados", confirmado contra el archivo de Illustrator).
+// Estas dos esquinas SÍ caben dentro de la caja del panel (x entre 0 y R):
+// el arco no necesita "salirse" hacia el panel izquierdo — el centro de cada
+// círculo está DENTRO del panel (en x=R, no en x=0), así que el arco completo
+// vive en x ∈ [0,R]. Es la misma curva que ya existía en la versión anterior
+// (los dos parches de radial-gradient en el costado CLARO de la costura,
+// nunca en el oscuro) — aquí, sencillamente, expresada como parte de un solo
+// `path()` en vez de dos elementos aparte con degradado.
+const RIGHT_PANEL_CLIP_PATH = `path("M0,0 L0,${TAB_TOP - TAB_CORNER_RADIUS} A${TAB_CORNER_RADIUS},${TAB_CORNER_RADIUS} 0 0 0 ${TAB_CORNER_RADIUS},${TAB_TOP} L${TAB_WIDTH - TAB_CORNER_RADIUS},${TAB_TOP} A${TAB_CORNER_RADIUS},${TAB_CORNER_RADIUS} 0 0 1 ${TAB_WIDTH},${TAB_TOP + TAB_CORNER_RADIUS} L${TAB_WIDTH},${TAB_TOP + TAB_HEIGHT - TAB_CORNER_RADIUS} A${TAB_CORNER_RADIUS},${TAB_CORNER_RADIUS} 0 0 1 ${TAB_WIDTH - TAB_CORNER_RADIUS},${TAB_TOP + TAB_HEIGHT} L${TAB_CORNER_RADIUS},${TAB_TOP + TAB_HEIGHT} A${TAB_CORNER_RADIUS},${TAB_CORNER_RADIUS} 0 0 0 0,${TAB_TOP + TAB_HEIGHT + TAB_CORNER_RADIUS} L0,${CLIP_FAR} L${CLIP_FAR},${CLIP_FAR} L${CLIP_FAR},0 Z")`;
+
+const labelClass = "mb-1.5 block text-sm font-semibold text-primary";
 
 const inputClass =
-  "h-12 w-full rounded-lg border border-base-300 bg-base-200 px-4 text-base text-base-content placeholder:text-base-content/40 transition-colors focus:border-primary focus:bg-base-100 focus:outline-none focus:ring-2 focus:ring-primary/40";
+  "h-11 w-full border-0 border-b-2 border-base-300 bg-transparent px-0 pb-2 text-base text-base-content placeholder:text-base-content/40 transition-colors focus:border-primary focus:outline-none focus:ring-0";
 
+// `min-h-*` (no `h-*`): en un teléfono angosto, "Continuar con Microsoft" (ícono +
+// texto largo) puede llegar a partirse en dos líneas — con una altura FIJA esa
+// segunda línea quedaría recortada. `min-h` deja crecer el botón en ese caso raro,
+// sin cambiar nada en el 99% de anchos donde el texto entra en una sola línea.
 const primaryBtnClass =
-  "flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+  "flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-accent px-6 text-base font-medium text-accent-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-lg hover:shadow-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 const secondaryBtnClass =
-  "flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-base-300 bg-base-100 px-6 text-base font-medium text-base-content transition-all duration-200 ease-out hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 motion-reduce:transition-none";
+  "flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-base-300 bg-base-100 px-6 text-base font-medium text-base-content transition-all duration-200 ease-out hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 motion-reduce:transition-none";
 
 const linkClass =
   "font-medium text-primary transition-colors hover:text-primary/80 hover:underline focus-visible:outline-none focus-visible:underline";
@@ -423,43 +474,122 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen bg-base-100">
-      {/* Panel izquierdo — hero */}
-      <div className="relative hidden overflow-hidden lg:block lg:w-1/2 xl:w-3/5">
+    // `min-h-dvh` (no `min-h-screen`): en móviles, la barra del navegador
+    // aparece/desaparece al hacer scroll y cambia el 100vh real — `min-h-screen`
+    // (fijo al alto de la PRIMERA carga) deja una franja vacía o recorta contenido
+    // según el momento. `dvh` (dynamic viewport height) sigue el alto real en cada
+    // instante; en desktop no hay barra dinámica, así que se ve exactamente igual.
+    <div className="relative flex min-h-dvh bg-base-200">
+      {/* Capa azul de ancho COMPLETO, detrás de todo — así se construye en el
+          archivo de Illustrator (comprobado inspeccionándolo con el usuario):
+          NO son dos piezas separadas (panel + pestaña) que deban coincidir en
+          color; es una sola capa azul de fondo, y el panel CLARO de encima
+          tiene un mordisco recortado que la deja ver. Antes intentamos lo
+          contrario (una pestaña navy aparte tratando de "adivinar" el mismo
+          azul del panel) y esa costura entre dos piezas fue el origen de
+          todos los bugs de renderizado que fuimos arreglando uno por uno
+          (sombra, línea de subpíxel, etc.) — con esta construcción no hay
+          NINGUNA costura que alinear: el azul que se ve en el mordisco es
+          literalmente el mismo píxel de fondo, no una copia aproximada.
+          `90%`→`45%` en el segundo stop del degradado: antes esto pintaba
+          solo el ancho del panel izquierdo (50vw), ahora pinta el ancho
+          COMPLETO (100vw) — para que el degradado se vea IGUAL que antes en
+          la mitad visible, el punto sólido tiene que caer en el mismo píxel
+          absoluto: 90% de 50vw = 45% de 100vw. */}
+      <div
+        className="pointer-events-none absolute inset-0 hidden lg:block"
+        style={{
+          backgroundImage: `linear-gradient(to right, ${PANEL_GRADIENT_FROM} 0%, ${PANEL_GRADIENT_TO} 45%)`,
+        }}
+      />
+
+      {/* Escudo + textura del panel izquierdo — ya SIN fondo propio (lo pinta
+          la capa azul de atrás); esta caja es puro contenido. */}
+      <div className="relative hidden overflow-hidden lg:flex lg:w-1/2 lg:items-center lg:justify-center">
+        {/* Textura decorativa: `login-log.svg` (subida por el usuario a
+            assets), un motivo tipo escudo/compás con degradado propio hacia
+            transparente. Es puramente ornamental (`aria-hidden`, `alt=""`) y
+            va DETRÁS del escudo (antes en el DOM ⇒ pinta primero). POSICIÓN
+            A AJUSTAR A OJO (usuario, prueba y error): no es full-bleed, va
+            en un punto puntual del panel. */}
         <img
-          src={heroImage}
-          alt="Estudiantes de Gimnasio El Paraíso"
-          className="absolute inset-0 h-full w-full object-cover"
+          src={LoginTexture}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 right-0 w-[85%] select-none opacity-40"
+          draggable={false}
         />
-        <div className="absolute inset-0 bg-gradient-to-tr from-secondary/95 via-secondary/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-secondary/80 via-transparent to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 p-10 xl:p-14">
-          {/* Acento de marca */}
-          <div className="mb-4 h-1 w-12 rounded-full bg-accent" />
-          <h2 className="font-display text-3xl font-semibold text-white xl:text-4xl">
-            Gimnasio El Paraíso
-          </h2>
-          <p className="mt-3 max-w-md font-display text-lg font-light italic leading-snug text-white/85 xl:text-xl">
-            «Con Fe, Esfuerzo y Sabiduría, formamos la Esperanza del Mañana»
-          </p>
-        </div>
-        {/* Filo de acento en el borde interior del hero */}
-        <div className="absolute inset-y-0 right-0 w-1 bg-accent/70" />
+        <img
+          src={Logo}
+          alt="Escudo de Gimnasio El Paraíso"
+          className="relative h-64 w-auto select-none xl:h-90"
+          draggable={false}
+        />
       </div>
 
-      {/* Panel derecho — acceso */}
-      <div className="flex w-full flex-col items-center justify-center overflow-y-auto bg-base-100 px-6 py-10 sm:px-10 lg:w-1/2 xl:w-2/5">
+      {/* Pestaña "Login": ya no es una pieza propia (pill/sombra/parches de
+          gradiente) — es el TEXTO flotando sobre el mordisco del panel
+          derecho, así que se ve directo el azul real de la capa de fondo
+          detrás. `left-1/2`: mismo punto que el mordisco (0 relativo al
+          panel derecho = 50% del wrapper completo, la costura).
+          HERMANO del panel derecho, NO hijo — un `clip-path` recorta TODO
+          su subárbol (fondo Y contenido), así que si este texto viviera
+          dentro del panel recortado, el mordisco se lo comería a él
+          también (pasó: quedaba invisible). Puesto aquí, en el wrapper sin
+          recorte, cae en el mismo punto de pantalla pero no lo afecta el
+          `clip-path` de su vecino. */}
+      <div
+        className="pointer-events-none absolute left-1/2 z-10 hidden items-center justify-center gap-2.5 text-base font-semibold text-primary-content lg:flex"
+        style={{ top: TAB_TOP, width: TAB_WIDTH, height: TAB_HEIGHT }}
+      >
+        <User className="h-5 w-5" aria-hidden="true" />
+        Login
+      </div>
+
+      {/* Panel derecho — acceso.
+          `pt-6 sm:pt-10` / `pb-[calc(1.5rem_+_...)] sm:pb-[calc(2.5rem_+_...)]`:
+          menos aire arriba/abajo SOLO en celulares (bajo 640px) — el formulario de
+          registro (5 campos) es el más largo de las 5 vistas y en un teléfono chico
+          pedía scroll; en tablets/desktop queda igual que antes (2.5rem).
+          `calc(...+env(safe-area-inset-bottom))` (el `_` es el espacio que exige la
+          sintaxis de `calc()` alrededor de `+`/`-`, codificado así porque un valor
+          arbitrario de Tailwind no puede llevar espacios literales): en iPhones con
+          home indicator (sin botón físico) el sistema reserva una franja abajo — sin
+          esto el footer puede quedar tapado o pegado al borde. `env(...)` vale 0 en
+          cualquier pantalla sin esa franja (todo lo demás, incluido desktop). */}
+      {/* `lg:[clip-path:var(--tab-clip)]` (no `style.clipPath` directo): el
+          mordisco solo debe existir en el layout de escritorio partido en
+          dos — en mobile este mismo div es el único panel visible, a todo el
+          ancho, y el mordisco caería encima del escudo grande de la vista
+          principal (mismo rango vertical). `clipPath` en `style` no admite
+          un prefijo `lg:` (no es una clase), así que la ruta solo se GUARDA
+          en una variable CSS aquí (inocua por sí sola) y una clase con
+          prefijo responsive es la que de verdad la activa — por debajo de
+          `lg` esa clase ni siquiera se aplica, así que no hay recorte. */}
+      <div
+        className="relative flex w-full flex-col items-center justify-center overflow-y-auto bg-base-200 px-6 pt-6 pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] sm:px-10 sm:pt-10 sm:pb-[calc(2.5rem_+_env(safe-area-inset-bottom))] lg:w-1/2 lg:[clip-path:var(--tab-clip)]"
+        style={{ "--tab-clip": RIGHT_PANEL_CLIP_PATH } as React.CSSProperties}
+      >
         <div className="w-full max-w-sm">
           <div>
-            {/* Marca */}
-            <div className="mb-8 flex flex-col items-center text-center">
-              <img
-                src={Logo}
-                alt="Escudo de Gimnasio El Paraíso"
-                className="h-16 w-auto select-none"
-                draggable={false}
-              />
-            </div>
+            {/* Marca — solo en mobile Y solo en la vista principal, donde no hay
+                panel izquierdo con el escudo grande. En desktop el archivo de
+                diseño no repite el escudo aquí. En las vistas secundarias
+                (registro, login, verificar, recuperar) se quita: el botón
+                "Volver" + el título ya dan contexto de dónde está el usuario,
+                y en un celular chico repetir 96px de escudo en CADA paso de
+                un formulario largo (registro tiene 5 campos) forzaba scroll
+                que no hacía falta. */}
+            {view === "main" && (
+              <div className="mb-8 flex flex-col items-center text-center lg:hidden">
+                <img
+                  src={Logo}
+                  alt="Escudo de Gimnasio El Paraíso"
+                  className="h-16 w-auto select-none"
+                  draggable={false}
+                />
+              </div>
+            )}
 
             {/* ---------------- Vista principal ---------------- */}
             {view === "main" && (
@@ -475,11 +605,15 @@ export default function Login() {
 
                 {notice && <Notice message={notice.text} tone={notice.tone} />}
 
+                {/* Microsoft (staff) queda neutro a propósito: es un botón de SSO de un
+                    tercero, no debe teñirse con el verde de marca — ese color se reserva
+                    para el CTA real de esta pantalla ("Iniciar sesión con correo"),
+                    el mismo rol que tiene "Entrar" en el archivo de diseño. */}
                 <button
                   type="button"
                   onClick={handleMicrosoftLogin}
                   disabled={isConnecting}
-                  className={primaryBtnClass}
+                  className={secondaryBtnClass}
                 >
                   {isConnecting ? (
                     <>
@@ -500,7 +634,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => goTo("email")}
-                    className={secondaryBtnClass}
+                    className={primaryBtnClass}
                   >
                     Iniciar sesión con correo
                   </button>
@@ -601,7 +735,11 @@ export default function Login() {
                   </button>
                 </form>
 
-                <p className="mt-6 text-center text-sm text-base-content/60">
+                {/* mt-4 en mobile, sm:mt-6 desde tablets/desktop — mismo motivo que
+                    el resto de recortes de espaciado en esta pantalla: menos aire
+                    en celulares chicos para no forzar scroll (registro es el
+                    formulario más largo de las 5 vistas). */}
+                <p className="mt-4 text-center text-sm text-base-content/60 sm:mt-6">
                   ¿No tienes cuenta?{" "}
                   <button
                     type="button"
@@ -630,7 +768,16 @@ export default function Login() {
                   </div>
                 )}
 
-                <form onSubmit={handleRegisterSubmit} className="space-y-5">
+                {/* space-y-4 en mobile (sm:space-y-5 desde tablets/desktop, igual que
+                    antes): este es el formulario más largo de las 5 vistas — 16px
+                    menos entre sus 5 campos ayuda a no forzar scroll en celulares
+                    chicos. */}
+                <form onSubmit={handleRegisterSubmit} className="space-y-4 sm:space-y-5">
+                  {/* Vuelta a `grid-cols-2` fijo (se probó apilar en 1 columna bajo
+                      640px, pero eso sumaba ~82px extra justo en el formulario más
+                      largo de las 5 vistas — forzaba scroll en celulares chicos sin
+                      necesidad real: son campos cortos ("Nombres"/"Apellidos"),
+                      entran bien lado a lado incluso a 320px. */}
                   <div className="grid grid-cols-2 gap-3">
                     <TextField
                       id="reg-first"
@@ -691,7 +838,11 @@ export default function Login() {
                   </button>
                 </form>
 
-                <p className="mt-6 text-center text-sm text-base-content/60">
+                {/* mt-4 en mobile, sm:mt-6 desde tablets/desktop — mismo motivo que
+                    el resto de recortes de espaciado en esta pantalla: menos aire
+                    en celulares chicos para no forzar scroll (registro es el
+                    formulario más largo de las 5 vistas). */}
+                <p className="mt-4 text-center text-sm text-base-content/60 sm:mt-6">
                   ¿Ya tienes cuenta?{" "}
                   <button
                     type="button"
@@ -764,7 +915,11 @@ export default function Login() {
                   </button>
                 </form>
 
-                <p className="mt-6 text-center text-sm text-base-content/60">
+                {/* mt-4 en mobile, sm:mt-6 desde tablets/desktop — mismo motivo que
+                    el resto de recortes de espaciado en esta pantalla: menos aire
+                    en celulares chicos para no forzar scroll (registro es el
+                    formulario más largo de las 5 vistas). */}
+                <p className="mt-4 text-center text-sm text-base-content/60 sm:mt-6">
                   ¿No te llegó?{" "}
                   <button
                     type="button"
@@ -886,8 +1041,10 @@ export default function Login() {
             )}
           </div>
 
-          {/* Footer */}
-          <p className="mt-6 text-center text-xs text-base-content/40">
+          {/* Footer — mt-4 en mobile (mismo motivo que los mt-6→mt-4 de arriba: menos
+              aire para no forzar scroll en celulares chicos; sm:mt-6 = igual que
+              antes desde tablets/desktop). */}
+          <p className="mt-4 text-center text-xs text-base-content/40 sm:mt-6">
             © {new Date().getFullYear()} Gimnasio El Paraíso
           </p>
         </div>

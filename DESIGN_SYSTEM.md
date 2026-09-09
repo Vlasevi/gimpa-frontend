@@ -27,14 +27,18 @@ semánticos, nunca hex sueltos ni `text-gray-*`.**
 
 | Token                | Hex       | Uso                                              |
 | -------------------- | --------- | ------------------------------------------------ |
-| `primary`            | `#3b4aa0` | Acción principal, enlaces, foco                  |
-| `secondary`          | `#2d3561` | Títulos fuertes, overlays de marca               |
-| `accent`             | `#52b455` | Éxito, confirmaciones, detalles de acento        |
-| `base-100`           | `#ffffff` | Fondo de superficies                             |
-| `base-200`           | `#f8f9fa` | Fondo de página / zonas hundidas                 |
+| `primary`            | `#1F3A5F` | Acción principal, enlaces, foco                  |
+| `secondary`          | `#2E75B6` | Títulos fuertes, overlays de marca               |
+| `accent`             | `#59AF4E` | Éxito, confirmaciones, detalles de acento        |
+| `base-100`           | `#FAFAFA` | Fondo de superficies                             |
+| `base-200`           | `#F3F4F6` | Fondo de página / zonas hundidas                 |
 | `base-300`           | `#e9ecef` | Bordes sutiles, separadores                      |
-| `base-content`       | `#2a2a2a` | Texto principal                                  |
-| `success` / `warning` / `error` / `info` | — | Estados (ver `index.css`)            |
+| `base-content`       | `#374151` | Texto principal                                  |
+| `info`               | `#003496` | Información, estados neutros de marca            |
+| `success` / `warning` / `error` | — | Estados (ver `index.css`)                 |
+
+> **Nota (2026-09-09):** esta tabla estaba desactualizada — tenía los colores previos
+> al manual de marca. Sincronizada con los valores reales de `src/index.css`.
 
 **Opacidad para jerarquía de texto** (en vez de grises arbitrarios):
 
@@ -47,8 +51,8 @@ semánticos, nunca hex sueltos ni `text-gray-*`.**
 ## 3. Tipografía (parametrizada)
 
 Dos familias, conectadas por variables. **Para cambiar la fuente de todo el sitio,
-edita solo el bloque `@theme` en `src/index.css`** (y, si cambias de familia, el
-`<link>` de Google Fonts en `index.html`).
+edita solo el bloque `@theme` en `src/index.css`** (y, si cambias de familia, sus
+`@font-face` o el `<link>` de Google Fonts en `index.html`, según cómo se cargue).
 
 ```css
 @theme {
@@ -63,6 +67,30 @@ edita solo el bloque `@theme` en `src/index.css`** (y, si cambias de familia, el
 | Títulos        | `font-display` | Poppins | `h1`–`h2`, cifras destacadas, firma    |
 
 \* aplicada globalmente al `body`.
+
+**Pesos disponibles de Inter** _(2026-09-09)_: auto-hospedada en
+`src/assets/fonts/inter/` (`@font-face` en `index.css`), ya no viene del `<link>`
+de Google Fonts. Pesos según el manual de marca (Thin/Book/Regular/Medium) **más**
+SemiBold/Bold (600/700, ya usados por `font-bold`/`font-semibold` en 51 archivos
+antes de este cambio — sin ellos el navegador sintetiza negrita falsa):
+
+| Peso        | CSS `font-weight` | Archivo                    |
+| ----------- | ------------------ | --------------------------- |
+| Thin        | 100                 | `Inter-Thin.ttf`            |
+| Book\*\*    | 300                 | `Inter-Light.ttf`           |
+| Regular     | 400                 | `Inter-Regular.ttf`         |
+| Medium      | 500                 | `Inter-Medium.ttf`          |
+| SemiBold    | 600                 | `Inter-SemiBold.ttf`        |
+| Bold        | 700                 | `Inter-Bold.ttf`            |
+
+\*\* Inter no tiene un peso literal llamado "Book" — se usa `Light` como el más
+cercano a ese rol.
+
+**Neue Aachen Pro** (fuente de marca, aún no activada en `--font-display`): auto-
+hospedada en `src/assets/fonts/neue-aachen-pro/` con los mismos 4 pesos del manual
+(Thin/Book/Regular/Medium — estos sí existen tal cual en esa familia). **Pendiente:**
+confirmar que la licencia recibida cubre uso web (la carpeta no trae archivo de
+licencia, a diferencia de Inter que sí trae `OFL.txt`) antes de activarla.
 
 **Escala usada en Login** (referencia): `text-4xl font-bold` (título de página),
 `text-base` (subtítulo), `text-sm` (ayudas).
