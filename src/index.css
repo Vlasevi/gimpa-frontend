@@ -51,39 +51,39 @@
 }
 
 /* =====================================================================
-   Neue Aachen Pro — fuente de marca, NO está en Google Fonts (comercial),
-   así que se auto-hospeda aquí. Archivos en src/assets/fonts/neue-aachen-pro/
-   (solo los 4 pesos que pide el manual: Thin/Book/Regular/Medium — el resto
-   de variantes que llegaron, itálicas/Bold/Black/UltraLight, no se copiaron).
-   OJO LICENCIA: la carpeta que se recibió no trae archivo de licencia (a
-   diferencia de Inter, que sí trae OFL.txt). Auto-hospedar en la web permite
-   descargar el archivo por la pestaña Network de cualquier navegador — antes
-   de que esto salga a producción hay que confirmar con quien la entregó que
-   el permiso cubre uso web, no solo escritorio/impresión. */
+   Aleo — reemplaza a Neue Aachen Pro como fuente de marca (decisión del
+   usuario: Neue Aachen Pro llegó sin archivo de licencia — no se podía
+   confirmar uso web —, Aleo es de Google Fonts con licencia libre, OFL).
+   NO está en el <link> de Google Fonts de index.html, se auto-hospeda aquí
+   igual que Inter. Archivos en src/assets/fonts/aleo/ (solo los 4 pesos
+   del manual: Thin/Book/Regular/Medium — el resto de variantes que
+   llegaron, itálicas/SemiBold/Bold/ExtraBold/Black/ExtraLight, no se
+   copiaron). Igual que con Inter, Aleo no tiene un peso literal llamado
+   "Book" — se usa "Light" como el más cercano a ese rol. */
 @font-face {
-  font-family: "Neue Aachen Pro";
-  src: url("./assets/fonts/neue-aachen-pro/NeueAachenPro-Thin.ttf") format("truetype");
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Thin.ttf") format("truetype");
   font-weight: 100;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Neue Aachen Pro";
-  src: url("./assets/fonts/neue-aachen-pro/NeueAachenPro-Book.ttf") format("truetype");
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Light.ttf") format("truetype");
   font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Neue Aachen Pro";
-  src: url("./assets/fonts/neue-aachen-pro/NeueAachenPro-Regular.ttf") format("truetype");
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: "Neue Aachen Pro";
-  src: url("./assets/fonts/neue-aachen-pro/NeueAachenPro-Medium.ttf") format("truetype");
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Medium.ttf") format("truetype");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -155,15 +155,16 @@
 /* =====================================================================
    SISTEMA DE DISEÑO — Tipografía parametrizada
    Para cambiar la fuente de TODO el sitio, edita solo estas dos líneas.
-   (Inter y Neue Aachen Pro se auto-hospedan arriba, ver @font-face —
-   Poppins sigue viniendo de Google Fonts en index.html.)
+   (Inter y Aleo se auto-hospedan arriba, ver @font-face.)
    Uso: clase `font-sans` (por defecto en body) y `font-display` (títulos).
-   TOKENS SIN CAMBIAR TODAVÍA: se deja "Poppins" en --font-display a
-   propósito — falta confirmar la licencia web de Neue Aachen Pro (ver nota
-   arriba) antes de activarla como fuente real del sitio. */
+   Aleo activada _(2026-09-09)_: reemplaza a Poppins en --font-display —
+   licencia libre confirmada (OFL), ya auto-hospedada arriba. Con este
+   cambio Poppins queda sin ningún uso real en el código (era solo este
+   token), así que también se quitó su <link> de Google Fonts en
+   index.html. */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Aleo", ui-serif, Georgia, serif;
 }
 
 /* Variables personalizadas para el Sidebar (usadas vía bg-[hsl(var(--...))]).

@@ -86,11 +86,13 @@ antes de este cambio — sin ellos el navegador sintetiza negrita falsa):
 \*\* Inter no tiene un peso literal llamado "Book" — se usa `Light` como el más
 cercano a ese rol.
 
-**Neue Aachen Pro** (fuente de marca, aún no activada en `--font-display`): auto-
-hospedada en `src/assets/fonts/neue-aachen-pro/` con los mismos 4 pesos del manual
-(Thin/Book/Regular/Medium — estos sí existen tal cual en esa familia). **Pendiente:**
-confirmar que la licencia recibida cubre uso web (la carpeta no trae archivo de
-licencia, a diferencia de Inter que sí trae `OFL.txt`) antes de activarla.
+**Aleo** _(2026-09-09)_ — fuente de marca, aún no activada en `--font-display`:
+reemplaza a Neue Aachen Pro (esa llegó sin archivo de licencia — no se podía
+confirmar uso web —, se eliminó del proyecto). Aleo es de Google Fonts, licencia
+libre (`OFL.txt`), auto-hospedada en `src/assets/fonts/aleo/` con los mismos 4
+pesos del manual (Thin/Book/Regular/Medium — como con Inter, no tiene un peso
+literal "Book"; se usa `Light`). **Pendiente:** decidir si se activa ya como
+`--font-display` (la licencia ya no es un impedimento) o se deja para más adelante.
 
 **Escala usada en Login** (referencia): `text-4xl font-bold` (título de página),
 `text-base` (subtítulo), `text-sm` (ayudas).
