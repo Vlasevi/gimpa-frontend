@@ -6,6 +6,7 @@ import { useAuth } from "@/components/Login/loginLogic";
 import { UserFormModal } from "@/components/users/UserFormModal";
 import { Alert } from "@/components/ui/Alert";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 interface User {
     first_name: string;
@@ -281,8 +282,8 @@ export default function Usuarios() {
                     <tbody>
                         {loading ? (
                             <tr>
-                                <td colSpan={4} className="text-center py-8">
-                                    <span className="loading loading-spinner loading-lg text-primary"></span>
+                                <td colSpan={4} className="py-8">
+                                    <LoadingState compact label="Cargando usuarios…" />
                                 </td>
                             </tr>
                         ) : paginatedUsers.length === 0 ? (

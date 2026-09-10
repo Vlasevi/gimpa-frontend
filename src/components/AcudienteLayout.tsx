@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 
-import { Sidebar } from "./Sidebar";
+import { Sidebar, SIDEBAR_DRAWER_ID, useSidebarDrawerState } from "./Sidebar";
 import { Navbar } from "./Navbar";
 
 /**
@@ -13,19 +13,32 @@ import { Navbar } from "./Navbar";
  * usa `Layout.tsx`, sin copiar su JSX): `Sidebar` ya sabe detectar `isGuardianOnly(user)`
  * y renderizar el menú de un solo ítem que le corresponde a un acudiente, con el mismo
  * logo (con el texto del colegio incluido) y el mismo estilo de NavLink que ve el staff.
+ *
+ * Mismo patrón de `drawer` que `Layout.tsx` (ver los comentarios ahí para el porqué de
+ * cada pieza) — se duplica aquí porque los dos marcos ya eran independientes desde
+ * antes; no es una regresión nueva de este cambio.
  */
 export default function AcudienteLayout() {
+  const [drawerOpen, setDrawerOpen] = useSidebarDrawerState();
+
   return (
-    <div className="flex min-h-screen bg-base-100">
-      <div className="h-screen sticky top-0">
-        <Sidebar />
-      </div>
-      <div className="flex-1 flex flex-col">
-        <Navbar />
-        <main className="flex-1 p-6 bg-base-200 overflow-y-auto">
+    <div className="drawer lg:drawer-open">
+      <input
+        id={SIDEBAR_DRAWER_ID}
+        type="checkbox"
+        className="drawer-toggle"
+        checked={drawerOpen}
+        onChange={(e) => setDrawerOpen(e.target.checked)}
+      />
+
+      <div className="drawer-content flex min-h-screen flex-col bg-base-100">
+        <Navbar showDrawerToggle />
+        <main className="flex-1 overflow-y-auto bg-base-200 p-6">
           <Outlet />
         </main>
       </div>
+
+      <Sidebar />
     </div>
   );
 }

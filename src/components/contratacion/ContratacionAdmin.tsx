@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DisplayField } from "@/components/matriculas/matriculasUI/DisplayField";
 import { Alert } from "@/components/ui/Alert";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import {
   DATA_FIELDS,
@@ -168,9 +169,7 @@ export const ContratacionAdmin = ({ readOnly = false }: { readOnly?: boolean }) 
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <span className="loading loading-spinner loading-lg text-primary" />
-        </div>
+        <LoadingState compact className="py-16" label="Cargando contrataciones…" />
       ) : (
         <div className="overflow-x-auto bg-base-100 rounded-lg border border-base-300 shadow-sm">
           <table className="table">

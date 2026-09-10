@@ -184,8 +184,35 @@ Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
 
 ## 6. Estados
 
-- **Carga:** ícono `Loader2` de `lucide-react` con `animate-spin` + texto de acción
-  en gerundio ("Conectando…"). Deshabilita el control mientras tanto.
+- **Carga dentro de un botón** (guardar, enviar, conectar…): ícono `Loader2` de
+  `lucide-react` con `animate-spin` SUELTO junto al texto del botón, en gerundio
+  ("Conectando…"). Deshabilita el control mientras tanto. **Nunca** el spinner nativo
+  de daisyUI (`loading loading-spinner`) en este caso — mezclar los dos estilos en
+  botones vecinos es la clase de inconsistencia que #6b existe para evitar.
+- **Carga de una SECCIÓN o PÁGINA completa** (tabla, panel de detalle, modal
+  cargando datos previos, un paso completo de un wizard): **siempre**
+  `<LoadingState />` (`components/ui/LoadingState.tsx`), **nunca** armado a mano.
+  Antes de estandarizar (2026-09-10) convivían dos estilos visualmente
+  distintos para el mismo propósito — el spinner nativo de daisyUI (un anillo sin
+  ícono) en Usuarios/Matrículas/Contratación, y este mismo patrón (`Loader2` +
+  texto, en una tarjeta) que ya usaba Admisiones — mismo módulo, apariencia
+  distinta según la pantalla. Si una funcionalidad nueva necesita esto,
+  **usa el componente, no repitas el JSX a mano**:
+  ```tsx
+  import { LoadingState } from "@/components/ui/LoadingState";
+
+  {loading ? (
+    <LoadingState label="Cargando expedientes…" />
+  ) : (
+    …
+  )}
+  ```
+  `compact` (sin tarjeta/borde/sombra) para cuando ya se está dentro de otro
+  contenedor con su propio marco (una fila de tabla, un modal chico) — ver el
+  componente para más detalle. Si hace falta una variante que el componente no
+  cubre (otro tamaño, otro layout), **amplía `LoadingState`, no crees un spinner
+  suelto nuevo** — el problema que resolvió este cambio vuelve apenas alguien
+  arma uno a mano "por esta vez".
 - **Vacío / error:** dan dirección, no disculpas. Di qué pasó y cómo seguir.
 - **Confirmaciones destructivas:** usa el modal `Alert` (`components/ui/Alert`) con
   `variant`/`acceptText`, **nunca `confirm()` nativo**. Referencia: `MatriculasAdmin`.
@@ -293,6 +320,21 @@ Patrón del `<h1>` de página:
 
 A medida que toquemos cada pantalla, alinearla con esta guía:
 
+- [x] **Spinner de carga de página/sección unificado en `LoadingState`.**
+      _(hecho 2026-09-10)_ Convivían dos estilos distintos para lo mismo: el
+      spinner nativo de daisyUI (`loading loading-spinner loading-lg/md`) en
+      `Usuarios.tsx`, `MatriculasAdmin.tsx` (×2), `MatriculasEstudiantes.tsx`
+      (×3), `Step4Documents.tsx`, `ContratacionAdmin.tsx`,
+      `ContratacionEmpleado.tsx` (×2), `UserFormModal.tsx`,
+      `PdfSignViewer.tsx` y `UploadPendingDocuments.tsx`; y el patrón `Loader2`
+      + texto en tarjeta que ya usaba Admisiones (`AdmisionesAdmin.tsx`,
+      `MisAdmisiones.tsx`, `DetalleAdmision.tsx`, etc. — ese es el que se
+      quedó, elegido por el usuario). También se alineó `Roles.tsx` (ya usaba
+      `Loader2`, pero sin la tarjeta). Extraído a
+      `components/ui/LoadingState.tsx` — ver §6. Sin tocar los spinners
+      pequeños DENTRO de botones (`loading-sm`/`loading-xs`, o `Loader2`
+      suelto): esos ya eran consistentes entre sí y son un caso de uso
+      distinto (ver §6).
 - [x] **Migrar clases de tokens shadcn muertas → tokens daisyui.** _(hecho 2026-07-09)_
       Estaban escritas inline y nunca se generaron (no se cablearon a Tailwind v4).
       Equivalencias aplicadas (referencia para futuros casos):
@@ -357,9 +399,17 @@ A medida que toquemos cada pantalla, alinearla con esta guía:
       Matrículas, detalle/forms de matrícula, Usuarios y Contratación; quedan páginas sueltas).
 - [ ] Unificar radios/sombras/transiciones al estándar de §4.
 - [ ] Revisar foco visible y `motion-reduce` en componentes interactivos.
+- [x] **Sidebar en azul institucional** _(2026-09-10)_: fondo pasa de verde
+      (`--accentlight`) a `bg-primary`; el resaltador de la página activa pasa
+      de `--accent-dark` a `bg-base-200`/`text-primary` (el gris `#F3F4F6` del
+      theme, en vez de un verde oscuro aparte). `Sidebar.tsx` ya no usa
+      ninguna variable HSL propia — con eso, `--accent`, `--accentlight`,
+      `--primary-light`, `--primary-dark` y `--accent-dark` quedaron sin
+      ningún uso real y se eliminaron de `src/index.css` (el bloque `:root`
+      completo). Logo del sidebar (`platform-logo.png`, wordmark en texto
+      negro): se le agregó una tarjeta `bg-base-100` detrás para que siga
+      siendo legible sobre el nuevo fondo navy.
 - [ ] (Opcional) Limpiar de `src/index.css` las variables shadcn muertas del
       bloque `:root` (`--background`, `--foreground`, `--card`, `--muted`, `--ring`,
       `--input`, `--popover`, `--destructive`, `--radius` y sus `-foreground`). Ya
-      ninguna clase las referencia. **Conservar** `--accent`, `--accentlight`,
-      `--primary-*`, `--accent-dark`: `Sidebar.tsx` los usa vía `bg-[hsl(var(--accent))]`
-      y `bg-[hsl(var(--accentlight))]`.
+      ninguna clase las referencia.

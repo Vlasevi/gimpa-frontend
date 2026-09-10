@@ -5,6 +5,8 @@ import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { PDFDocument } from "pdf-lib";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
+import { LoadingState } from "@/components/ui/LoadingState";
+
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -230,11 +232,7 @@ const PdfViewer = ({
   }, [pdfData]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-48">
-        <span className="loading loading-spinner loading-md text-primary" />
-      </div>
-    );
+    return <LoadingState compact className="h-48" label="Cargando documentos…" />;
   }
 
   const firstPageWidth = pages[0]?.getViewport({ scale: 1 }).width ?? 0;

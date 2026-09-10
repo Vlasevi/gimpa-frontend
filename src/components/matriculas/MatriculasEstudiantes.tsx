@@ -11,6 +11,7 @@ import { Step6Confirmation } from "./Step6Confirmation";
 import { EnrollmentBlockedMessage } from "./EnrollmentBlockedMessage";
 import { useAuth } from "@/components/Login/loginLogic";
 import { apiUrl, API_ENDPOINTS, apiFetch } from "@/utils/api";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 // Tipado de la respuesta del backend (estructura optimizada)
 export interface EnrollmentResponse {
@@ -155,16 +156,13 @@ export const MatriculasEstudiantes = () => {
       {/* Loading overlay while generating PDFs */}
       {generatingPdfs && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg text-primary" />
+          <LoadingState label="Generando documentos…" />
         </div>
       )}
       <div className="max-w-4xl mx-auto">
         {/* Show loading spinner while checking eligibility */}
         {loadingEligibility ? (
-          <div className="bg-white rounded-lg shadow-lg p-12 flex flex-col items-center justify-center">
-            <span className="loading loading-spinner loading-lg text-primary"></span>
-            <p className="mt-4 text-gray-600">Verificando elegibilidad...</p>
-          </div>
+          <LoadingState label="Verificando elegibilidad…" />
         ) : (
           <>
             {/* Show eligibility message if user cannot enroll */}
@@ -257,11 +255,7 @@ export const MatriculasEstudiantes = () => {
 
                   {currentStep === 4 && enrollmentInfo && (
                     <Suspense
-                      fallback={
-                        <div className="flex items-center justify-center h-48">
-                          <span className="loading loading-spinner loading-lg text-primary" />
-                        </div>
-                      }
+                      fallback={<LoadingState compact className="h-48" />}
                     >
                       <Step4Documents
                         next={nextStep}

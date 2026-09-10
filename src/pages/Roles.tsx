@@ -11,6 +11,7 @@ import {
 import { apiUrl } from "@/utils/api";
 import { useAuth } from "@/components/Login/loginLogic";
 import useBodyScrollLock from "@/hooks/useBodyScrollLock";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 type CatalogItem = { key: string; label: string; isSelf: boolean };
 type CatalogGroup = { group: string; capabilities: CatalogItem[] };
@@ -194,9 +195,7 @@ export default function Roles() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <LoadingState compact className="py-16" label="Cargando roles…" />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
           <table className="w-full text-sm">

@@ -167,26 +167,6 @@
   --font-display: "Aleo", ui-serif, Georgia, serif;
 }
 
-/* Variables personalizadas para el Sidebar (usadas vía bg-[hsl(var(--...))]).
-   No borrar: Sidebar.tsx depende de --accentlight y --accent-dark (fondo
-   completo del sidebar y resaltado del link activo, respectivamente) — la
-   única razón de que este duplicado en HSL siga existiendo en vez de que
-   Sidebar use el token `accent` de daisyUI directamente.
-   --accentlight/--accent-dark recalculados a partir del nuevo accent de
-   marca (#59AF4E → hsl(113 38% 50%)), con la misma relación de
-   saturación/luminosidad que tenían antes respecto al accent viejo. --accent,
-   --primary-light y --primary-dark NO se usan en ningún lado (grep en
-   src/) — se dejan tal cual, ya estaban marcados como resto muerto en
-   DESIGN_SYSTEM.md §9. */
-@layer base {
-  :root {
-    --accentlight: 113 55% 80%;
-    --accent: 122 39% 52%;
-    --primary-light: 231 41% 54%;
-    --primary-dark: 230 50% 35%;
-    --accent-dark: 113 43% 36%;
-  }
-}
 
 /* Fuente base del documento (parametrizada arriba) */
 @layer base {

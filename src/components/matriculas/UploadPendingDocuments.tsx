@@ -5,6 +5,7 @@ import { Step5Documents } from "./Step5Documents";
 import { useAuth } from "@/components/Login/loginLogic";
 import { apiUrl, API_ENDPOINTS, buildHeaders } from "@/utils/api";
 import { EnrollmentResponse } from "./MatriculasEstudiantes";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 export const UploadPendingDocuments = () => {
   const [enrollmentInfo, setEnrollmentInfo] =
@@ -133,9 +134,7 @@ export const UploadPendingDocuments = () => {
   if (loading) {
     return (
       <div className="container mx-auto p-6">
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <span className="loading loading-spinner loading-lg text-primary"></span>
-        </div>
+        <LoadingState compact className="min-h-[60vh]" label="Cargando documentos pendientes…" />
       </div>
     );
   }

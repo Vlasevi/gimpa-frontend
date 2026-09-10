@@ -24,6 +24,7 @@ import { EnrollmentRow } from "./matriculasUI/EnrollmentRow";
 import { StudentDataTabs } from "./StudentDataTabs";
 import { Alert } from "@/components/ui/Alert";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useAuth } from "@/components/Login/loginLogic";
 
@@ -856,9 +857,7 @@ export const MatriculasAdmin = () => {
         className="rounded-lg border border-base-300 bg-base-100 shadow-sm"
       >
         {loading ? (
-          <div className="flex justify-center items-center py-16">
-            <span className="loading loading-spinner loading-lg text-primary"></span>
-          </div>
+          <LoadingState compact className="py-16" label="Cargando matrículas…" />
         ) : filteredEnrollments.length === 0 ? (
           <div className="text-center py-16 text-base-content/50">
             {enrollments.length === 0
@@ -1346,9 +1345,7 @@ export const MatriculasAdmin = () => {
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
           {detailsLoading ? (
-            <div className="flex justify-center items-center h-full min-h-[300px]">
-              <span className="loading loading-spinner loading-lg text-primary"></span>
-            </div>
+            <LoadingState compact className="h-full min-h-[300px]" label="Cargando detalle…" />
           ) : (
             selectedEnrollmentData && (
               <StudentDataTabs

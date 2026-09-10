@@ -5,6 +5,7 @@ import { apiUrl, API_ENDPOINTS, apiFetch, buildHeaders } from "@/utils/api";
 import { useAuth } from "@/components/Login/loginLogic";
 import { PdfModal, embedImagesInPdf, type FieldOverlay } from "@/components/pdf/PdfSignViewer";
 import { OtpInput } from "@/components/ui/OtpInput";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { FieldWidget } from "./FieldWidget";
 import {
   DATA_FIELDS,
@@ -97,8 +98,8 @@ export const ContratacionEmpleado = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6 flex justify-center">
-        <span className="loading loading-spinner loading-lg text-primary" />
+      <div className="container mx-auto p-6">
+        <LoadingState label="Cargando contrato…" />
       </div>
     );
   }
@@ -727,9 +728,7 @@ const StepSign = ({
       {error && <div className="alert alert-error"><span>{error}</span></div>}
 
       {generating ? (
-        <div className="flex justify-center py-10">
-          <span className="loading loading-spinner loading-lg text-primary" />
-        </div>
+        <LoadingState compact className="py-10" label="Generando contrato…" />
       ) : (
         <>
           {/* Progreso */}

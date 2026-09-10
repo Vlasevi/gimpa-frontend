@@ -3,6 +3,7 @@ import { UserPlus, User, Mail, Phone, Save, X, UserCog, Users, ChevronDown } fro
 import { apiUrl, buildHeaders } from "@/utils/api";
 import { useAuth } from "@/components/Login/loginLogic";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { LoadingState } from "@/components/ui/LoadingState";
 
 // Fallback de etiquetas mientras carga la lista dinámica de roles.
 const ROLE_LABELS: Record<string, string> = {
@@ -271,9 +272,7 @@ export function UserFormModal({ isOpen, onClose, onSuccess, userToEdit, isLoadin
 
                 {/* CONTENT */}
                 {isLoadingData ? (
-                    <div className="flex flex-1 items-center justify-center py-20">
-                        <span className="loading loading-spinner loading-lg text-primary"></span>
-                    </div>
+                    <LoadingState compact className="flex-1 py-20" label="Cargando datos…" />
                 ) : (
                     <form className="flex-1 overflow-y-auto p-6 space-y-5" onSubmit={handleSubmit}>
 
