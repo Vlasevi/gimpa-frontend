@@ -4,8 +4,14 @@ Guía viva del lenguaje visual del frontend. La idea es **replicar estos patrone
 poco a poco en todas las pantallas** para lograr un producto coherente, moderno y
 con la identidad de Gimnasio El Paraíso.
 
-> Primera pantalla estandarizada: **Login** (`src/pages/Login.tsx`).
-> Úsala como referencia de estilo al migrar el resto.
+> **Referencias de estilo:**
+> - **Módulos (formularios, tablas, modales, botones, toasts):** Matrículas es la fuente
+>   de verdad del lenguaje visual. Sus clases ya están centralizadas en
+>   `components/ui/formStyles.ts` y en los componentes de `components/ui/` (ver §13).
+> - **Pantalla de acceso:** `src/pages/Login.tsx` tiene un diseño propio y deliberado
+>   (ver §8). No copies su estilo a otras pantallas.
+>
+> _Última revisión contra el código: 2026-09-10._
 
 ---
 
@@ -22,23 +28,26 @@ con la identidad de Gimnasio El Paraíso.
 
 ## 2. Color
 
-Definido en el theme daisyui `gimpa` (`src/index.css`). **Usa siempre los tokens
-semánticos, nunca hex sueltos ni `text-gray-*`.**
+Definido en el theme daisyui `gimpa` (`src/index.css`), según el manual de marca.
+**Usa siempre los tokens semánticos, nunca hex sueltos ni `text-gray-*`.**
 
 | Token                | Hex       | Uso                                              |
 | -------------------- | --------- | ------------------------------------------------ |
-| `primary`            | `#1F3A5F` | Acción principal, enlaces, foco                  |
-| `secondary`          | `#2E75B6` | Títulos fuertes, overlays de marca               |
-| `accent`             | `#59AF4E` | Éxito, confirmaciones, detalles de acento        |
-| `base-100`           | `#FAFAFA` | Fondo de superficies                             |
-| `base-200`           | `#F3F4F6` | Fondo de página / zonas hundidas                 |
+| `primary`            | `#1F3A5F` | Acción principal, enlaces, foco, fondo del sidebar |
+| `secondary`          | `#2E75B6` | Títulos de página, overlays de marca             |
+| `accent`             | `#59AF4E` | Éxito, confirmaciones, CTA del Login             |
+| `neutral`            | `#6B7280` | Gris medio (sin rol específico en el manual)     |
+| `base-100`           | `#FAFAFA` | Fondo de superficies (cards, modales, navbar)    |
+| `base-200`           | `#F3F4F6` | Fondo de página / zonas hundidas / ítem activo del sidebar |
 | `base-300`           | `#e9ecef` | Bordes sutiles, separadores                      |
 | `base-content`       | `#374151` | Texto principal                                  |
 | `info`               | `#003496` | Información, estados neutros de marca            |
-| `success` / `warning` / `error` | — | Estados (ver `index.css`)                 |
+| `success`            | `#166534` | Estado correcto                                   |
+| `warning`            | `#ff6b35` | Advertencia (sin dato en el manual, valor previo) |
+| `error`              | `#B91C1C` | Error, acciones destructivas                     |
 
-> **Nota (2026-09-09):** esta tabla estaba desactualizada — tenía los colores previos
-> al manual de marca. Sincronizada con los valores reales de `src/index.css`.
+Todos los `*-content` son `#ffffff`. Radios del theme: `--radius-selector`,
+`--radius-field` y `--radius-box` = `0.5rem`.
 
 **Opacidad para jerarquía de texto** (en vez de grises arbitrarios):
 
@@ -46,33 +55,40 @@ semánticos, nunca hex sueltos ni `text-gray-*`.**
 - Secundario: `text-base-content/60`
 - Terciario / ayudas: `text-base-content/50`
 
+**Única excepción a "nada de hex":** el degradado del panel de marca del Login
+(`PANEL_GRADIENT_FROM`/`PANEL_GRADIENT_TO` en `Login.tsx`) va como string en un
+`style` inline, porque Tailwind no puede leer un `var()` dentro de un degradado armado
+en JS. `PANEL_GRADIENT_FROM` es el mismo valor que `primary`.
+
 ---
 
 ## 3. Tipografía (parametrizada)
 
 Dos familias, conectadas por variables. **Para cambiar la fuente de todo el sitio,
 edita solo el bloque `@theme` en `src/index.css`** (y, si cambias de familia, sus
-`@font-face` o el `<link>` de Google Fonts en `index.html`, según cómo se cargue).
+`@font-face` en el mismo archivo).
 
 ```css
 @theme {
-  --font-sans:    "Inter", ui-sans-serif, system-ui, sans-serif;   /* cuerpo y UI */
-  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif; /* títulos     */
+  --font-sans:    "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif; /* cuerpo y UI */
+  --font-display: "Aleo", ui-serif, Georgia, serif;                               /* títulos     */
 }
 ```
 
-| Rol            | Clase          | Familia | Notas                                  |
-| -------------- | -------------- | ------- | -------------------------------------- |
-| Cuerpo / UI    | `font-sans`\*  | Inter   | Por defecto en `body`; no hace falta declararla |
-| Títulos        | `font-display` | Poppins | `h1`–`h2`, cifras destacadas, firma    |
+| Rol            | Clase          | Familia          | Notas                                  |
+| -------------- | -------------- | ---------------- | -------------------------------------- |
+| Cuerpo / UI    | `font-sans`\*  | Inter            | Por defecto en `body`; no hace falta declararla |
+| Títulos        | `font-display` | Aleo (serif)     | `h1`–`h2`, cifras destacadas, firma    |
 
-\* aplicada globalmente al `body`.
+\* aplicada globalmente al `body`. No existen `font-poppins` ni `font-inter` como
+utilidades.
 
-**Pesos disponibles de Inter** _(2026-09-09)_: auto-hospedada en
-`src/assets/fonts/inter/` (`@font-face` en `index.css`), ya no viene del `<link>`
-de Google Fonts. Pesos según el manual de marca (Thin/Book/Regular/Medium) **más**
-SemiBold/Bold (600/700, ya usados por `font-bold`/`font-semibold` en 51 archivos
-antes de este cambio — sin ellos el navegador sintetiza negrita falsa):
+**Ambas fuentes se auto-hospedan** (`@font-face` en `index.css`, archivos en
+`src/assets/fonts/`). `index.html` ya no carga nada desde Google Fonts.
+
+**Pesos de Inter** (`src/assets/fonts/inter/`): los del manual de marca
+(Thin/Book/Regular/Medium) **más** SemiBold/Bold, porque `font-semibold`/`font-bold`
+se usan en toda la app y sin esos archivos el navegador sintetiza una negrita falsa.
 
 | Peso        | CSS `font-weight` | Archivo                    |
 | ----------- | ------------------ | --------------------------- |
@@ -83,19 +99,28 @@ antes de este cambio — sin ellos el navegador sintetiza negrita falsa):
 | SemiBold    | 600                 | `Inter-SemiBold.ttf`        |
 | Bold        | 700                 | `Inter-Bold.ttf`            |
 
-\*\* Inter no tiene un peso literal llamado "Book" — se usa `Light` como el más
-cercano a ese rol.
+\*\* Inter no tiene un peso literal llamado "Book": se usa `Light` como el más cercano.
 
-**Aleo** _(2026-09-09)_ — fuente de marca, aún no activada en `--font-display`:
-reemplaza a Neue Aachen Pro (esa llegó sin archivo de licencia — no se podía
-confirmar uso web —, se eliminó del proyecto). Aleo es de Google Fonts, licencia
-libre (`OFL.txt`), auto-hospedada en `src/assets/fonts/aleo/` con los mismos 4
-pesos del manual (Thin/Book/Regular/Medium — como con Inter, no tiene un peso
-literal "Book"; se usa `Light`). **Pendiente:** decidir si se activa ya como
-`--font-display` (la licencia ya no es un impedimento) o se deja para más adelante.
+**Aleo** (`src/assets/fonts/aleo/`) es la fuente de marca para títulos desde
+2026-09-09. Reemplazó a Poppins en `--font-display` y a Neue Aachen Pro, que llegó sin
+archivo de licencia y se eliminó del proyecto. Aleo viene de Google Fonts con licencia
+libre (OFL). Solo se cargaron los 4 pesos del manual:
 
-**Escala usada en Login** (referencia): `text-4xl font-bold` (título de página),
-`text-base` (subtítulo), `text-sm` (ayudas).
+| Peso      | CSS `font-weight` | Archivo            |
+| --------- | ------------------ | ------------------ |
+| Thin      | 100                 | `Aleo-Thin.ttf`    |
+| Book\*\*  | 300                 | `Aleo-Light.ttf`   |
+| Regular   | 400                 | `Aleo-Regular.ttf` |
+| Medium    | 500                 | `Aleo-Medium.ttf`  |
+
+> ⚠️ **Negrita sintética en títulos.** Aleo no tiene 600/700 cargados, pero el patrón de
+> título (§10) usa `font-display ... font-bold`, y hay ~60 combinaciones de
+> `font-display` con `font-bold`/`font-semibold` en `src/`. El navegador "inventa"
+> esa negrita, el mismo problema que ya se resolvió para Inter. Pendiente de decidir
+> (ver §14).
+
+**Escala de referencia:** `text-3xl font-bold` (título de página y del Login),
+`text-2xl` (cards/placeholders), `text-base` (subtítulo), `text-sm` (ayudas).
 
 ---
 
@@ -105,43 +130,55 @@ Los tres ingredientes del acabado "moderno". Mantenlos consistentes.
 
 | Concepto        | Valor recomendado                              | Ejemplo                         |
 | --------------- | ---------------------------------------------- | ------------------------------- |
-| Radio de acción | `rounded-2xl` (botones/cards grandes)          | botón de login                  |
-| Radio de campo  | `rounded-lg` (inputs, botones chicos)          | ver `--radius-field` en theme   |
-| Sombra base     | `shadow-sm`                                    | estado reposo                   |
+| Radio de card   | `rounded-2xl` (cards grandes, placeholders)     | card de placeholder (§10)       |
+| Radio de campo  | `0.5rem` del theme (`--radius-field`)          | `btn`, `input`, `select` de daisyUI; `rounded-lg` si es a mano |
+| Sombra base     | `shadow-sm`                                    | estado reposo, `primaryBtnClass` |
 | Sombra hover    | `shadow-lg shadow-primary/25`                  | elevación al pasar el mouse     |
 | Transición      | `transition-all duration-200 ease-out`         | **estándar en todo lo interactivo** |
 
 ---
 
-## 5. Patrón de botón (acción principal)
+## 5. Botones
 
-Copia/pega este patrón para el CTA de cualquier pantalla:
+### 5.1 Botón de formulario / módulo (estándar)
+
+Usa las constantes de `components/ui/formStyles.ts`, nunca un string propio:
 
 ```tsx
-<button
-  className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl
-             bg-primary px-6 text-base font-medium text-primary-content shadow-sm
-             transition-all duration-200 ease-out
-             hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25
-             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
-             focus-visible:ring-offset-2 focus-visible:ring-offset-base-100
-             active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70
-             motion-reduce:transition-none motion-reduce:hover:translate-y-0"
->
-  …
-</button>
+import { primaryBtnClass, ghostBtnClass } from "@/components/ui/formStyles";
+
+<button className={primaryBtnClass}>Guardar</button>  {/* "btn btn-primary gap-2 shadow-sm" */}
+<button className={ghostBtnClass}>Cancelar</button>   {/* "btn btn-ghost gap-2" */}
 ```
 
-Claves: micro-elevación en hover, **foco visible** con `ring`, estado `disabled`
-y anulación de movimiento con `motion-reduce`.
+Para otras variantes, usa las clases de daisyUI directamente: `btn btn-outline`,
+`btn btn-error`, `btn-sm`…
+
+Esta es la misma clase que usa Matrículas en listados, modales y paneles. Admisiones
+tenía su propia familia de botones con hover-lift, sombra de color y `h-12 rounded-xl`,
+sin equivalente en Matrículas. Se eliminó para igualarla (ver la cabecera de
+`formStyles.ts`). `adminPrimaryBtnClass`/`adminGhostBtnClass` son solo alias de
+compatibilidad: no los uses en código nuevo.
+
+### 5.2 CTA del Login (excepción deliberada)
+
+`Login.tsx` define localmente su CTA: píldora `rounded-full bg-accent`, `min-h-12`,
+micro-elevación en hover con `shadow-accent/25`, anillo de foco, `disabled:opacity-70`
+y variantes `motion-reduce:*`. También define un botón secundario `rounded-full border`
+y su propio estilo de campo (subrayado, sin caja). Pertenece a esa pantalla; no lo
+copies a otras.
+
+### 5.3 CTA grande anterior (legado)
+
+El patrón `h-14 rounded-2xl bg-primary ... hover:-translate-y-0.5
+hover:shadow-primary/25` que esta guía recomendaba antes solo sobrevive en
+`pages/NotFound.tsx` y `pages/Roles.tsx`. **No lo uses en pantallas nuevas** (ver §14).
 
 > **Decisión (2026-07-09):** el frontend usa **solo daisyui + Tailwind**. Se eliminó
 > el shadcn/ui residual (`ui/button`, `ui/dialog`, `components.json`, deps Radix y
-> `class-variance-authority`). Para botones dentro de formularios/tablas usa las
-> clases daisyui (`btn btn-primary`, `btn btn-outline`, …); para CTAs grandes, el
-> patrón de arriba. Los widgets accesibles complejos (combobox, tablas con filtro,
-> date picker) se traerán con librerías headless puntuales cuando se necesiten, no
-> con todo shadcn.
+> `class-variance-authority`). Los widgets accesibles complejos se construyen sobre
+> daisyUI (ya existen `ComboBox`, `FilterSelect`, `OtpInput`, `tabs`; ver §13) o se
+> traerán con librerías headless puntuales cuando se necesiten, no con todo shadcn.
 
 ---
 
@@ -150,8 +187,8 @@ y anulación de movimiento con `motion-reduce`.
 Las acciones por fila (ver, editar, eliminar) son **solo ícono**, sin texto ni
 color de fondo. Nunca `btn btn-ghost` con la palabra al lado ("Ver", "Editar").
 El significado lo da el ícono + `title` (tooltip/accesibilidad); el color aparece
-solo en hover. Referencia canónica: `matriculas/matriculasUI/EnrollmentRow` y
-`pages/Usuarios`.
+solo en hover. Referencias: `matriculas/matriculasUI/EnrollmentRow`,
+`pages/Usuarios` y el botón "Ver expediente" de `pages/AdmisionesAdmin`.
 
 ```tsx
 {/* Ver detalles / acción neutra → primary en hover */}
@@ -185,19 +222,19 @@ Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
 ## 6. Estados
 
 - **Carga dentro de un botón** (guardar, enviar, conectar…): ícono `Loader2` de
-  `lucide-react` con `animate-spin` SUELTO junto al texto del botón, en gerundio
-  ("Conectando…"). Deshabilita el control mientras tanto. **Nunca** el spinner nativo
-  de daisyUI (`loading loading-spinner`) en este caso — mezclar los dos estilos en
-  botones vecinos es la clase de inconsistencia que #6b existe para evitar.
+  `lucide-react` con `animate-spin`, suelto junto al texto del botón, en gerundio
+  ("Conectando…"). Deshabilita el control mientras tanto. **Nunca** uses el spinner
+  nativo de daisyUI (`loading loading-spinner`) en este caso: mezclar los dos estilos
+  en botones vecinos es justo la inconsistencia que se quiere evitar.
+  _Estado real:_ quedan 28 spinners nativos dentro de botones, en 12 archivos
+  (Contratación, Matrículas, `auxiliar/*`, `UserFormModal`). Es deuda, ver §14.
 - **Carga de una SECCIÓN o PÁGINA completa** (tabla, panel de detalle, modal
   cargando datos previos, un paso completo de un wizard): **siempre**
   `<LoadingState />` (`components/ui/LoadingState.tsx`), **nunca** armado a mano.
-  Antes de estandarizar (2026-09-10) convivían dos estilos visualmente
-  distintos para el mismo propósito — el spinner nativo de daisyUI (un anillo sin
-  ícono) en Usuarios/Matrículas/Contratación, y este mismo patrón (`Loader2` +
-  texto, en una tarjeta) que ya usaba Admisiones — mismo módulo, apariencia
-  distinta según la pantalla. Si una funcionalidad nueva necesita esto,
-  **usa el componente, no repitas el JSX a mano**:
+  Hasta 2026-09-10 convivían dos estilos distintos para el mismo propósito: el spinner
+  nativo de daisyUI (un anillo sin ícono) en Usuarios, Matrículas y Contratación, y
+  `Loader2` + texto en tarjeta en Admisiones. Se quedó el segundo y se extrajo al
+  componente. **Usa el componente, no repitas el JSX a mano:**
   ```tsx
   import { LoadingState } from "@/components/ui/LoadingState";
 
@@ -207,18 +244,39 @@ Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
     …
   )}
   ```
-  `compact` (sin tarjeta/borde/sombra) para cuando ya se está dentro de otro
-  contenedor con su propio marco (una fila de tabla, un modal chico) — ver el
-  componente para más detalle. Si hace falta una variante que el componente no
-  cubre (otro tamaño, otro layout), **amplía `LoadingState`, no crees un spinner
-  suelto nuevo** — el problema que resolvió este cambio vuelve apenas alguien
-  arma uno a mano "por esta vez".
+  `compact` quita la tarjeta (borde, fondo y sombra) para cuando ya estás dentro de
+  otro contenedor con su propio marco, como una fila de tabla o un modal chico. Si
+  necesitas una variante que el componente no cubre (otro tamaño, otro layout),
+  **amplía `LoadingState`, no crees un spinner suelto nuevo**.
+  _Estado real:_ Admisiones todavía tiene 10 copias a mano de este mismo JSX, sin
+  importar el componente. Ver §14.
+- **Carga de pantalla completa al iniciar sesión:** `components/auxiliar/Spinner.tsx`
+  (logo pulsando). Solo se usa mientras se rehidrata la sesión (`App.tsx`,
+  `ProtectedRoute` en `loginLogic.tsx`). No lo uses para secciones.
 - **Vacío / error:** dan dirección, no disculpas. Di qué pasó y cómo seguir.
 - **Confirmaciones destructivas:** usa el modal `Alert` (`components/ui/Alert`) con
   `variant`/`acceptText`, **nunca `confirm()` nativo**. Referencia: `MatriculasAdmin`.
-- **Feedback de acción (éxito/error):** toast efímero (arriba-derecha, `bg-base-100`
-  + ícono de estado, auto-cierre ~3.5 s), **nunca `alert()` nativo**. Hoy es local en
-  `MatriculasAdmin`; **candidato a extraer** a un componente/hook compartido.
+- **Feedback de acción (éxito/error):** usa el toast compartido, **nunca `alert()`
+  nativo**:
+  ```tsx
+  import { useToast } from "@/hooks/use-toast";
+  import { Toast } from "@/components/ui/Toast";
+
+  const { toast, flash } = useToast();
+  flash("success", "Guardado correctamente"); // success | error | warning | info
+
+  return (
+    <>
+      <Toast toast={toast} />
+      …
+    </>
+  );
+  ```
+  Muestra un toast a la vez, arriba a la derecha, sobre `bg-base-100` con ícono de
+  estado, y se cierra solo a los 3.5 s. Para pasarlo a un subcomponente, usa el tipo
+  `FlashFn` (ver `admisiones/admin/adminTypes.ts`).
+  _Estado real:_ solo `ApplicationDetail` lo usa (y le pasa `flash` a `DecisionPanel`
+  e `InterviewsPanel`). Quedan 5 toasts locales y 8 `alert()` nativos. Ver §14.
 
 ---
 
@@ -227,6 +285,9 @@ Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
 - Transiciones cortas (150–200 ms), `ease-out`. Menos es más.
 - Todo lo que anima debe tener su variante `motion-reduce:*`, y hay una regla global
   en `index.css` que corta animaciones cuando el sistema pide reducir movimiento.
+- Animaciones disponibles: `tailwindcss-animate` (`animate-in`, `fade-in`,
+  `slide-in-from-*`…, usado por `Modal` y `Toast`), `.animate-modal-pop` (entrada de
+  `Alert`) y `.animate-view-in` (ver §7b), ambas definidas en `index.css`.
 
 ---
 
@@ -237,11 +298,106 @@ Para cards multi-vista (login, wizards), anima la entrada con `.animate-view-in`
 un `transform` pegado que reste nitidez al texto). Fuerza el remonte con un `key`
 por vista. Respeta `prefers-reduced-motion` por la regla global.
 
+---
+
 ## 8. Layout de referencia (Login)
 
-Split-screen: acceso a la izquierda (`lg:w-2/5`), hero a la derecha
-(`hidden lg:block lg:w-3/5`) con overlay de marca degradado + firma (nombre y lema
-real del escudo). En móvil solo se muestra el panel de acceso, centrado.
+Pantalla dividida al 50/50 en desktop:
+
+- **Izquierda, panel de marca** (`hidden lg:flex lg:w-1/2`): degradado
+  `PANEL_GRADIENT_FROM → PANEL_GRADIENT_TO` (ver §2), escudo y la textura decorativa
+  `login-log.svg`.
+- **Derecha, panel de acceso** (`lg:w-1/2`, `bg-base-200`, contenido en `max-w-sm`):
+  lleva una pestaña "Login" recortada con `clip-path` sobre la costura entre los dos
+  paneles.
+- **Móvil:** solo se muestra el panel de acceso. El escudo aparece arriba únicamente en
+  la vista principal, para no forzar scroll en los formularios largos.
+- Título `font-display text-3xl font-bold text-secondary`. Cada vista (principal,
+  correo, registro, verificar, recuperar) entra con `.animate-view-in`.
+- Los códigos de verificación usan `OtpInput` (§13).
+
+---
+
+## 9. Marco de la app (Layout, Sidebar y Navbar)
+
+`Layout.tsx` (área de staff) y `AcudienteLayout.tsx` (área del acudiente) arman el
+mismo marco con las mismas piezas, sin copiarlas:
+
+- **Drawer de daisyUI:** `drawer lg:drawer-open` con un checkbox `drawer-toggle` cuyo
+  id es `SIDEBAR_DRAWER_ID` (exportado desde `Sidebar.tsx`, no lo repitas a mano). El
+  estado inicial sale de `useSidebarDrawerState()`: abierto en ≥1024 px, cerrado en
+  móvil.
+- **Contenido:** `Navbar` arriba y `<main className="flex-1 overflow-y-auto bg-base-200
+  p-6">`. El fondo `base-200` da profundidad a las cards `base-100`.
+- **Sidebar:** fondo `bg-primary`.
+  - En desktop siempre está montado y alterna entre riel de íconos (`w-14`) y ancho
+    completo (`w-64`). En móvil se abre como overlay.
+  - Ítem activo: `bg-base-200 text-primary shadow-sm`. Ítem inactivo:
+    `text-primary-content/70 hover:bg-white/10`.
+  - En modo riel el ícono se centra y la etiqueta aparece como tooltip (`data-tip`).
+  - Logo: escudo compacto en riel; `platform-logo.png` (wordmark en blanco) expandido.
+  - **Ítems nuevos:** usa `SidebarNavLink`, no un `NavLink` crudo. El ítem también
+    necesita su entrada en `featureEnvMap`, o no se muestra.
+- **Navbar:** a la izquierda el botón `PanelLeft`, que abre y cierra el overlay en
+  móvil y colapsa o expande el riel en desktop. A la derecha, el menú de usuario. **No
+  lleva título** (§10).
+- El header del sidebar y el `Navbar` miden los dos `h-18`, para que sus bordes
+  inferiores queden alineados.
+- **Acudiente:** el mismo `Sidebar` detecta `isGuardianOnly(user)` y muestra un solo
+  ítem, "Mis solicitudes".
+- **Cuenta sin rol** (`permissions == null`): `Layout` muestra `NoAccess`, sin sidebar
+  ni botón de menú.
+
+---
+
+## 10. Encabezado de página
+
+**Cada página es dueña de su propio título.** El `Navbar` **no** repite el nombre de
+la sección (sería redundante); solo lleva el menú de usuario a la derecha. Así, el
+título vive una sola vez, dentro del contenido, y no se duplica.
+
+Patrón del `<h1>` de página:
+
+```tsx
+<h1 className="font-display text-3xl font-bold text-secondary">
+  Gestión de Notas
+</h1>
+```
+
+- `font-display` (Aleo) + `text-secondary` (azul de marca). Ver la advertencia de
+  negrita sintética en §3.
+- `text-3xl` para páginas con contenido; `text-2xl` para cards/placeholders.
+- Si la página es un placeholder, envuélvelo en el card estándar:
+  `rounded-2xl border border-base-300 bg-base-100 p-8 shadow-sm` y una descripción en
+  `text-base-content/70`.
+
+---
+
+## 11. Selects de filtro y listas buscables
+
+Los filtros de las páginas usan **`components/ui/FilterSelect`** (dropdown de daisyui),
+**no `<select>` nativo**. Motivo: el navegador dibuja la opción activa con un ✓ que no
+se puede reemplazar de forma fiable por CSS; el dropdown propio resalta la opción
+seleccionada con el color de marca (`bg-primary text-primary-content`) y se cierra al
+elegir o al perder foco. Uso:
+
+```tsx
+<FilterSelect
+  className="w-56"
+  ariaLabel="Filtrar por rol"
+  value={roleFilter}
+  onChange={setRoleFilter}
+  options={[{ value: "", label: "Todos los roles" }, ...ROLE_OPTIONS]}
+/>
+```
+
+Se usa en `MatriculasAdmin` (grado/estado/año), `Usuarios` (rol), `ContratacionAdmin`
+(año) y `AdmisionesAdmin` (estado/año). Los `<select>` de **formulario** siguen siendo
+nativos; una regla global en `index.css` colorea `option:checked` con el color de marca.
+
+Para **listas largas dentro de un formulario** (países, departamentos, ciudades,
+barrios, catálogos) usa **`components/ui/ComboBox`**: filtra por prefijo ignorando
+tildes, se maneja con teclado (↑/↓/Enter/Esc) y tiene ARIA de combobox.
 
 ---
 
@@ -260,81 +416,189 @@ interno (tabs, listas de documentos) debe fluir con `min-h-[…]` pero **sin** s
 propio `max-h/overflow`; deja que el cuerpo sea el que desplaza. Referencia:
 `ContratacionAdmin` → `DetailModal`.
 
+**Modal nuevo:** usa **`components/ui/Modal`**. Trae animación de entrada y salida,
+cierre con Escape y por backdrop (`closeOnBackdrop`), y bloqueo de scroll integrado.
+Para confirmaciones, usa `Alert`. Referencia: `ApplicationDetail`.
+
 **Bloqueo del fondo:** con un modal abierto, **el `<body>` no debe hacer scroll**
-(para eso está el backdrop difuminado: aislar la interacción). Todo modal usa el hook
-`hooks/useBodyScrollLock(active)`, que fija `overflow: hidden` en el body y compensa
-el ancho de la scrollbar (para que el fondo no “salte”). Soporta modales anidados.
-Aplicado en `AnimatedModal` (Matrículas), `UserFormModal`, `Alert`, `DetailModal` /
-`Overlay` (Contratación) y `PdfModal`. **Todo modal nuevo debe llamarlo.**
+(para eso está el backdrop difuminado: aislar la interacción).
+`hooks/useBodyScrollLock(active)` fija `overflow: hidden` en el body y compensa el
+ancho de la scrollbar, para que el fondo no "salte". Soporta modales anidados.
+
+- `Modal` y `Alert` **ya lo llaman por dentro**: no lo llames aparte si los usas.
+- Los modales hechos a mano sí deben llamarlo. Hoy lo hacen `AnimatedModal`
+  (`MatriculasAdmin`, local, candidato a migrar a `Modal`), `UserFormModal`,
+  `DetailModal`/`Overlay` (Contratación), `PdfModal` (`PdfSignViewer`) y los modales
+  de `Roles`.
+
+**Feedback dentro de un contenedor con `transform`:** un hijo `fixed` se posiciona
+respecto al contenedor transformado, no al viewport. Monta el toast o el `Alert` con
+`createPortal(..., document.body)`. Referencia: `StudentDataTabs`.
 
 ---
 
-## 11. Selects de filtro
+## 13. Componentes y hooks compartidos
 
-Los filtros de las páginas usan **`components/ui/FilterSelect`** (dropdown de daisyui),
-**no `<select>` nativo**. Motivo: el navegador dibuja la opción activa con un ✓ que no
-se puede reemplazar de forma fiable por CSS; el dropdown propio resalta la opción
-seleccionada con el color de marca (`bg-primary text-primary-content`) y se cierra al
-elegir o al perder foco. Uso:
+**Antes de crear un componente, revisa esta tabla.** Si lo que necesitas casi existe,
+amplía el compartido en vez de duplicarlo dentro de un módulo.
+
+### 13.1 `components/ui/`
+
+| Pieza | API | Para qué | Quién lo usa hoy |
+| --- | --- | --- | --- |
+| `formStyles.ts` | `labelClass`, `inputClass`, `selectClass`, `textareaClass`, `controlClass` (alias de `selectClass`), `primaryBtnClass`, `ghostBtnClass` | Clases de campo y botón (§5.1). Idénticas a lo que Matrículas renderiza inline | Admisiones (13 archivos), `ComboBox`, `OtpInput`, `fields/*`. Matrículas aún no lo importa |
+| `LoadingState` | `{label?, compact?, className?}` | Carga de sección o página (§6) | Usuarios, Roles, Matrículas, Contratación, `PdfSignViewer`, `UserFormModal` |
+| `Toast` | `{toast: ToastState \| null}` | Presentación del toast; el estado lo da `useToast` (§6) | `ApplicationDetail` |
+| `Alert` | `variant` (warning/info/error/success), `acceptText`, `requireScrollToBottom`, … | Confirmaciones y avisos modales. Cierra con Escape y backdrop | `ApplicationDetail`, `SolicitudWizard`, `ContratacionAdmin`, `MatriculasAdmin`, `Step3StudentData`, `StudentDataTabs`, `Usuarios` |
+| `Modal` | `{isOpen, onClose, children, className?, closeOnBackdrop?}` | Modal genérico animado (§12) | `ApplicationDetail` |
+| `tabs` | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` (controlado o no) | Pestañas propias, sin Radix | `ApplicationDetail`, `ContratacionAdmin`, `StudentDataTabs` |
+| `FilterSelect` | `{value, onChange, options, placeholder?, className?, ariaLabel?}` | Filtros de listado (§11) | `MatriculasAdmin`, `Usuarios`, `ContratacionAdmin`, `AdmisionesAdmin` |
+| `ComboBox` | `{value, onChange, options, label, placeholder?, disabled?, loading?, required?}` | Lista buscable dentro de un formulario (§11) | `Step3StudentData`, `fields/*` |
+| `SubSection` | `{title, subtitle?, open, onToggle, status?: "complete"\|"incomplete"\|"error", children}` | Acordeón controlado por el padre, animado con `grid-rows` | `SolicitudWizard`, `admisiones/steps.tsx` |
+| `OtpInput` | `{value, onChange, length?=6, autoFocus?=true, onComplete?, error?, …}` | Código de verificación (componente `otp` de daisyUI). Solo acepta dígitos y restaura el foco | `Login`, `Step1Verification`, `ContratacionEmpleado` |
+
+### 13.2 `components/ui/fields/` — campos declarativos
+
+Los formularios nuevos **declaran sus campos como datos** (`FieldDescriptor[]`) y los
+pintan con `<SchemaSection>`, en vez de escribir el JSX de cada campo a mano:
 
 ```tsx
-<FilterSelect
-  className="w-56"
-  ariaLabel="Filtrar por rol"
-  value={roleFilter}
-  onChange={setRoleFilter}
-  options={[{ value: "", label: "Todos los roles" }, ...ROLE_OPTIONS]}
-/>
+import { SchemaSection } from "@/components/ui/fields/registry";
+import type { FieldDescriptor } from "@/components/ui/fields/types";
+
+const SCHEMA: FieldDescriptor[] = [
+  { type: "text", name: "first_name", label: "Nombres" },
+  { type: "yesno", name: "has_diagnosis", label: "¿Tiene diagnóstico?" },
+  { type: "textarea", name: "diagnosis_detail", label: "Detalle",
+    showWhen: { field: "has_diagnosis", equals: "Si" } },
+];
+
+<SchemaSection schema={SCHEMA} control={control} register={register} setValue={setValue} />
 ```
 
-Aplicado en `MatriculasAdmin` (grado/estado/año), `Usuarios` (rol) y
-`ContratacionAdmin` (año). Para los `<select>` de **formulario** que siguen siendo
-nativos, hay una regla global en `index.css` que colorea `option:checked` con el
-color de marca.
+| Pieza | Qué contiene |
+| --- | --- |
+| `types.ts` | `FieldType` (text, email, tel, number, date, textarea, select, combobox, yesno, checkbox, checkbox-group, geo-cascade, photo, file), el descriptor `FieldDescriptor`, las condiciones `FieldCondition` (`equals`/`notEquals`/`in`, o `watch` + `predicate`) para `showWhen`/`disabledWhen`/`required` |
+| `registry.tsx` | `FIELD_REGISTRY` (tipo → componente), `SchemaField` y `SchemaSection`. `SchemaSection` observa con un solo `useWatch` únicamente los campos de los que dependen las condiciones |
+| `primitives.tsx` | `TextField`, `SelectField`, `TextAreaField`, `CheckboxField`, `YesNoField` (modo `"string"` → guarda `"Si"`/`"No"`, o `"boolean"`), `CheckboxGroupField`, `ComboBoxField` |
+| `GeoCascadeField.tsx` | Cascada país → departamento → ciudad → barrio, con dirección y estrato. Fuente `static` (listas fijas) o `api` (`/api/geo/`) |
+| `PhotoField.tsx` | Foto JPG/PNG de hasta 3 MB, controlada desde fuera (`value`/`onChange`). **No va dentro de RHF**: un `File` no sobrevive al JSON del autoguardado |
+
+Quién lo usa: **Admisiones** (`steps.tsx`, `guardianFields.tsx`). **Matrículas**
+(`Step3StudentData`) aún no: usa `ComboBox` y `PhotoField` sueltos, con sus campos a mano.
+
+### 13.3 `hooks/`
+
+| Hook | API | Para qué | Quién lo usa |
+| --- | --- | --- | --- |
+| `useToast` (`use-toast.ts`) | `() → {toast, flash(type, msg), dismiss}` | Estado del toast compartido (§6) | `ApplicationDetail` |
+| `useBodyScrollLock` | `(active: boolean)` | Bloquea el scroll del body con un modal abierto (§12) | `Modal`, `Alert` y los modales hechos a mano |
+| `useAutosaveDraft` | `({key, enabled?, debounceMs?=500}) → {push(value, meta?), flush, discard, peekDraft}` + helpers `resolveDraft`, `valuesMatchServer`, `fingerprint`, `clearAllDrafts` | **Método único de autoguardado.** Borrador **solo local** (localStorage, nunca el servidor), con un `meta` opaco para saber sobre qué versión del servidor se escribió. El servidor se toca únicamente con una acción explícita del usuario. Al volver, `resolveDraft` decide: descartar, restaurar (con aviso) o conflicto (modal "Conservar lo mío / Usar lo guardado"). `clearAllDrafts()` se llama al cerrar sesión. Es agnóstico al motor de formularios | Admisiones: `SolicitudWizard` (un borrador por sección, `meta` = versión de la sección). Matrículas: `MatriculasEstudiantes` + `Step3StudentData` (un borrador para el paso 3, `meta` = `fingerprint` de `user_data`). `loginLogic` (`clearAllDrafts`) |
+
+### 13.4 Otros compartidos
+
+| Pieza | Para qué |
+| --- | --- |
+| `components/shared/formLists.ts` | Catálogos: `COUNTRIES`, `DOCUMENT_TYPES`, `EPS_LIST`, `COLOMBIA_DEPARTMENTS`, `ATLANTICO_CITIES`, `BARRIOS_BARRANQUILLA`, `GENDERS`, `BLOOD_ABO/RH`, `ACCOUNT_TYPES`, `EDUCATION_LEVELS`. **No redeclares estas listas en un módulo** |
+| `components/auxiliar/Spinner.tsx` | Carga de pantalla completa durante la rehidratación de sesión (§6) |
+| `utils/statusHelpers.ts` | `getStatusLabel`/`getStatusBadgeClass` de matrículas. No cubre los estados de admisiones: esos los pinta `admisiones/StatusBadge.tsx` |
+| `utils/documentSensitivity.ts` | `classifyDocument(key)` → `normal`/`medical`/`sensitive` (espejo del backend) |
 
 ---
 
-## 10. Encabezado de página
+## 14. Pendientes de migración
 
-**Cada página es dueña de su propio título.** El `Navbar` **no** repite el nombre de
-la sección (sería redundante); solo lleva el menú de usuario a la derecha. Así, el
-título vive una sola vez, dentro del contenido, y no se duplica.
+A medida que toquemos cada pantalla, alinearla con esta guía.
 
-Patrón del `<h1>` de página:
+### Por hacer
 
-```tsx
-<h1 className="font-display text-3xl font-bold text-secondary">
-  Gestión de Notas
-</h1>
-```
+- [ ] **Negrita sintética en Aleo** (§3). Opciones: agregar los `@font-face` 600/700
+      de Aleo (los archivos llegaron, pero no se copiaron) o bajar los títulos a
+      `font-medium`. Afecta ~60 combinaciones en `src/`.
+- [ ] **Admisiones → `LoadingState`**: 10 copias a mano del mismo JSX de carga en
+      `AdmisionesAdmin`, `MisAdmisiones`, `DetalleAdmision`, `SolicitudWizard`,
+      `ApplicationDetail`, `DecisionPanel`, `InterviewsPanel`, `GuardianDocumentsCard`,
+      `GuardianInterviewsCard` y `GuardianPaymentCard`.
+- [ ] **Spinner nativo dentro de botones → `Loader2`** (§6): 28 usos en 12 archivos.
+      `ContratacionAdmin` (10), `ContratacionEmpleado` (6), `Step1Verification` (2),
+      `Step4Documents` (2), y uno en `enrollmentUpdate`, `userEnroll`, `userRegister`,
+      `userUpdate`, `MatriculasAdmin`, `Step5Documents`, `Step6Confirmation` y
+      `UserFormModal`.
+- [ ] **Toasts locales → `useToast` + `Toast`**: `ContratacionAdmin` (`notify`),
+      `MatriculasAdmin`, `StudentDataTabs`, `Roles` y `Usuarios` (`showToast`).
+- [ ] **`alert()` nativo → toast**: 4 llamadas en `matriculas/Step6Confirmation.tsx`.
+      Hay otras 4 en `matriculas/UploadPendingDocuments.tsx`, pero ese archivo es
+      código muerto (ver abajo).
+- [ ] **`AnimatedModal` local de `MatriculasAdmin` → `ui/Modal`**. Usan la misma técnica.
+- [ ] **Matrículas → `formStyles.ts`**: sigue con strings de clase inline.
+      `UserFormModal` redeclara `inputClass`/`selectClass`/`labelClass` con valores
+      propios. `Login` también, pero ahí es deliberado (§5.2).
+- [ ] **Matrículas → campos declarativos** (`Step3StudentData` a `<SchemaSection>`,
+      Paso 4 de `plan-schema-driven-fields.md`). También quitar las copias locales de
+      `BARRIOS_BARRANQUILLA`, `COUNTRIES`, `DOCUMENT_TYPES`, `EPS_LIST`,
+      `COLOMBIA_DEPARTMENTS` y `ATLANTICO_CITIES` que tiene ese archivo, y usar
+      `formLists.ts`.
+- [ ] **Copias locales de `ComboBox`** en `auxiliar/enrollmentUpdate.tsx` y
+      `auxiliar/userUpdate.tsx` → `ui/ComboBox`. `userUpdate.tsx` no se importa en
+      ningún lado: es código muerto.
+- [ ] **CTA de legado** (§5.3) en `NotFound.tsx` y `Roles.tsx` → `primaryBtnClass`.
+- [~] **Grises y colores crudos → tokens**. Hecho en el marco, Matrículas admin,
+      Usuarios y Contratación. Queda:
+  - `text-gray-*`: 34 usos en 10 archivos (`userUpdate`, `Step6Confirmation`,
+    `UploadPendingDocuments`, `Step4Documents`, `Step3StudentData`,
+    `EnrollmentBlockedMessage`, `userRegister`, `PdfSignViewer`, `Step5Documents`,
+    `Step1Verification`).
+  - Otros `*-gray-*`: 21 usos.
+  - Paleta cruda (`red-*`, `blue-*`, `green-*`, `yellow-*`): 40 usos, sobre todo en
+    `EnrollmentBlockedMessage`, `userUpdate` y `userRegister`.
+  - `bg-white`: 14 usos.
+- [ ] Unificar radios/sombras/transiciones al estándar de §4.
+- [ ] Revisar foco visible y `motion-reduce` en componentes interactivos.
+- [ ] **Comentarios desactualizados en el código**, que ya no coinciden con esta guía:
+  - `ui/fields/types.ts`, `ui/fields/registry.tsx`, `ui/SubSection.tsx` y
+    `hooks/use-toast.ts` dicen "sin consumidores todavía", pero ya tienen.
+  - `ui/Toast.tsx` habla del "amarillo de `--color-info`", que ahora es azul `#003496`.
+  - `REGRESSION_CHECKLIST.md` dice que `use-toast.ts` importa un `ui/toast`
+    inexistente; ya no es así.
+- [ ] **Código muerto de UI**: no se importan en ningún lado
+      `hooks/use-mobile.tsx`, `src/App.css`, `assets/login-hero.webp`,
+      `matriculasUI/GradeAccordion.tsx`, `matriculasUI/SectionCard.tsx`,
+      `matriculas/UploadPendingDocuments.tsx`, `matriculas/StudentDataModal.tsx`
+      (vacío, 0 bytes) y `auxiliar/userUpdate.tsx`. Antes de migrar su estilo, decide si
+      se borran. Varios puntos de esta lista (`text-gray-*`, spinners, `alert()`)
+      incluyen usos dentro de estos archivos.
 
-- `font-display` (Poppins) + `text-secondary` (azul de marca fuerte).
-- `text-3xl` para páginas con contenido; `text-2xl` para cards/placeholders.
-- Si la página es un placeholder, envuélvelo en el card estándar:
-  `rounded-2xl border border-base-300 bg-base-100 p-8 shadow-sm` y una descripción en
-  `text-base-content/70`.
+### Hecho
 
----
+- [x] **Toast, modal, acordeón y clases de formulario compartidos** _(2026-09-07 →
+      09-10, plan de Admisiones)_: `hooks/use-toast.ts` (reescrito, el anterior
+      importaba un `ui/toast` inexistente), `ui/Toast`, `ui/Modal`, `ui/SubSection`,
+      `ui/formStyles.ts`, `ui/ComboBox` (movido desde `admisiones/`, con teclado y
+      ARIA), `ui/OtpInput` y los campos declarativos de `ui/fields/`. Ver §13.
+- [x] **Aleo activada como `--font-display`** _(2026-09-09)_: reemplaza a Poppins.
+      Inter y Aleo se auto-hospedan; se quitó el `<link>` de Google Fonts.
+- [x] **Colores del manual de marca** _(2026-09-09)_: tabla de §2 sincronizada con
+      `index.css`.
+- [x] **Spinner de carga de página/sección unificado en `LoadingState`**
+      _(2026-09-10)_. Convivían dos estilos distintos para lo mismo:
+  - El spinner nativo de daisyUI (`loading loading-spinner loading-lg/md`) en
+    `Usuarios.tsx`, `MatriculasAdmin.tsx` (×2), `MatriculasEstudiantes.tsx` (×3),
+    `Step4Documents.tsx`, `ContratacionAdmin.tsx`, `ContratacionEmpleado.tsx` (×2),
+    `UserFormModal.tsx`, `PdfSignViewer.tsx` y `UploadPendingDocuments.tsx`.
+  - El patrón `Loader2` + texto en tarjeta de Admisiones. Es el que se quedó, elegido
+    por el usuario.
 
-## 9. Pendientes de migración
-
-A medida que toquemos cada pantalla, alinearla con esta guía:
-
-- [x] **Spinner de carga de página/sección unificado en `LoadingState`.**
-      _(hecho 2026-09-10)_ Convivían dos estilos distintos para lo mismo: el
-      spinner nativo de daisyUI (`loading loading-spinner loading-lg/md`) en
-      `Usuarios.tsx`, `MatriculasAdmin.tsx` (×2), `MatriculasEstudiantes.tsx`
-      (×3), `Step4Documents.tsx`, `ContratacionAdmin.tsx`,
-      `ContratacionEmpleado.tsx` (×2), `UserFormModal.tsx`,
-      `PdfSignViewer.tsx` y `UploadPendingDocuments.tsx`; y el patrón `Loader2`
-      + texto en tarjeta que ya usaba Admisiones (`AdmisionesAdmin.tsx`,
-      `MisAdmisiones.tsx`, `DetalleAdmision.tsx`, etc. — ese es el que se
-      quedó, elegido por el usuario). También se alineó `Roles.tsx` (ya usaba
-      `Loader2`, pero sin la tarjeta). Extraído a
-      `components/ui/LoadingState.tsx` — ver §6. Sin tocar los spinners
-      pequeños DENTRO de botones (`loading-sm`/`loading-xs`, o `Loader2`
-      suelto): esos ya eran consistentes entre sí y son un caso de uso
-      distinto (ver §6).
+  También se alineó `Roles.tsx`, que ya usaba `Loader2` pero sin tarjeta. Los spinners
+  dentro de botones no se tocaron en ese cambio; su migración sigue pendiente (ver
+  "Por hacer").
+- [x] **Sidebar en azul institucional** _(2026-09-10)_: el fondo pasa del verde
+      (`--accentlight`) a `bg-primary`, y el resaltador de la página activa pasa de
+      `--accent-dark` a `bg-base-200`/`text-primary`. `Sidebar.tsx` ya no usa
+      variables HSL propias, así que el bloque `:root` completo de `index.css` (con
+      `--accent`, `--accentlight`, `--primary-*`, `--accent-dark` y las variables
+      shadcn muertas) se eliminó. El wordmark de `platform-logo.png` se recoloreó a
+      blanco para leerse sobre navy. El sidebar pasó al drawer de daisyUI con riel de
+      íconos (§9).
 - [x] **Migrar clases de tokens shadcn muertas → tokens daisyui.** _(hecho 2026-07-09)_
       Estaban escritas inline y nunca se generaron (no se cablearon a Tailwind v4).
       Equivalencias aplicadas (referencia para futuros casos):
@@ -349,10 +613,9 @@ A medida que toquemos cada pantalla, alinearla con esta guía:
     `pages/Index.tsx`, `matriculas/MatriculasAdmin.tsx`. Verificado: 0 tokens muertos
     restantes en `src`, typecheck sin errores nuevos.
 - [x] **Marco de la app estandarizado** _(2026-07-09)_: `Layout` (main sobre
-      `bg-base-200` para dar profundidad a las cards), `Sidebar` (verde con activo
-      `--accent-dark` de más contraste, íconos `h-5 w-5`, foco visible), `Navbar`
-      (tokens, `lucide`, `text-error`; **ya no repite el título de la sección**) y
-      `Dashboard` (re-estilizado).
+      `bg-base-200` para dar profundidad a las cards), `Sidebar` (íconos `h-5 w-5`,
+      foco visible), `Navbar` (tokens, `lucide`, `text-error`; **ya no repite el título
+      de la sección**) y `Dashboard` (re-estilizado).
 - [x] **Título de página estandarizado** _(2026-07-09)_: **cada página es dueña de
       su propio `<h1>`** (`font-display text-secondary`, `text-3xl`/`text-2xl`); el
       **`Navbar` no lo repite**. Alineados: `Notas`, `Estudiantes`, `Certificados`,
@@ -368,8 +631,8 @@ A medida que toquemos cada pantalla, alinearla con esta guía:
       (grado · estado · búsqueda · año) con **paginación** (15/pág, `join` de daisyui,
       se reinicia al filtrar) en vez de acordeones por grado; stats con Pendientes;
       `alert()/confirm()` → **toasts** + modal **`Alert`**; tokens y `font-display`.
-      `GradeAccordion` quedó sin uso (borrable). La paginación y el toast son
-      **candidatos a extraer** a componentes compartidos para otras tablas.
+      La paginación es **candidata a extraer** a un componente compartido para otras
+      tablas.
 - [x] **Detalle del estudiante y forms de matrícula estandarizados** _(2026-07-09)_:
       `StudentDataTabs` (tabs, estado vacío y tarjetas de documentos a tokens),
       `DisplayField` (grises → `base-content/opacidad`, `border-base-200`, resaltado
@@ -380,10 +643,8 @@ A medida que toquemos cada pantalla, alinearla con esta guía:
       `select`/`input` de daisyui**, dropdown de búsqueda con tokens, botones daisyui).
 - [x] **Diálogos nativos del detalle eliminados** _(2026-07-09)_: `StudentDataTabs` ya
       no usa `alert()`/`confirm()` en las acciones de documentos; ahora usa **toast**
-      efímero + modal **`Alert`** para confirmar el borrado. Como el modal de detalle usa
-      `transform` (un hijo `fixed` se posicionaría respecto a él, no al viewport), el toast
-      y el `Alert` se montan con **`createPortal(..., document.body)`**. Patrón a reutilizar
-      para cualquier feedback dentro de un contenedor con `transform`.
+      efímero + modal **`Alert`** para confirmar el borrado, montados con
+      `createPortal` (ver §12).
 - [x] **Usuarios estandarizado** _(2026-07-09)_: `pages/Usuarios.tsx` (tabla, filas y
       paginación a tokens; modal de borrado a mano → **`Alert`** compartido; `alert()` →
       **toast** daisyui) y `components/users/UserFormModal.tsx` (todos los **hex
@@ -395,21 +656,5 @@ A medida que toquemos cada pantalla, alinearla con esta guía:
       de matrícula; **3 `confirm()` nativos → `Alert`**), `ContratacionEmpleado.tsx`
       (`SectionCard`, tarjetas de estado, wizard de pasos, títulos `font-display`) y
       `FieldWidget.tsx`. Verificado: 0 grises/hex/`bg-white` restantes en el módulo.
-- [~] Reemplazar `text-gray-*` por tokens `base-content/opacidad` (hecho en el marco,
-      Matrículas, detalle/forms de matrícula, Usuarios y Contratación; quedan páginas sueltas).
-- [ ] Unificar radios/sombras/transiciones al estándar de §4.
-- [ ] Revisar foco visible y `motion-reduce` en componentes interactivos.
-- [x] **Sidebar en azul institucional** _(2026-09-10)_: fondo pasa de verde
-      (`--accentlight`) a `bg-primary`; el resaltador de la página activa pasa
-      de `--accent-dark` a `bg-base-200`/`text-primary` (el gris `#F3F4F6` del
-      theme, en vez de un verde oscuro aparte). `Sidebar.tsx` ya no usa
-      ninguna variable HSL propia — con eso, `--accent`, `--accentlight`,
-      `--primary-light`, `--primary-dark` y `--accent-dark` quedaron sin
-      ningún uso real y se eliminaron de `src/index.css` (el bloque `:root`
-      completo). Logo del sidebar (`platform-logo.png`, wordmark en texto
-      negro): se le agregó una tarjeta `bg-base-100` detrás para que siga
-      siendo legible sobre el nuevo fondo navy.
-- [ ] (Opcional) Limpiar de `src/index.css` las variables shadcn muertas del
-      bloque `:root` (`--background`, `--foreground`, `--card`, `--muted`, `--ring`,
-      `--input`, `--popover`, `--destructive`, `--radius` y sus `-foreground`). Ya
-      ninguna clase las referencia.
+- [x] **Limpiar variables shadcn muertas de `:root`**: el bloque completo se eliminó
+      junto con el cambio del sidebar (ver arriba).
