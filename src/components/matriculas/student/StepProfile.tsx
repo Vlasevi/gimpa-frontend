@@ -423,8 +423,8 @@ export function StepProfile({
         </p>
         <p className="text-justify">
           Asimismo, <strong>autorizo y otorgo consentimiento previo, expreso e informado</strong> a Gimnasio El
-          Paraíso para utilizar firma electrónica por aceptación (clic en «Acepto») y, cuando aplique, validación
-          biométrica (huella), exclusivamente para la identificación, aceptación y oficialización de los documentos
+          Paraíso para utilizar firma electrónica por aceptación (clic en «Acepto») y validación biométrica
+          (huella), exclusivamente para la identificación, aceptación y oficialización de los documentos
           del proceso de matrícula (formulario/acta de matrícula, contrato de prestación del servicio educativo,
           anexos, autorizaciones institucionales y soportes administrativos asociados).
         </p>
@@ -433,12 +433,6 @@ export function StepProfile({
           Ley 527 de 1999, el Decreto 2364 de 2012 y la Ley 1581 de 2012. He sido informado(a) de mis derechos como
           titular de datos personales (conocer, actualizar, rectificar, solicitar prueba de la autorización y
           revocar el consentimiento cuando proceda).
-        </p>
-        <p className="text-justify">
-          Huella/biometría: reconozco que corresponde a un dato sensible. Su autorización es opcional y la
-          institución dispondrá de un mecanismo alterno no biométrico, por lo que la matrícula no se condiciona
-          exclusivamente al suministro de huella. Si la autorizo, será solo para la finalidad indicada y bajo
-          medidas de seguridad.
         </p>
         <p className="text-justify">
           Autorizo que la institución conserve y custodie evidencias de trazabilidad del proceso de aceptación (por
