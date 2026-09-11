@@ -98,7 +98,7 @@ function historyOf(detail: EnrollmentDetail): HistoryEvent[] {
   if (detail.closed_at) {
     const closing: Record<string, { title: string; tone: Tone; icon: LucideIcon }> = {
       REJECTED: { title: "Rechazada", tone: "error", icon: XCircle },
-      CANCELLED: { title: "Anulada", tone: "error", icon: Ban },
+      CANCELLED: { title: "Cancelada", tone: "error", icon: Ban },
       INACTIVE: {
         title: `Inactivada · ${INACTIVE_REASON_LABELS[detail.inactive_reason ?? ""] ?? "sin tipo"}`,
         tone: "neutral",

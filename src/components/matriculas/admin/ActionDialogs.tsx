@@ -1,5 +1,5 @@
 /**
- * Diálogos de las acciones del staff sobre una matrícula (devolver, rechazar, anular,
+ * Diálogos de las acciones del staff sobre una matrícula (devolver, rechazar, cancelar,
  * inactivar, cambiar grado). Todos comparten `ActionDialog`: modal de 3 franjas, título
  * que nombra al diálogo, campos obligatorios con etiqueta visible y botón de envío con
  * `Loader2` + gerundio, deshabilitado mientras el formulario no es válido.
@@ -34,6 +34,8 @@ interface ActionDialogProps {
   submitLabel: string;
   pendingLabel: string;
   submitClassName?: string;
+  /** Botón que cierra sin hacer nada. "Volver" donde la acción ya se llama "Cancelar …". */
+  dismissLabel?: string;
   pending: boolean;
   canSubmit: boolean;
   onSubmit: () => void;
@@ -48,6 +50,7 @@ export function ActionDialog({
   submitLabel,
   pendingLabel,
   submitClassName = primaryBtnClass,
+  dismissLabel = "Cancelar",
   pending,
   canSubmit,
   onSubmit,
@@ -87,7 +90,7 @@ export function ActionDialog({
 
           <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-base-300 px-6 py-4 sm:flex-row sm:justify-end">
             <button type="button" className={ghostBtnClass} onClick={onClose} disabled={pending}>
-              Cancelar
+              {dismissLabel}
             </button>
             <button type="submit" className={submitClassName} disabled={!canSubmit || pending}>
               {pending ? (
@@ -165,7 +168,7 @@ function RequiredText({
   );
 }
 
-// --------------------------------------------------------------------- Rechazar / Anular
+// --------------------------------------------------------------------- Rechazar / Cancelar
 
 const REASON_DIALOGS = {
   reject: {
@@ -176,15 +179,18 @@ const REASON_DIALOGS = {
     hint: "El acudiente lo verá en el correo.",
     submitLabel: "Rechazar matrícula",
     pendingLabel: "Rechazando…",
+    dismissLabel: "Cancelar",
   },
   cancel: {
-    title: "Anular matrícula",
+    title: "Cancelar matrícula",
     description:
       "Cierra la matrícula sin decidir sobre ella, por ejemplo si la familia no continúa. Es definitivo y no se envía correo. Si más adelante sigue el proceso, hay que crearle una matrícula nueva.",
-    label: "Motivo de la anulación",
+    label: "Motivo de la cancelación",
     hint: "Queda registrado en la matrícula.",
-    submitLabel: "Anular matrícula",
-    pendingLabel: "Anulando…",
+    submitLabel: "Cancelar matrícula",
+    pendingLabel: "Cancelando…",
+    // No "Cancelar" junto a "Cancelar matrícula".
+    dismissLabel: "Volver",
   },
 } as const;
 
@@ -217,6 +223,7 @@ export function ReasonDialog({
       submitLabel={config.submitLabel}
       pendingLabel={config.pendingLabel}
       submitClassName="btn btn-error gap-2"
+      dismissLabel={config.dismissLabel}
       pending={pending}
       canSubmit={Boolean(reason.trim())}
       onSubmit={() => onSubmit(reason.trim())}

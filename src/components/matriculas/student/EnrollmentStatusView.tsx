@@ -1,6 +1,6 @@
 /**
  * Matrícula que ya no se edita: en revisión, aprobada (con o sin documentos pendientes),
- * rechazada, anulada o inactiva. Reemplaza el "Matrícula No Disponible" (hallazgo #21):
+ * rechazada, cancelada o inactiva. Reemplaza el "Matrícula No Disponible" (hallazgo #21):
  * cada estado dice qué pasa y qué sigue.
  *
  * Aprobada con pendientes (plan §12): pestaña "Documentos" para subir o reemplazar lo que
@@ -173,7 +173,7 @@ export function EnrollmentStatusView({
 
   if (status === "REJECTED" || status === "CANCELLED") {
     return (
-      <StatusCard tone="error" icon={XCircle} title={status === "REJECTED" ? "No aprobada" : "Anulada"}>
+      <StatusCard tone="error" icon={XCircle} title={status === "REJECTED" ? "No aprobada" : "Cancelada"}>
         <p>{message}</p>
         {enrollment.closed_reason && (
           <p>

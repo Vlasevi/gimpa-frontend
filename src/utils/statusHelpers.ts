@@ -12,7 +12,7 @@ export const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
   SUBMITTED: "En revisión",
   ACTIVE: "Aprobada",
   REJECTED: "Rechazada",
-  CANCELLED: "Anulada",
+  CANCELLED: "Cancelada",
   INACTIVE: "Inactiva",
 };
 
