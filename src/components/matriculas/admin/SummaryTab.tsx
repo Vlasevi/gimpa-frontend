@@ -120,56 +120,57 @@ export function SummaryTab({ detail }: { detail: EnrollmentDetail }) {
   const next = nextStep(detail);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      {/* Historial */}
-      <section aria-labelledby="resumen-historial">
-        <h3 id="resumen-historial" className="mb-4 text-sm font-semibold uppercase tracking-wider text-base-content/50">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      {/* Historial: riel propio alineado a la izquierda. La `timeline` de daisyUI con
+          `timeline-compact` + `timeline-snap-icon` deja una columna vacía de 1fr a la
+          izquierda y centra la línea en la columna. */}
+      <section aria-labelledby="resumen-historial" className="rounded-lg border border-base-300 p-4">
+        <h3 id="resumen-historial" className="mb-4 font-semibold text-base-content">
           Historial
         </h3>
-        <ul className="timeline timeline-vertical timeline-compact timeline-snap-icon">
+        <ol>
           {events.map((event, index) => {
             const Icon = event.icon;
-            const isLast = index === events.length - 1 && !next;
+            const hasNext = index < events.length - 1 || Boolean(next);
             return (
-              <li key={`${event.title}-${event.at}`}>
-                {index > 0 && <hr className="bg-base-300" />}
-                <div className="timeline-middle">
+              <li key={`${event.title}-${event.at}`} className="relative flex gap-3 pb-5 last:pb-0">
+                {hasNext && (
                   <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full ${TONE_CLASS[event.tone]} ${
-                      isLast ? "ring-4 ring-base-200" : ""
+                    aria-hidden="true"
+                    className={`absolute top-8 bottom-1 left-3.5 -translate-x-1/2 border-l-2 ${
+                      index === events.length - 1 ? "border-dashed border-base-300" : "border-base-300"
                     }`}
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                </div>
-                <div className="timeline-end mb-5 ml-1 min-w-0">
-                  <time dateTime={event.at} className="text-xs text-base-content/50">
-                    {formatDateTime(event.at)}
-                  </time>
-                  <p className="font-medium text-base-content">{event.title}</p>
-                  {event.by && <p className="text-sm text-base-content/60">por {event.by}</p>}
+                  />
+                )}
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${TONE_CLASS[event.tone]}`}
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p className="font-medium leading-6 text-base-content">{event.title}</p>
+                  <p className="text-xs text-base-content/55">
+                    <time dateTime={event.at}>{formatDateTime(event.at)}</time>
+                    {event.by && <> · por {event.by}</>}
+                  </p>
                   {event.note && (
-                    <p className="mt-1.5 whitespace-pre-line rounded-lg bg-base-200 px-3 py-2 text-sm text-base-content/80">
+                    <p className="mt-2 whitespace-pre-line rounded-lg bg-base-200 px-3 py-2 text-sm text-base-content/80">
                       {event.note}
                     </p>
                   )}
                 </div>
-                {(index < events.length - 1 || next) && <hr className="bg-base-300" />}
               </li>
             );
           })}
           {next && (
-            <li>
-              <hr className="bg-base-300" />
-              <div className="timeline-middle">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-dashed border-base-300 text-base-content/40">
-                  <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                </span>
-              </div>
-              <div className="timeline-end mb-2 ml-1 text-sm text-base-content/60">{next}</div>
+            <li className="flex gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-base-300 text-base-content/40">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+              <p className="min-w-0 flex-1 pt-0.5 text-sm leading-6 text-base-content/60">{next}</p>
             </li>
           )}
-        </ul>
+        </ol>
       </section>
 
       <div className="space-y-4">
