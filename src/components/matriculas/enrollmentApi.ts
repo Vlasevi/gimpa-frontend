@@ -65,6 +65,8 @@ export interface Correction {
   comment: string;
   rejected_documents: RejectedDocument[];
   requested_by: string | null;
+  /** El envío que se devolvió (la matrícula solo guarda el último). `null` en datos viejos. */
+  submitted_at: string | null;
   requested_at: string;
   resolved_at: string | null;
 }

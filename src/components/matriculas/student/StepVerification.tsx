@@ -12,6 +12,7 @@ import { Loader2, MailCheck, ShieldCheck } from "lucide-react";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { primaryBtnClass } from "@/components/ui/formStyles";
 import { ApiError, enrollmentApi } from "@/components/matriculas/enrollmentApi";
+import { titleClass } from "@/components/ui/textStyles";
 
 export function StepVerification({ onVerified }: { onVerified: () => void }) {
   const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function StepVerification({ onVerified }: { onVerified: () => void }) {
           <ShieldCheck className="h-6 w-6" />
         </span>
         <div>
-          <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+          <h2 id="step-title" className={titleClass}>
             Verificación del acudiente
           </h2>
           <p className="mt-1 text-sm text-base-content/70">

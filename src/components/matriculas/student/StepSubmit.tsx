@@ -12,6 +12,7 @@ import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import { ApiError, enrollmentApi, type StudentEnrollment } from "@/components/matriculas/enrollmentApi";
 import { getDocumentStatusLabel } from "@/utils/statusHelpers";
 import type { FlashFn } from "./types";
+import { titleClass } from "@/components/ui/textStyles";
 
 function CheckRow({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
@@ -67,7 +68,7 @@ export function StepSubmit({
   return (
     <section aria-labelledby="step-title" className="space-y-6">
       <div>
-        <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+        <h2 id="step-title" className={titleClass}>
           Revisa y envía
         </h2>
         <p className="mt-1 text-sm text-base-content/70">

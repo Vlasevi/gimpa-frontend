@@ -113,11 +113,19 @@ libre (OFL). Solo se cargaron los 4 pesos del manual:
 | Regular   | 400                 | `Aleo-Regular.ttf` |
 | Medium    | 500                 | `Aleo-Medium.ttf`  |
 
-> ⚠️ **Negrita sintética en títulos.** Aleo no tiene 600/700 cargados, pero el patrón de
-> título (§10) usa `font-display ... font-bold`, y hay ~60 combinaciones de
-> `font-display` con `font-bold`/`font-semibold` en `src/`. El navegador "inventa"
-> esa negrita, el mismo problema que ya se resolvió para Inter. Pendiente de decidir
-> (ver §14).
+> ⚠️ **Negrita sintética en títulos.** Aleo no tiene 600/700 cargados: `font-semibold` y
+> `font-bold` sobre `font-display` se ven **igual** (el navegador toma el Medium y le
+> inventa la negrita: más gruesa, apretada y menos legible — comprobado en Chrome).
+> **Decisión en Matrículas (2026-09-11):** los títulos en Aleo van en `font-medium`, el
+> peso real más alto del manual, con los tokens de `src/components/ui/textStyles.ts`
+> (`titleClass`, `smallTitleClass`, `cardTitleClass`, `SubSection`). Quedan los títulos
+> de página (`text-3xl font-bold`) y ~50 combinaciones fuera de Matrículas (ver §14).
+
+**Tipografía de Matrículas (estudiante y staff): `src/components/ui/textStyles.ts`.** Las
+dos vistas usan los mismos tokens: título de paso/modal, tarjeta de sección (igual que
+`SubSection`), nombre de un elemento (`font-medium`, 16 px), texto secundario (`text-sm`
+al 60 %), dato en solo lectura (etiqueta como la del campo del formulario y valor en
+16 px) y comentarios citados. Nada que haya que leer va en 12 px al 50 %.
 
 **Escala de referencia:** `text-3xl font-bold` (título de página y del Login),
 `text-2xl` (cards/placeholders), `text-base` (subtítulo), `text-sm` (ayudas).
@@ -518,9 +526,11 @@ A medida que toquemos cada pantalla, alinearla con esta guía.
 
 ### Por hacer
 
-- [ ] **Negrita sintética en Aleo** (§3). Opciones: agregar los `@font-face` 600/700
-      de Aleo (los archivos llegaron, pero no se copiaron) o bajar los títulos a
-      `font-medium`. Afecta ~60 combinaciones en `src/`.
+- [ ] **Negrita sintética en Aleo** (§3). En Matrículas ya se bajaron los títulos a
+      `font-medium` (tokens de `textStyles.ts`). Faltan los títulos de página
+      (`text-3xl font-bold`) y ~50 combinaciones en el resto de `src/`. Alternativa:
+      agregar los `@font-face` 600/700 de Aleo (los archivos llegaron, pero no se
+      copiaron), aunque el manual solo lista hasta Medium.
 - [ ] **Admisiones → `LoadingState`**: 10 copias a mano del mismo JSX de carga en
       `AdmisionesAdmin`, `MisAdmisiones`, `DetalleAdmision`, `SolicitudWizard`,
       `ApplicationDetail`, `DecisionPanel`, `InterviewsPanel`, `GuardianDocumentsCard`,

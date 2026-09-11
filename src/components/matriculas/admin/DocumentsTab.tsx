@@ -1,5 +1,9 @@
 /**
- * Pestaña "Documentos": fotos, PDF firmados y documentos de la familia con su estado.
+ * Pestaña "Documentos": fotos, PDF firmados, documentos y documentos médicos, con su estado.
+ *
+ * - "Documentos médicos" agrupa los de la familia con flag `sensitivity: "medical"` en su
+ *   metadata. El backend solo los manda a quien puede verlos (aprobadores y quien tiene
+ *   permiso de documentos médicos); si no llega ninguno, la sección no aparece.
  *
  * - Todos: "Ver" (URL firmada, en otra pestaña).
  * - Con `review_documents` (aprobador, matrícula en revisión o activa): aprobar,
@@ -17,6 +21,7 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  Lock,
   Trash2,
   Undo2,
   Upload,
@@ -27,16 +32,38 @@ import {
 import type { DocumentStatus, EnrollmentDetail, EnrollmentDocument } from "@/components/matriculas/enrollmentApi";
 import { ghostBtnClass, labelClass, textareaClass } from "@/components/ui/formStyles";
 import {
+  cardClass,
+  cardHeaderClass,
+  cardSubtitleClass,
+  cardTitleClass,
+  itemTitleClass,
+  metaTextClass,
+} from "@/components/ui/textStyles";
+import {
   getDocumentStatusBadgeClass,
   getDocumentStatusLabel,
   isDocumentResolved,
 } from "@/utils/statusHelpers";
 import { formatDateTime, formatFileSize, MAX_UPLOAD_BYTES, type FlashFn } from "./shared";
 
-const GROUPS: { kind: EnrollmentDocument["kind"]; title: string }[] = [
-  { kind: "photo", title: "Fotos" },
-  { kind: "signed", title: "Documentos firmados" },
-  { kind: "family", title: "Documentos de la familia" },
+interface Group {
+  id: string;
+  title: string;
+  match: (doc: EnrollmentDocument) => boolean;
+  /** Sección con acceso restringido por el flag de sensibilidad. */
+  restricted?: boolean;
+}
+
+const GROUPS: Group[] = [
+  { id: "photo", title: "Fotos", match: (doc) => doc.kind === "photo" },
+  { id: "signed", title: "Documentos firmados", match: (doc) => doc.kind === "signed" },
+  { id: "family", title: "Documentos", match: (doc) => doc.kind === "family" && doc.sensitivity !== "medical" },
+  {
+    id: "medical",
+    title: "Documentos médicos",
+    match: (doc) => doc.kind === "family" && doc.sensitivity === "medical",
+    restricted: true,
+  },
 ];
 
 const ACCEPT: Record<EnrollmentDocument["kind"], string> = {
@@ -171,20 +198,34 @@ export function DocumentsTab({
       />
 
       {GROUPS.map((group) => {
-        const docs = detail.documents.filter((doc) => doc.kind === group.kind);
+        const docs = detail.documents.filter(group.match);
         if (!docs.length) return null;
         const required = docs.filter((doc) => doc.required);
         const resolved = required.filter((doc) => isDocumentResolved(doc.status)).length;
-        const headingId = `${ids}-${group.kind}`;
+        const headingId = `${ids}-${group.id}`;
+        const noteId = `${headingId}-note`;
 
         return (
-          <section key={group.kind} aria-labelledby={headingId} className="rounded-lg border border-base-300 bg-base-100">
-            <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-base-300 px-4 py-3">
-              <h3 id={headingId} className="font-display text-base font-bold text-secondary">
-                {group.title}
-              </h3>
-              {group.kind === "family" && required.length > 0 && (
-                <span className="text-xs text-base-content/60">
+          <section
+            key={group.id}
+            aria-labelledby={headingId}
+            aria-describedby={group.restricted ? noteId : undefined}
+            className={cardClass}
+          >
+            <header className={cardHeaderClass}>
+              <div className="min-w-0">
+                <h3 id={headingId} className={`flex items-center gap-2 ${cardTitleClass}`}>
+                  {group.restricted && <Lock className="h-4 w-4 shrink-0 text-base-content/60" aria-hidden="true" />}
+                  {group.title}
+                </h3>
+                {group.restricted && (
+                  <p id={noteId} className={cardSubtitleClass}>
+                    Acceso restringido: solo los ve el personal con permiso para documentos médicos.
+                  </p>
+                )}
+              </div>
+              {required.length > 0 && docs[0].kind === "family" && (
+                <span className={metaTextClass}>
                   {resolved} de {required.length} obligatorios resueltos
                 </span>
               )}
@@ -206,22 +247,22 @@ export function DocumentsTab({
                   : ["Sin archivo"];
 
                 return (
-                  <li key={doc.key} className="px-4 py-3">
+                  <li key={doc.key} className="px-5 py-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 gap-3">
                         <Icon className="mt-0.5 h-5 w-5 shrink-0 text-base-content/40" aria-hidden="true" />
                         <div className="min-w-0">
-                          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-base-content">
+                          <p className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 ${itemTitleClass}`}>
                             {doc.label}
                             {doc.kind === "family" && (
-                              <span className="text-xs font-normal text-base-content/50">
+                              <span className="text-sm font-normal text-base-content/60">
                                 {doc.required ? "Obligatorio" : "Opcional"}
                               </span>
                             )}
                           </p>
-                          <p className="break-words text-xs text-base-content/50">{meta.join(" · ")}</p>
+                          <p className={`break-words ${metaTextClass}`}>{meta.join(" · ")}</p>
                           {doc.reviewed_at && (
-                            <p className="text-xs text-base-content/50">Revisado el {formatDateTime(doc.reviewed_at)}</p>
+                            <p className={metaTextClass}>Revisado el {formatDateTime(doc.reviewed_at)}</p>
                           )}
                           {doc.status === "REJECTED" && doc.reject_reason && (
                             <p className="mt-1 text-sm text-error">Motivo: {doc.reject_reason}</p>
@@ -234,7 +275,7 @@ export function DocumentsTab({
                           {getDocumentStatusLabel(doc.status)}
                         </span>
                         {isBusy ? (
-                          <span className="flex items-center gap-2 px-2 text-xs text-base-content/60" role="status">
+                          <span className="flex items-center gap-2 px-2 text-sm text-base-content/60" role="status">
                             <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
                             Guardando…
                           </span>

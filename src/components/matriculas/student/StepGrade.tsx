@@ -8,6 +8,7 @@ import { GraduationCap } from "lucide-react";
 import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import type { StudentEnrollment } from "@/components/matriculas/enrollmentApi";
 import { ORIGIN_LABELS } from "@/utils/statusHelpers";
+import { titleClass } from "@/components/ui/textStyles";
 
 export function StepGrade({
   enrollment,
@@ -23,7 +24,7 @@ export function StepGrade({
   return (
     <section aria-labelledby="step-title" className="space-y-6">
       <div>
-        <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+        <h2 id="step-title" className={titleClass}>
           Confirma el grado
         </h2>
         <p className="mt-1 text-sm text-base-content/70">

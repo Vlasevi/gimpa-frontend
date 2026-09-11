@@ -11,6 +11,7 @@ import { enrollmentApi, type BulkRenewalResult } from "@/components/matriculas/e
 import { Modal } from "@/components/ui/Modal";
 import { Alert } from "@/components/ui/Alert";
 import { ghostBtnClass, labelClass, primaryBtnClass, selectClass } from "@/components/ui/formStyles";
+import { smallTitleClass } from "@/components/ui/textStyles";
 import { currentYear, errorMessage, type FlashFn } from "./shared";
 
 interface BulkRenewalDialogProps {
@@ -106,7 +107,7 @@ export function BulkRenewalDialog({ isOpen, onClose, onDone, flash, years }: Bul
         className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border-base-300 bg-base-100 p-0 gap-0 shadow-xl"
       >
         <div className="shrink-0 border-b border-base-300 px-6 py-4">
-          <h2 id={`${ids}-title`} className="font-display text-lg font-bold text-secondary">
+          <h2 id={`${ids}-title`} className={smallTitleClass}>
             Renovar matrículas
           </h2>
           <p className="mt-1 text-sm text-base-content/60">

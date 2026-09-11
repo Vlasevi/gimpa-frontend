@@ -41,6 +41,8 @@
 import { useId, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 
+import { cardTitleClass } from "./textStyles";
+
 export type SubSectionStatus = "complete" | "incomplete" | "error";
 
 export interface SubSectionProps {
@@ -116,7 +118,7 @@ export function SubSection({
               />
             )}
             <span className="min-w-0">
-              <span className="block truncate font-display text-base font-semibold text-secondary">
+              <span className={`block truncate ${cardTitleClass}`}>
                 {title}
                 {statusText && <span className="sr-only"> ({statusText})</span>}
               </span>

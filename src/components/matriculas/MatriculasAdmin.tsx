@@ -39,6 +39,7 @@ import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl, API_ENDPOINTS, buildHeaders } from "@/utils/api";
 import { ENROLLMENT_STATUS_ORDER, getStatusLabel, ORIGIN_LABELS } from "@/utils/statusHelpers";
+import { smallTitleClass } from "@/components/ui/textStyles";
 
 // Alturas aproximadas (px) para estimar cuántas filas caben sin scroll
 const ROW_HEIGHT = 69;
@@ -624,7 +625,7 @@ export const MatriculasAdmin = () => {
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id={enrollTitleId} className="font-display text-lg font-bold text-secondary">
+            <h2 id={enrollTitleId} className={smallTitleClass}>
               Nueva matrícula
             </h2>
             <p className="mt-1 text-sm text-base-content/60">
@@ -656,7 +657,7 @@ export const MatriculasAdmin = () => {
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id={registerTitleId} className="font-display text-lg font-bold text-secondary">
+            <h2 id={registerTitleId} className={smallTitleClass}>
               Registrar usuario
             </h2>
             <p className="mt-1 text-sm text-base-content/60">Crea la cuenta del estudiante y los datos de su acudiente.</p>

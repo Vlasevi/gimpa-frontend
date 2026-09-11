@@ -47,6 +47,7 @@ import {
   type SectionId,
 } from "@/components/matriculas/profileSchema";
 import type { FlashFn } from "./types";
+import { titleClass } from "@/components/ui/textStyles";
 
 type PhotoKey = "student_photo" | "father_photo" | "mother_photo";
 const PHOTO_KEYS: PhotoKey[] = ["student_photo", "father_photo", "mother_photo"];
@@ -288,7 +289,7 @@ export function StepProfile({
   return (
     <section aria-labelledby="step-title" className="space-y-5">
       <div>
-        <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+        <h2 id="step-title" className={titleClass}>
           Datos del estudiante y la familia
         </h2>
         <p className="mt-1 text-sm text-base-content/70">

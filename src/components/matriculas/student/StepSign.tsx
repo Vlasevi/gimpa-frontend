@@ -25,6 +25,7 @@ import {
   type UnsignedKind,
 } from "@/components/matriculas/enrollmentApi";
 import type { FlashFn } from "./types";
+import { cardTitleClass, titleClass } from "@/components/ui/textStyles";
 
 const DOCS: { kind: UnsignedKind; label: string; description: string }[] = [
   { kind: "contrato", label: "Contrato de matrícula", description: "Prestación del servicio educativo" },
@@ -242,7 +243,7 @@ export function StepSign({
   if (!signing) {
     return (
       <section aria-labelledby="step-title" className="space-y-5">
-        <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+        <h2 id="step-title" className={titleClass}>
           Documentos firmados
         </h2>
         <div role="status" className="alert alert-success alert-soft text-sm">
@@ -306,7 +307,7 @@ export function StepSign({
   return (
     <section aria-labelledby="step-title" className="space-y-6">
       <div>
-        <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+        <h2 id="step-title" className={titleClass}>
           Lee y firma los documentos
         </h2>
         <p className="mt-1 text-sm text-base-content/70">
@@ -355,7 +356,7 @@ export function StepSign({
       </ol>
 
       <fieldset className="rounded-2xl border border-base-300 bg-base-200/40 p-4">
-        <legend className="px-1 font-display text-base font-semibold text-secondary">Firmantes</legend>
+        <legend className={`px-1 ${cardTitleClass}`}>Firmantes</legend>
         <ul className="grid gap-4 md:grid-cols-2">
           {signers.map((s) => (
             <li key={s.key} className="space-y-3 rounded-xl bg-base-100 p-4 shadow-sm">

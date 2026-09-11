@@ -8,6 +8,7 @@ import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import type { EnrollmentDocument, StudentEnrollment } from "@/components/matriculas/enrollmentApi";
 import { DocumentChecklist } from "./DocumentChecklist";
 import type { FlashFn } from "./types";
+import { titleClass } from "@/components/ui/textStyles";
 
 export function StepDocuments({
   enrollment,
@@ -26,7 +27,7 @@ export function StepDocuments({
   return (
     <section aria-labelledby="step-title" className="space-y-5">
       <div>
-        <h2 id="step-title" className="font-display text-xl font-semibold text-secondary">
+        <h2 id="step-title" className={titleClass}>
           Documentos
         </h2>
         <p className="mt-1 text-sm text-base-content/70">

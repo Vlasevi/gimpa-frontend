@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { EnrollmentDocument, StudentEnrollment } from "@/components/matriculas/enrollmentApi";
 import { DocumentChecklist } from "./DocumentChecklist";
 import type { FlashFn } from "./types";
+import { smallTitleClass, titleClass } from "@/components/ui/textStyles";
 
 function formatDate(value?: string | null) {
   if (!value) return "";
@@ -45,7 +46,7 @@ function StatusCard({
         <Icon className="h-6 w-6" />
       </span>
       <div className="min-w-0 space-y-1">
-        <h2 className="font-display text-xl font-semibold text-secondary">{title}</h2>
+        <h2 className={titleClass}>{title}</h2>
         <div className="space-y-1 text-sm text-base-content/80">{children}</div>
       </div>
     </div>
@@ -91,7 +92,7 @@ export function EnrollmentStatusView({
           )}
         </StatusCard>
         <section aria-labelledby="docs-title" className="space-y-3">
-          <h2 id="docs-title" className="font-display text-lg font-semibold text-secondary">
+          <h2 id="docs-title" className={smallTitleClass}>
             Documentos entregados
           </h2>
           <DocumentChecklist

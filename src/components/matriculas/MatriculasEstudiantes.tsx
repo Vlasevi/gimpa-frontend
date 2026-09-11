@@ -35,6 +35,7 @@ import { StepGrade } from "./student/StepGrade";
 import { StepProfile } from "./student/StepProfile";
 import { StepDocuments } from "./student/StepDocuments";
 import { StepSubmit } from "./student/StepSubmit";
+import { smallTitleClass } from "@/components/ui/textStyles";
 
 // El paso de firmas carga pdf.js y pdf-lib (~1 MB): se descarga solo al llegar a él.
 const StepSign = lazy(() => import("./student/StepSign").then((m) => ({ default: m.StepSign })));
@@ -94,7 +95,7 @@ function CorrectionNotice({ enrollment }: { enrollment: StudentEnrollment }) {
   if (enrollment.status !== "RETURNED" || !correction) return null;
   return (
     <div role="alert" className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
-      <h2 className="font-display text-lg font-semibold text-secondary">La institución pidió correcciones</h2>
+      <h2 className={smallTitleClass}>La institución pidió correcciones</h2>
       <p className="mt-2 whitespace-pre-line text-sm text-base-content/80">{correction.comment}</p>
       {correction.rejected_documents.length > 0 && (
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-base-content/80">

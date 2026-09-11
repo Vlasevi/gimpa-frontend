@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
 import { ghostBtnClass, labelClass, primaryBtnClass, textareaClass, inputClass } from "@/components/ui/formStyles";
+import { smallTitleClass } from "@/components/ui/textStyles";
 import UserEnroll from "@/components/auxiliar/userEnroll";
 import type { EnrollmentDetail, EnrollmentDocument, GradeInfo } from "@/components/matriculas/enrollmentApi";
 import { getDocumentStatusBadgeClass, getDocumentStatusLabel } from "@/utils/statusHelpers";
@@ -72,7 +73,7 @@ export function ActionDialog({
           }}
         >
           <div className="shrink-0 border-b border-base-300 px-6 py-4">
-            <h2 id={titleId} className="font-display text-lg font-bold text-secondary">
+            <h2 id={titleId} className={smallTitleClass}>
               {title}
             </h2>
             {description && (
@@ -495,7 +496,7 @@ export function ChangeGradeDialog({
         className={`${PANEL_CLASS} p-6 gap-4`}
       >
         <div>
-          <h2 id={titleId} className="font-display text-lg font-bold text-secondary">
+          <h2 id={titleId} className={smallTitleClass}>
             Cambiar grado
           </h2>
           <p className="mt-1 text-sm text-base-content/60">

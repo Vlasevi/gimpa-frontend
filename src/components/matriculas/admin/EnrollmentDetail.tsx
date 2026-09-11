@@ -38,6 +38,7 @@ import { Alert } from "@/components/ui/Alert";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { titleClass } from "@/components/ui/textStyles";
 import { getStatusBadgeClass, getStatusLabel, INACTIVE_REASON_LABELS } from "@/utils/statusHelpers";
 import { ChangeGradeDialog, InactivateDialog, ReasonDialog, ReturnDialog } from "./ActionDialogs";
 import { CorrectionsTab } from "./CorrectionsTab";
@@ -229,7 +230,7 @@ export function EnrollmentDetail({
             <div className="flex items-start gap-4">
               <StudentAvatar name={detail?.student_name ?? ""} photoUrl={detail?.student.photo_url} size="lg" />
               <div className="min-w-0 flex-1">
-                <h2 id={titleId} className="font-display text-xl font-bold leading-tight text-secondary">
+                <h2 id={titleId} className={`leading-tight ${titleClass}`}>
                   {detail?.student_name ?? "Matrícula"}
                 </h2>
                 {detail && (

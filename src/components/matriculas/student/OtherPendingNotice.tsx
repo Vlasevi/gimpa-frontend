@@ -19,6 +19,7 @@ import {
 import { replaceDocument } from "./DocumentChecklist";
 import { EnrollmentStatusView } from "./EnrollmentStatusView";
 import type { FlashFn } from "./types";
+import { titleClass } from "@/components/ui/textStyles";
 
 export function OtherPendingNotice({ items, flash }: { items: OtherPendingEnrollment[]; flash: FlashFn }) {
   const titleId = useId();
@@ -70,7 +71,7 @@ export function OtherPendingNotice({ items, flash }: { items: OtherPendingEnroll
         className="max-h-[90vh] w-[calc(100%-2rem)] max-w-3xl overflow-hidden bg-base-100 p-0"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-base-300 px-6 py-4">
-          <h2 id={titleId} className="font-display text-xl font-semibold text-secondary">
+          <h2 id={titleId} className={titleClass}>
             Matrícula {open?.academic_year}
           </h2>
           <button
