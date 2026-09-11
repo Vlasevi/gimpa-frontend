@@ -157,16 +157,6 @@ export function StepProfile({
   const [saving, setSaving] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Nombres que vienen de la cuenta de Microsoft: se muestran bloqueados.
-  const lockedFields = useMemo(
-    () => Object.keys(enrollment.locked_names ?? {}).map((k) => `student.${k}`),
-    [enrollment.locked_names],
-  );
-  const lockedHints = useMemo(
-    () => Object.fromEntries(lockedFields.map((f) => [f, "Tomado de tu cuenta de Microsoft."])),
-    [lockedFields],
-  );
-
   // --- Borrador local al entrar ---
   useEffect(() => {
     const stored = peekDraft();
@@ -383,8 +373,6 @@ export function StepProfile({
                     control={control}
                     register={register}
                     setValue={setValue}
-                    disabledFields={section.id === "student" ? lockedFields : undefined}
-                    fieldHints={section.id === "student" ? lockedHints : undefined}
                   />
                   {section.id === "student" && <AgeLine control={control} />}
                 </div>

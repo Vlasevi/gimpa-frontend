@@ -72,10 +72,6 @@ export interface Correction {
 /** Ficha del estudiante (esquema v1 por secciones, `core/student_profile.py`). */
 export type StudentProfile = Record<string, unknown>;
 
-export type LockedNames = Partial<
-  Record<"first_name1" | "first_name2" | "last_name1" | "last_name2", string>
->;
-
 /** `GET /api/enrollments/me/` → `enrollment`. Los campos presentes dependen del estado. */
 export interface StudentEnrollment {
   id: number;
@@ -90,7 +86,6 @@ export interface StudentEnrollment {
   // Editables (CREATED / DRAFT / RETURNED)
   data?: StudentProfile;
   data_schema_version?: number;
-  locked_names?: LockedNames;
   progress?: { data_saved: boolean; signed: boolean };
   correction?: Correction | null;
   // Con documentos (editables, SUBMITTED, ACTIVE)
