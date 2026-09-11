@@ -70,6 +70,8 @@ export const Step5Documents = ({
   updateUploadedFiles,
   enrollmentInfo,
   preloadedDocuments,
+  // Valores del paso 3 tal como quedaron al pulsar "Siguiente" (los guarda el padre).
+  step3Data,
   nextButtonText = "Siguiente",
   isSubmitting = false,
 }: any) => {
@@ -87,43 +89,31 @@ export const Step5Documents = ({
   const enrollmentId = currentEnrollment?.id;
 
   // Leer datos del Step3 para verificar si tiene diagnóstico y con quién vive
+  // (antes venían de una copia en localStorage, `enrollment_step3_<id>`).
   useEffect(() => {
-    if (enrollmentId) {
-      const storageKey = `enrollment_step3_${enrollmentId}`;
-      const step3DataStr = localStorage.getItem(storageKey);
+    if (!step3Data) return;
+    const diagnosis = step3Data.medical_has_diagnosis;
 
-      if (step3DataStr) {
-        try {
-          const step3Data = JSON.parse(step3DataStr);
-          const diagnosis = step3Data.medical_has_diagnosis;
+    // Si tiene cualquier diagnóstico diferente a "Ninguno", habilitar el documento
+    setHasDiagnosis(Boolean(diagnosis) && diagnosis !== "Ninguno");
 
-          // Si tiene cualquier diagnóstico diferente a "Ninguno", habilitar el documento
-          setHasDiagnosis(diagnosis && diagnosis !== "Ninguno");
+    // Obtener el tipo de acudiente (Padre, Madre, Otro, Empresa)
+    const guardianTypeValue = step3Data.guardian_type || "";
+    setGuardianType(guardianTypeValue);
 
-          // Obtener el tipo de acudiente (Padre, Madre, Otro, Empresa)
-          const guardianTypeValue = step3Data.guardian_type || "";
-          setGuardianType(guardianTypeValue);
+    // Determinar qué cédulas adicionales se necesitan según con quién vive
+    // Solo mostrar cédula del padre si vive con el estudiante Y no es el acudiente
+    setShowFatherID(
+      Boolean(step3Data.father_lives_with_student) && guardianTypeValue !== "Padre",
+    );
+    // Solo mostrar cédula de la madre si vive con el estudiante Y no es la acudiente
+    setShowMotherID(
+      Boolean(step3Data.mother_lives_with_student) && guardianTypeValue !== "Madre",
+    );
 
-          // Determinar qué cédulas adicionales se necesitan según con quién vive
-          // Solo mostrar cédula del padre si vive con el estudiante Y no es el acudiente
-          setShowFatherID(
-            step3Data.father_lives_with_student &&
-              guardianTypeValue !== "Padre",
-          );
-          // Solo mostrar cédula de la madre si vive con el estudiante Y no es la acudiente
-          setShowMotherID(
-            step3Data.mother_lives_with_student &&
-              guardianTypeValue !== "Madre",
-          );
-
-          // Obtener quién es el responsable para el certificado laboral
-          setGuardianRelationship(step3Data.guardian_relationship || "");
-        } catch (error) {
-          console.error("Error leyendo datos del Step3:", error);
-        }
-      }
-    }
-  }, [enrollmentId]);
+    // Obtener quién es el responsable para el certificado laboral
+    setGuardianRelationship(step3Data.guardian_relationship || "");
+  }, [step3Data]);
 
   // Determinar si es Preescolar (Caminadores a Transición)
   const preescolarGrades = [

@@ -1,15 +1,20 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   useForm,
   useWatch,
   type Control,
   type UseFormSetValue,
 } from "react-hook-form";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Info, X } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { ComboBox } from "@/components/ui/ComboBox";
 import { PhotoField } from "@/components/ui/fields/PhotoField";
-import { API_ENDPOINTS, apiFetch } from "@/utils/api";
+import {
+  fingerprint,
+  resolveDraft,
+  type UseAutosaveDraftResult,
+} from "@/hooks/useAutosaveDraft";
+import type { Step3DraftMeta } from "./MatriculasEstudiantes";
 
 // --- CONSTANTES (Listas para desplegables) ---
 const BARRIOS_BARRANQUILLA = [
@@ -460,14 +465,34 @@ export const Step3StudentData = ({
   enrollmentInfo,
   enrollmentId,
   preloadedDocuments,
+  // Borrador local del paso (vive en el padre, que lo descarta al guardar).
+  draft,
+  // Último `user_data` guardado en el servidor.
+  serverData,
 }: any) => {
+  const step3Draft = draft as UseAutosaveDraftResult<Record<string, unknown>, Step3DraftMeta>;
   // Motor del formulario (react-hook-form). `data`/`update` (props del padre,
   // `MatriculasEstudiantes.tsx`) siguen siendo la fuente de verdad ENTRE pasos
   // (Step4/5/6 los leen directo) — este `useForm()` es el motor INTERNO de este
   // paso, sembrado con `data` al montar, y se sincroniza de vuelta hacia el
-  // padre en el efecto de autoguardado más abajo (con el mismo debounce de
-  // 700ms que ya existía, en vez de en cada tecla).
+  // padre en el efecto de más abajo (con un debounce de 700ms, en vez de en cada
+  // tecla).
   const rhf = useForm<Record<string, unknown>>({ defaultValues: data });
+
+  // Borrador local: aviso de "cambios recuperados" y conflicto con lo del servidor.
+  const [draftRestored, setDraftRestored] = useState(false);
+  // Conflicto: el formulario muestra el borrador, y `before` guarda los valores previos
+  // (lo del servidor) para poder volver a ellos con "Usar lo guardado".
+  const [draftConflict, setDraftConflict] = useState<{
+    before: Record<string, unknown>;
+    keys: string[];
+  } | null>(null);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  // Huella de lo que tiene el servidor, guardada con cada borrador (`meta`). En un ref
+  // porque la lee la suscripción de `rhf.watch`, que no se recrea en cada render.
+  const serverHash = useMemo(() => fingerprint(serverData), [serverData]);
+  const serverHashRef = useRef(serverHash);
+  serverHashRef.current = serverHash;
   const { register, control, getValues, setValue: setFieldValue } = rhf;
 
   // Estado para el modal legal
@@ -496,7 +521,9 @@ export const Step3StudentData = ({
 
   // Datos clave del backend
   const canEnroll = enrollmentInfo?.eligibility?.can_enroll;
-  const existingData = enrollmentInfo?.eligibility?.existing_data || {};
+  // Lo último guardado en el servidor (el padre lo actualiza tras cada "Siguiente";
+  // arranca con `eligibility.existing_data`).
+  const existingData = serverData || {};
   const suggestedGradeObj = enrollmentInfo?.suggested_enrollment?.grade || null;
   const suggestedGrade =
     enrollmentInfo?.suggested_enrollment?.grade?.description || "";
@@ -506,8 +533,7 @@ export const Step3StudentData = ({
 
   // Inicialización (existing_data + grado + año) solo una vez
   const initializedRef = useRef(false);
-  const autosaveTimeoutRef = useRef<number | null>(null);
-  const autosaveLastHashRef = useRef<string>("");
+  const parentSyncTimeoutRef = useRef<number | null>(null);
 
   // --- WATCHES puntuales ---
   // Solo se "watchean" los campos que gatillan una rama condicional del JSX
@@ -746,12 +772,33 @@ export const Step3StudentData = ({
       update(updates);
     }
 
+    // Borrador local con cambios sin guardar de una sesión anterior — misma decisión
+    // que Admisiones (`resolveDraft`), comparando la huella de `user_data` en vez de
+    // una versión. Todavía con `initializedRef` en false: estos `setFieldValue` no
+    // re-escriben el borrador.
+    const localDraft = step3Draft?.peekDraft();
+    const resolution = resolveDraft(
+      localDraft ?? null,
+      existingData,
+      (m) => m?.baseHash === serverHashRef.current,
+    );
+    if (resolution === "stale") {
+      step3Draft.discard();
+    } else if (resolution === "restore" || resolution === "conflict") {
+      const before = getValues();
+      Object.entries(localDraft!.value).forEach(([key, value]) => {
+        setFieldValue(key, value, { shouldDirty: true });
+      });
+      update(localDraft!.value);
+      if (resolution === "restore") {
+        setDraftRestored(true);
+      } else {
+        setDraftConflict({ before, keys: Object.keys(localDraft!.value) });
+        setConflictModalOpen(true);
+      }
+    }
+
     initializedRef.current = true;
-    // Marca como "ya guardado" el estado recién hidratado, para que el efecto
-    // de autoguardado de abajo no dispare un POST redundante con datos que ya
-    // vienen del backend (existing_data) o son puramente derivados (grado
-    // sugerido, año, fecha).
-    autosaveLastHashRef.current = JSON.stringify(getValues());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     canEnroll,
@@ -762,64 +809,65 @@ export const Step3StudentData = ({
     currentDate,
   ]);
 
-  // --- EFFECT: puente RHF -> `data` del padre + autoguardado a backend ---
-  // Antes: cada `onChange` llamaba `update()` de inmediato (useState en el
-  // padre), y un efecto separado, atado a `data`, debounceaba solo el POST.
-  // Ahora: una única suscripción imperativa (`rhf.watch`, fuera del render,
-  // igual que el autoguardado de Admisiones en SolicitudWizard.tsx) debouncea
-  // 700ms tanto la sincronización hacia `data` del padre (que Step4/5/6 leen
-  // directamente) como el POST — mismo endpoint, mismo payload
-  // (`{ user_data: <objeto plano> }`), mismo hash para evitar POSTs
-  // redundantes.
+  // --- EFFECT: puente RHF -> borrador local + `data` del padre ---
+  // Mismo método de guardado que Admisiones (ver hooks/useAutosaveDraft.ts):
+  // mientras el usuario escribe, SOLO borrador local; al servidor va con
+  // "Siguiente" (el padre llama `generate-unsigned`, que persiste `user_data`).
+  // Antes aquí también salía un POST a `save-student-data` a los 700ms de
+  // inactividad — se eliminó.
+  // Una suscripción imperativa (`rhf.watch`, fuera del render) para no
+  // re-renderizar el formulario en cada tecla.
   useEffect(() => {
-    const subscription = rhf.watch((_values, { name }) => {
-      // `name === undefined` solo ocurre en un `reset()` — este paso no llama
-      // `reset()` nunca, pero se deja el chequeo por coherencia con el mismo
-      // patrón ya usado en Admisiones.
+    const subscription = rhf.watch((values, { name }) => {
+      // `name === undefined` solo ocurre en un `reset()`.
       if (name === undefined) return;
       if (!initializedRef.current) return;
 
-      if (autosaveTimeoutRef.current) {
-        window.clearTimeout(autosaveTimeoutRef.current);
+      step3Draft?.push(values as Record<string, unknown>, {
+        baseHash: serverHashRef.current,
+      });
+
+      // Sincroniza `data` en el padre (debounce 700ms) — los demás pasos del
+      // wizard (4, 5, 6) y un regreso a este paso leen `data`, no este `useForm()`.
+      if (parentSyncTimeoutRef.current) {
+        window.clearTimeout(parentSyncTimeoutRef.current);
       }
-
-      autosaveTimeoutRef.current = window.setTimeout(async () => {
-        const snapshot = rhf.getValues();
-
-        // Sincroniza `data` en el padre — los demás pasos del wizard (4, 5, 6)
-        // leen `data` directamente, no este `useForm()` interno.
-        update(snapshot);
-
-        if (!enrollmentId) return;
-
-        const payloadHash = JSON.stringify(snapshot);
-        if (payloadHash === autosaveLastHashRef.current) return;
-
-        try {
-          const res = await apiFetch(
-            API_ENDPOINTS.enrollmentSaveStudentData(enrollmentId),
-            {
-              method: "POST",
-              body: JSON.stringify({ user_data: snapshot }),
-            },
-          );
-          if (res.ok) {
-            autosaveLastHashRef.current = payloadHash;
-          }
-        } catch (error) {
-          console.error("Error guardando borrador Step 3:", error);
-        }
+      parentSyncTimeoutRef.current = window.setTimeout(() => {
+        update(rhf.getValues());
       }, 700);
     });
 
     return () => {
       subscription.unsubscribe();
-      if (autosaveTimeoutRef.current) {
-        window.clearTimeout(autosaveTimeoutRef.current);
+      if (parentSyncTimeoutRef.current) {
+        window.clearTimeout(parentSyncTimeoutRef.current);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrollmentId]);
+  }, []);
+
+  /** Conflicto — "Conservar lo mío": el formulario ya muestra el borrador; se
+   * reescribe con la huella actual del servidor (ahora está basado en ella). Se
+   * guardará en el servidor al pulsar "Siguiente". */
+  const keepLocalDraft = () => {
+    step3Draft?.push(rhf.getValues(), { baseHash: serverHashRef.current });
+    setDraftConflict(null);
+    setConflictModalOpen(false);
+  };
+
+  /** Conflicto — "Usar lo guardado": vuelve los campos del borrador a lo que había
+   * antes de aplicarlo (lo del servidor) y descarta el borrador. */
+  const applySavedData = () => {
+    if (!draftConflict) return;
+    const { before, keys } = draftConflict;
+    initializedRef.current = false; // que estos cambios no re-escriban el borrador
+    keys.forEach((key) => setFieldValue(key, before[key], { shouldDirty: true }));
+    initializedRef.current = true;
+    update(rhf.getValues());
+    step3Draft?.discard();
+    setDraftConflict(null);
+    setConflictModalOpen(false);
+  };
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -945,12 +993,6 @@ export const Step3StudentData = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [motherLivesWithStudent, residenceForCopy, motherResidenceForCopy]);
-
-  // --- MANEJO DE DATOS / localStorage ---
-  const storageKey =
-    enrollmentId !== null && enrollmentId !== undefined
-      ? `enrollment_step3_${enrollmentId}`
-      : null;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     console.log("🚀 handleSubmit ejecutado");
@@ -1083,15 +1125,11 @@ export const Step3StudentData = ({
 
     try {
       // Toma el valor MÁS FRESCO del motor RHF (no el `data` prop, que puede
-      // ir hasta 700ms detrás por el debounce del autoguardado) para que ni el
-      // snapshot de localStorage ni el modal legal pierdan la última tecla
-      // escrita antes de avanzar.
+      // ir hasta 700ms detrás por el debounce de la sincronización) para que ni
+      // el guardado ni el modal legal pierdan la última tecla escrita antes de
+      // avanzar.
       const currentValues = rhf.getValues();
       update(currentValues);
-
-      if (storageKey) {
-        localStorage.setItem(storageKey, JSON.stringify(currentValues));
-      }
       setLegalModalSnapshot(currentValues as LegalModalSnapshot);
       // Mostrar modal legal antes de avanzar
       setShowLegalModal(true);
@@ -1103,7 +1141,9 @@ export const Step3StudentData = ({
 
   const handleAcceptLegal = () => {
     setShowLegalModal(false);
-    next();
+    // El padre guarda en el servidor (`generate-unsigned` persiste `user_data`) y pasa
+    // estos valores a los pasos 5 y 6.
+    next(rhf.getValues());
   };
 
   const handleDeclineLegal = () => {
@@ -1133,6 +1173,49 @@ export const Step3StudentData = ({
   return (
     <form onSubmit={handleSubmit} noValidate={true}>
       <div className="space-y-6 animate-fade-in max-w-5xl mx-auto pb-10">
+        {/* Borrador local recuperado / en conflicto (mismo mecanismo que Admisiones) */}
+        {draftConflict ? (
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-lg border border-warning/25 bg-warning/5 p-4 text-sm text-base-content/80"
+          >
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <span className="flex-1">
+              Estás viendo cambios sin guardar de este dispositivo, pero tus datos se
+              guardaron después desde otro lugar.{" "}
+              <button
+                type="button"
+                onClick={() => setConflictModalOpen(true)}
+                className="font-medium text-primary hover:underline"
+              >
+                Elegir qué versión conservar
+              </button>
+            </span>
+          </div>
+        ) : (
+          draftRestored && (
+            <div
+              role="status"
+              className="flex items-start gap-3 rounded-lg border border-info/25 bg-info/5 p-4 text-sm text-base-content/80"
+            >
+              <Info className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+              <span className="flex-1">
+                Recuperamos cambios que no alcanzaste a guardar en este dispositivo. Se
+                guardarán al pulsar «Siguiente».
+              </span>
+              <button
+                type="button"
+                onClick={() => setDraftRestored(false)}
+                className="rounded-full p-1 text-base-content/40 transition-colors hover:bg-base-200 hover:text-base-content"
+                title="Cerrar aviso"
+                aria-label="Cerrar aviso"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )
+        )}
+
         {/* 1. Datos del Estudiante */}
         <SectionCard
           title="1. Información del Estudiante"
@@ -2859,6 +2942,39 @@ export const Step3StudentData = ({
             interés superior y los derechos prevalentes de los niños, niñas y
             adolescentes.
           </p>
+        </Alert>
+
+        {/* Conflicto entre el borrador local y lo guardado (mismo criterio que el
+            modal de conflicto de Admisiones). "Ahora no" solo cierra: el formulario
+            sigue mostrando el borrador, y guardar con "Siguiente" equivale a
+            conservarlo. */}
+        <Alert
+          isOpen={conflictModalOpen && !!draftConflict}
+          onClose={() => setConflictModalOpen(false)}
+          onAccept={keepLocalDraft}
+          title="Tus datos se guardaron desde otro lugar"
+          variant="warning"
+          acceptText="Conservar lo mío"
+          cancelText="Ahora no"
+        >
+          <p>
+            Tienes cambios sin guardar en este dispositivo, pero los datos de la
+            matrícula se guardaron después desde otro lugar (quizás tú, desde otro
+            dispositivo o pestaña). Elige con cuál versión quedarte:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <strong>Conservar lo mío:</strong> sigue con lo que ves ahora; se guardará
+              al pulsar «Siguiente», reemplazando lo guardado en el otro lugar.
+            </li>
+            <li>
+              <strong>Usar lo guardado:</strong> descarta los cambios de este dispositivo
+              y carga lo último guardado.
+            </li>
+          </ul>
+          <button type="button" onClick={applySavedData} className="btn btn-outline btn-sm">
+            Usar lo guardado
+          </button>
         </Alert>
       </div>
     </form>

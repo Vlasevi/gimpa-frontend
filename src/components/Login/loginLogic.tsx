@@ -8,6 +8,7 @@ import {
   setTokens,
   clearTokens,
 } from "@/utils/tokens";
+import { clearAllDrafts } from "@/hooks/useAutosaveDraft";
 
 // Tipos de roles del backend. Con roles dinámicos, el rol es cualquier slug; se listan
 // los de sistema para autocompletar, pero `(string & {})` permite cualquier valor.
@@ -196,6 +197,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Ignoramos errores de red en logout: igual limpiamos el estado local.
     } finally {
       clearTokens();
+      // Borradores de formularios sin guardar (solo viven en este navegador y pueden
+      // traer datos de salud): no deben quedar para el siguiente que use el equipo.
+      clearAllDrafts();
       setAuthenticated(false);
       setUser(null);
       navigate("/login", { replace: true });

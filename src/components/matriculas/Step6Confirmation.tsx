@@ -5,6 +5,8 @@ import { apiUrl, API_ENDPOINTS, buildHeaders } from "@/utils/api";
 export const Step6Confirmation = ({
   back,
   data,
+  // Valores del paso 3 tal como quedaron al pulsar "Siguiente" (los guarda el padre).
+  step3Data,
   uploadedFiles,
   enrollmentInfo,
 }: any) => {
@@ -24,8 +26,10 @@ export const Step6Confirmation = ({
 
     try {
       // ---------- PASO 1: Enviar datos de Step3 (user_data) ----------
-      const storageKey = `enrollment_step3_${enrollmentId}`;
-      const step3DataStr = localStorage.getItem(storageKey);
+      // Antes venían de una copia en localStorage (`enrollment_step3_<id>`). Respaldo:
+      // `data` (el estado del wizard), que es un superconjunto de lo del paso 3 — mejor
+      // eso que mandar `user_data: {}` y borrar los datos del estudiante.
+      const step3Values = step3Data ?? data;
 
       // Verificar si tiene diagnóstico y extraer información de convivencia
       let studentHasDiagnosis = false;
@@ -35,8 +39,8 @@ export const Step6Confirmation = ({
       let guardianRelationship = "";
       let studentData: any = {};
 
-      if (step3DataStr) {
-        studentData = JSON.parse(step3DataStr);
+      if (step3Values) {
+        studentData = step3Values;
         const diagnosis = studentData.medical_has_diagnosis;
         studentHasDiagnosis = diagnosis && diagnosis !== "Ninguno";
         setHasDiagnosis(studentHasDiagnosis);
@@ -266,11 +270,6 @@ export const Step6Confirmation = ({
       if (response.ok) {
         const result = await response.json();
         console.log("Matrícula enviada:", result);
-
-        // Limpiar localStorage después de envío exitoso
-        const storageKey = `enrollment_step3_${enrollmentId}`;
-        localStorage.removeItem(storageKey);
-
         setSuccess(true);
       } else {
         const error = await response.json();

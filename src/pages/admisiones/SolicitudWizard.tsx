@@ -7,7 +7,10 @@ import {
   AlertCircle,
   AlertTriangle,
   Check,
+  CloudOff,
+  Info,
   Send,
+  X,
 } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
@@ -28,8 +31,9 @@ import { SubSection, type SubSectionStatus } from "@/components/ui/SubSection";
 import { Alert } from "@/components/ui/Alert";
 import { primaryBtnClass } from "@/components/ui/formStyles";
 import {
+  resolveDraft,
   useAutosaveDraft,
-  type AutosaveStatus,
+  valuesMatchServer,
   type UseAutosaveDraftResult,
 } from "@/hooks/useAutosaveDraft";
 
@@ -41,6 +45,16 @@ interface SectionVersionConflict {
   conflicts: string[];
   data_versions: Record<string, number>;
   current: Record<string, SectionValues>;
+}
+
+/** Conflicto pendiente en el modal. `fromLocalDraft`: no vino de un 409, sino de un
+ * borrador local encontrado al cargar que el servidor ya superó (solo cambia el texto). */
+type PendingConflict = SectionVersionConflict & { fromLocalDraft?: boolean };
+
+/** Lo que el wizard guarda junto a cada borrador local (`meta` del hook): la versión de
+ * la sección (`data_versions[<sección>]`) sobre la que el usuario estaba escribiendo. */
+interface DraftMeta {
+  baseVersion: number;
 }
 
 /** Resultado uniforme de un PATCH de sección, para que `saveSection` (botón manual) y
@@ -59,41 +73,21 @@ type Step = {
   subtitle: string;
   Component: (props: StepProps) => JSX.Element;
   form: UseFormReturn<SectionValues>;
-  autosave: UseAutosaveDraftResult<SectionValues>;
+  /** Borrador local de la sección (solo localStorage). */
+  draft: UseAutosaveDraftResult<SectionValues, DraftMeta>;
 };
 
-/** Indicador de autoguardado por sección — texto adicional junto al botón "Guardar
- * sección" (no sustituye al `status` de `SubSection`, que sigue derivado de
- * `formState`/`application.data` sin cambios, tal como quedó en el Paso 3). Decisión
- * documentada: mezclar ambos indicadores habría acoplado el guardado silencioso de
- * fondo con la marca de "sección completa", que el equipo quiere que dependa solo de
- * una acción explícita del usuario. */
-function AutosaveIndicator({ status }: { status: AutosaveStatus }) {
-  if (status === "saving") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-base-content/60">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Guardando…
-      </span>
-    );
-  }
-  if (status === "saved") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-base-content/60">
-        <Check className="h-4 w-4 text-success" />
-        Guardado
-      </span>
-    );
-  }
-  if (status === "error") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-sm text-warning">
-        <AlertTriangle className="h-4 w-4" />
-        No pudimos guardar, reintentando
-      </span>
-    );
-  }
-  return <span />;
+/** Aviso junto al botón "Guardar sección": la sección tiene cambios que solo existen
+ * en este navegador (borrador local) y todavía no llegaron al servidor. Se deriva de
+ * `formState.isDirty`, el mismo dato que deja la tarjeta en "incompleta". */
+function UnsavedIndicator({ dirty }: { dirty: boolean }) {
+  if (!dirty) return <span />;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm text-base-content/60">
+      <CloudOff className="h-4 w-4 text-warning" />
+      Cambios sin guardar · solo en este dispositivo
+    </span>
+  );
 }
 
 export default function SolicitudWizard() {
@@ -116,29 +110,30 @@ export default function SolicitudWizard() {
   // status "error" del acordeón.
   const [sectionErrors, setSectionErrors] = useState<Record<string, string | null>>({});
 
-  // --- Paso 5: autoguardado ------------------------------------------------------
+  // --- Guardado -----------------------------------------------------------------
+  // Dos niveles, a propósito separados:
+  // - Borrador LOCAL (useAutosaveDraft): cada cambio del usuario se copia a
+  //   localStorage (~0.5s). Nunca toca el servidor. Sirve para no perder lo escrito si
+  //   recarga, cierra la pestaña o se queda sin red.
+  // - Servidor: SOLO con "Guardar sección" (o "Enviar solicitud", que guarda antes lo
+  //   pendiente). Ver la cabecera de hooks/useAutosaveDraft.ts para el porqué.
+  //
   // `data_versions[<sección>]` que trajo el último GET/PATCH exitoso. Vive en un ref
-  // (no en estado) porque se lee dentro de callbacks de guardado que no deben
-  // recrearse en cada render; una sección ausente cuenta como versión 0.
+  // (no en estado) porque se lee dentro de callbacks que no deben recrearse en cada
+  // render; una sección ausente cuenta como versión 0.
   const sectionVersionsRef = useRef<Record<string, number>>({});
-  // Interruptor global: se apaga ante un 409 "de siempre" (el expediente cambió de
-  // estado en otro lugar) — ese conflicto no es de una sección, es del expediente
-  // completo, así que detiene el autoguardado de las 5 a la vez.
-  const [autosaveGloballyEnabled, setAutosaveGloballyEnabled] = useState(true);
-  // Interruptor por sección: se apaga SOLO para la sección en conflicto de versión
-  // (otra pestaña/dispositivo la guardó primero), sin afectar a las demás.
-  const [sectionAutosaveEnabled, setSectionAutosaveEnabled] = useState<Record<string, boolean>>(
-    {},
-  );
   // Conflictos de versión pendientes de resolver, por sección. Se muestran de a uno
   // (ver `activeConflict` más abajo); el borrador local de esa sección NO se toca
   // hasta que el usuario elige una salida.
   const [versionConflicts, setVersionConflicts] = useState<
-    Record<string, SectionVersionConflict | undefined>
+    Record<string, PendingConflict | undefined>
   >({});
+  // Secciones cuyo borrador local se restauró al cargar (alimenta el aviso "Tienes
+  // cambios sin guardar"). Vacío = sin aviso.
+  const [restoredSections, setRestoredSections] = useState<string[]>([]);
   // Desacoplado de `versionConflicts` a propósito: permite cerrar el modal ("Ahora
-  // no") sin resolver el conflicto ni tocar nada. Un guardado posterior (manual o
-  // autoguardado) que vuelva a chocar lo reabre.
+  // no") sin resolver el conflicto ni tocar nada. Un guardado posterior que vuelva a
+  // chocar lo reabre.
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
 
   // Un `useForm()` por sección (no uno global): el PATCH sigue siendo por sección, y
@@ -151,10 +146,9 @@ export default function SolicitudWizard() {
   const declarationsForm = useForm<SectionValues>({ defaultValues: {} });
 
   /**
-   * PATCH de una sección puntual, compartido por el botón manual y el autoguardado —
-   * para que ninguno de los dos invente su propia lectura de los dos tipos de 409.
-   * Siempre manda `versions` (el número que trajo el último GET/PATCH para esa
-   * sección): así ningún PATCH del wizard sale sin `versions` (ver Paso 9).
+   * PATCH de una sección puntual (lo usa solo `saveSection`). Siempre manda `versions`
+   * (el número que trajo el último GET/PATCH para esa sección): así ningún PATCH del
+   * wizard sale sin `versions` (ver Paso 9).
    */
   const patchSection = async (key: string, values: SectionValues): Promise<PatchResult> => {
     try {
@@ -198,90 +192,33 @@ export default function SolicitudWizard() {
     }
   };
 
-  const openVersionConflict = (key: string, payload: SectionVersionConflict) => {
-    setSectionAutosaveEnabled((prev) => ({ ...prev, [key]: false }));
+  const openVersionConflict = (key: string, payload: PendingConflict) => {
     setVersionConflicts((prev) => ({ ...prev, [key]: payload }));
     setConflictModalOpen(true);
   };
 
-  /** `save` que recibe cada `useAutosaveDraft` — una función por sección, cerrada
-   * sobre su `key`. No necesita ser estable entre renders: el hook la guarda en un
-   * ref internamente (`saveRef.current = save`), así que recrearla en cada render no
-   * reprograma ningún timer en curso. */
-  const makeAutosave = (key: string) => async (values: SectionValues): Promise<void> => {
-    const result = await patchSection(key, values);
-    switch (result.kind) {
-      case "ok":
-        // No se llama `form.reset()` aquí: el usuario puede seguir escribiendo
-        // después de que el debounce disparó el guardado, y resetear el formulario
-        // en ese momento pisaría lo que siga tecleando. El botón "Guardar sección"
-        // sigue siendo el único que limpia `isDirty`/marca la tarjeta "completa".
-        setApplication(result.application);
-        return;
-      case "version_conflict":
-        openVersionConflict(key, result.payload);
-        // Rechaza para que el hook marque `status: "error"` (ver AutosaveIndicator,
-        // que aquí se sustituye por el aviso de conflicto) y deje de reintentar por
-        // su cuenta esta sección — ya la apagamos con sectionAutosaveEnabled.
-        throw new Error("section_version_conflict");
-      case "state_conflict":
-        setGlobalError(`${result.message} Recarga la página para continuar.`);
-        setAutosaveGloballyEnabled(false);
-        throw new Error("state_conflict");
-      case "network":
-      case "error":
-      default:
-        // Fallo de red o error genérico: el hook ya deja `status: "error"` y
-        // reintentará con el próximo `push()`/debounce del propio usuario — sin
-        // retry-loop propio.
-        throw new Error(result.kind === "error" ? result.message : "network_error");
-    }
-  };
-
-  const residenceAutosave = useAutosaveDraft<SectionValues>({
-    key: `gimpa_admision_draft_${code}_residence`,
-    save: makeAutosave("residence"),
-    enabled:
-      !!application &&
-      isEditable(application.status) &&
-      autosaveGloballyEnabled &&
-      sectionAutosaveEnabled.residence !== false,
+  // Un borrador local por expediente y sección (nunca por usuario: un acudiente tiene
+  // varios hijos y varios expedientes abiertos a la vez).
+  const draftsEnabled = !!application && isEditable(application.status);
+  const residenceDraft = useAutosaveDraft<SectionValues, DraftMeta>({
+    key: `admision:${code}:residence`,
+    enabled: draftsEnabled,
   });
-  const academicAutosave = useAutosaveDraft<SectionValues>({
-    key: `gimpa_admision_draft_${code}_academic_history`,
-    save: makeAutosave("academic_history"),
-    enabled:
-      !!application &&
-      isEditable(application.status) &&
-      autosaveGloballyEnabled &&
-      sectionAutosaveEnabled.academic_history !== false,
+  const academicDraft = useAutosaveDraft<SectionValues, DraftMeta>({
+    key: `admision:${code}:academic_history`,
+    enabled: draftsEnabled,
   });
-  const guardiansAutosave = useAutosaveDraft<SectionValues>({
-    key: `gimpa_admision_draft_${code}_guardians`,
-    save: makeAutosave("guardians"),
-    enabled:
-      !!application &&
-      isEditable(application.status) &&
-      autosaveGloballyEnabled &&
-      sectionAutosaveEnabled.guardians !== false,
+  const guardiansDraft = useAutosaveDraft<SectionValues, DraftMeta>({
+    key: `admision:${code}:guardians`,
+    enabled: draftsEnabled,
   });
-  const healthAutosave = useAutosaveDraft<SectionValues>({
-    key: `gimpa_admision_draft_${code}_health`,
-    save: makeAutosave("health"),
-    enabled:
-      !!application &&
-      isEditable(application.status) &&
-      autosaveGloballyEnabled &&
-      sectionAutosaveEnabled.health !== false,
+  const healthDraft = useAutosaveDraft<SectionValues, DraftMeta>({
+    key: `admision:${code}:health`,
+    enabled: draftsEnabled,
   });
-  const declarationsAutosave = useAutosaveDraft<SectionValues>({
-    key: `gimpa_admision_draft_${code}_declarations`,
-    save: makeAutosave("declarations"),
-    enabled:
-      !!application &&
-      isEditable(application.status) &&
-      autosaveGloballyEnabled &&
-      sectionAutosaveEnabled.declarations !== false,
+  const declarationsDraft = useAutosaveDraft<SectionValues, DraftMeta>({
+    key: `admision:${code}:declarations`,
+    enabled: draftsEnabled,
   });
 
   /** Las 5 secciones, en orden. `key` = sección de `data` en el backend. */
@@ -292,7 +229,7 @@ export default function SolicitudWizard() {
       subtitle: "¿Dónde vive el aspirante?",
       Component: ResidenceStep,
       form: residenceForm,
-      autosave: residenceAutosave,
+      draft: residenceDraft,
     },
     {
       key: "academic_history",
@@ -300,7 +237,7 @@ export default function SolicitudWizard() {
       subtitle: "Su trayectoria escolar hasta hoy.",
       Component: AcademicHistoryStep,
       form: academicForm,
-      autosave: academicAutosave,
+      draft: academicDraft,
     },
     {
       key: "guardians",
@@ -308,7 +245,7 @@ export default function SolicitudWizard() {
       subtitle: "Quién responde por el aspirante.",
       Component: GuardiansStep,
       form: guardiansForm,
-      autosave: guardiansAutosave,
+      draft: guardiansDraft,
     },
     {
       key: "health",
@@ -316,7 +253,7 @@ export default function SolicitudWizard() {
       subtitle: "Para cuidarlo mejor durante el año escolar.",
       Component: HealthStep,
       form: healthForm,
-      autosave: healthAutosave,
+      draft: healthDraft,
     },
     {
       key: "declarations",
@@ -324,7 +261,7 @@ export default function SolicitudWizard() {
       subtitle: "Revisa y envía tu solicitud.",
       Component: DeclarationsStep,
       form: declarationsForm,
-      autosave: declarationsAutosave,
+      draft: declarationsDraft,
     },
   ];
 
@@ -340,36 +277,63 @@ export default function SolicitudWizard() {
         const data: AdmissionApplication = await res.json();
         setApplication(data);
         sectionVersionsRef.current = { ...(data.data_versions ?? {}) };
-        // Hidrata cada sección con lo que trajo el servidor. `reset(...)`, no
-        // `defaultValues` síncronos: el dato llega async.
-        //
-        // `hydrate(serverValue, serverUpdatedAt)` es el contrato del hook (Paso 1):
-        // devuelve el borrador local solo si su timestamp es posterior al del
-        // servidor. `AdmissionApplication` no expone un `updated_at` POR SECCIÓN hoy
-        // (solo `data_versions`, un contador, no una fecha) — sin ese segundo
-        // argumento, `hydrate` siempre resuelve al valor del servidor (ver su JSDoc
-        // en useAutosaveDraft.ts). Es decir, tal como está hoy, el borrador local
-        // NUNCA gana la hidratación automática. Se documenta como aceptado para este
-        // paso (no hay timestamp real que comparar y no corresponde inventar uno
-        // falso ni tocar el contrato del backend, cerrado en el Paso 4) — queda como
-        // hallazgo pendiente si en el futuro se agrega un timestamp por sección.
-        const residenceServer = (data.data?.residence as SectionValues) ?? {};
-        const academicServer = (data.data?.academic_history as SectionValues) ?? {};
-        const guardiansServer = (data.data?.guardians as SectionValues) ?? {};
-        const healthServer = (data.data?.health as SectionValues) ?? {};
-        const declarationsServer = (data.data?.declarations as SectionValues) ?? {};
-        residenceForm.reset(residenceAutosave.hydrate(residenceServer));
-        academicForm.reset(academicAutosave.hydrate(academicServer));
-        guardiansForm.reset(guardiansAutosave.hydrate(guardiansServer));
-        healthForm.reset(healthAutosave.hydrate(healthServer));
-        declarationsForm.reset(declarationsAutosave.hydrate(declarationsServer));
+        const editable = isEditable(data.status);
+
+        // Hidrata cada sección: primero con lo del servidor (`reset(...)`, no
+        // `defaultValues` síncronos: el dato llega async), y después, si hay un
+        // borrador local que el servidor no tiene, decide con `resolveDraft`
+        // (compara la versión sobre la que se escribió el borrador con
+        // `data_versions`, no fechas — ver el JSDoc de `peekDraft` en el hook).
+        const restored: string[] = [];
+        const toOpen: string[] = [];
+        STEPS.forEach((s) => {
+          const server = (data.data?.[s.key] as SectionValues) ?? {};
+          s.form.reset(server);
+          if (!editable) return; // el efecto de más abajo descarta los borradores
+
+          const draft = s.draft.peekDraft();
+          // Misma base = nadie guardó la sección desde que se escribió el borrador.
+          const serverVersion = data.data_versions?.[s.key] ?? 0;
+          switch (resolveDraft(draft, server, (m) => m?.baseVersion === serverVersion)) {
+            case "stale":
+              s.draft.discard();
+              break;
+            case "restore":
+              // `keepDefaultValues`: los defaults siguen siendo lo del servidor, así
+              // que RHF marca la sección como con cambios sin guardar (isDirty) — la
+              // tarjeta queda "incompleta" hasta que se guarde, igual que si el usuario
+              // lo hubiera escrito ahora. El borrador sigue en localStorage hasta que
+              // se guarde la sección.
+              s.form.reset(draft!.value, { keepDefaultValues: true });
+              restored.push(s.key);
+              toOpen.push(s.key);
+              break;
+            case "conflict":
+              // Se muestra lo del borrador (es "lo mío" del modal) con los defaults del
+              // servidor; el modal ofrece conservarlo o cargar lo del servidor.
+              s.form.reset(draft!.value, { keepDefaultValues: true });
+              openVersionConflict(s.key, {
+                detail: "La sección fue modificada desde otro lugar.",
+                code: "section_version_conflict",
+                conflicts: [s.key],
+                data_versions: data.data_versions ?? {},
+                current: { [s.key]: server },
+                fromLocalDraft: true,
+              });
+              toOpen.push(s.key);
+              break;
+          }
+        });
+        setRestoredSections(restored);
+
         // Reanudación automática: deja abierta la primera sección sin diligenciar (o
-        // la primera de todas si ya están completas).
+        // la primera de todas si ya están completas), más las que traen un borrador
+        // recuperado o en conflicto.
         const firstPending = STEPS.findIndex(
           (s) => !data.data?.[s.key] || Object.keys(data.data[s.key]).length === 0,
         );
         const initialKey = STEPS[firstPending === -1 ? 0 : firstPending].key;
-        setOpenSections(new Set([initialKey]));
+        setOpenSections(new Set([initialKey, ...toOpen]));
       })
       .catch(() => {
         if (active) setGlobalError("No pudimos conectar con el servidor.");
@@ -385,42 +349,32 @@ export default function SolicitudWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
-  // Puente RHF → autoguardado. `form.watch(callback)` (imperativo, fuera del render)
+  // Puente RHF → borrador local. `form.watch(callback)` (imperativo, fuera del render)
   // en vez de `useWatch`: así ninguna tecla re-renderiza el wizard, que es justo el
   // motivo por el que Admisiones migró a RHF en el Paso 2.
   //
-  // Cómo se filtran los disparos programáticos (investigado contra el código fuente
-  // instalado, react-hook-form@7.81.0, porque la documentación pública describe un
-  // `type: "change"` que ESTA versión no emite en runtime):
-  // - `reset(values)` llama internamente a `_subjects.state.next({name: undefined,
-  //   type: undefined, values})` — SIEMPRE con `name: undefined`.
-  // - Un cambio de campo real (sea por `register`/tecleo del usuario, o por
-  //   `setValue(name, value)` programático) llama a
-  //   `_subjects.state.next({name: <campo>, values})` — SIEMPRE con `name` definido,
-  //   y en ningún caso trae una clave `type` distinguible (la build instalada no la
-  //   setea nunca para cambios de campo; solo `reset()` la setea, a `undefined`).
-  //   Es decir: en esta versión, `type` NO sirve para distinguir nada — el único
-  //   campo utilizable es `name`.
-  // Filtro aplicado: `name === undefined` ⇒ viene de un `reset()` ⇒ se ignora.
-  // Esto cubre el caso obligatorio del plan (la hidratación inicial no debe disparar
-  // `push()`). Los `setValue()` de la auto-copia padre/madre→acudiente y del
-  // pre-llenado desde `useAuth().user` (ambos en `GuardiansStep`, steps.tsx) SÍ traen
-  // `name` definido, igual que el tecleo real, y esta build de RHF no expone ninguna
-  // forma más fina de diferenciarlos. Decisión: dejar que SÍ disparen `push()` —
-  // son datos reales y queridos por el usuario (aceptó "Padre"/"Madre" como
-  // acudiente, o inició sesión con esa cuenta), y como `push()` solo reprograma un
-  // debounce (nunca escribe de inmediato), encadenar varios `setValue()` seguidos no
-  // produce ningún PATCH prematuro: el efecto observable es el mismo que si el
-  // usuario hubiera escrito esos valores a mano. Se añade además, como red de
-  // seguridad adicional sugerida por el plan, un chequeo de `formState.isDirty`
-  // (que `reset()` también deja en `false`) — redundante con el filtro por `name`
-  // pero sin costo.
+  // Qué cambios cuentan (verificado en el código de react-hook-form@7.81.0):
+  // - `reset(values)` emite `name: undefined` ⇒ se ignora (la hidratación inicial no
+  //   debe escribir un borrador).
+  // - Un cambio de campo emite `name` definido, venga del tecleo o de un `setValue()`.
+  //   No se puede filtrar por `type`: los ComboBox de la cascada geográfica aplican la
+  //   elección del usuario con `setValue()`, igual que un cambio hecho por código.
+  // - El chequeo de `formState.isDirty` es lo que excluye el pre-llenado del acudiente
+  //   con los datos de la cuenta (`GuardiansStep`, steps.tsx): se hace sin
+  //   `shouldDirty`, así que no deja la sección "con cambios" ni crea un borrador
+  //   solo por abrir el formulario. La auto-copia padre/madre → acudiente sí marca
+  //   cambios (la dispara una acción del usuario) y entra al borrador.
   useEffect(() => {
     const subscriptions = STEPS.map((s) => {
       const { unsubscribe } = s.form.watch((values, { name }) => {
         if (name === undefined) return;
         if (!s.form.formState.isDirty) return;
-        s.autosave.push(values as SectionValues);
+        // `baseVersion`: sobre qué versión de la sección se está escribiendo — es lo
+        // que permite decidir, al recargar, si el borrador local sigue siendo lo más
+        // nuevo (ver `resolveDraft`).
+        s.draft.push(values as SectionValues, {
+          baseVersion: sectionVersionsRef.current[s.key] ?? 0,
+        });
       });
       return unsubscribe;
     });
@@ -432,19 +386,19 @@ export default function SolicitudWizard() {
 
   // Descarta los 5 borradores locales si el expediente deja de ser editable (p. ej.
   // una acción del staff lo transicionó mientras el acudiente tenía la pestaña
-  // abierta). El autoguardado ya deja de programarse solo vía `enabled`; esto además
-  // limpia lo que ya hubiera en localStorage.
+  // abierta). Los borradores ya dejan de escribirse vía `enabled`; esto además limpia
+  // lo que ya hubiera en localStorage.
   useEffect(() => {
     if (application && !isEditable(application.status)) {
-      STEPS.forEach((s) => s.autosave.discard());
+      STEPS.forEach((s) => s.draft.discard());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [application?.status]);
 
   const toggleSection = (key: string) => {
-    // Vacía cualquier guardado pendiente en el debounce de esa sección antes de
-    // plegarla/desplegarla — no dejar autoguardado "en el aire" al alejarse.
-    STEPS.find((s) => s.key === key)?.autosave.flush();
+    // Escribe ya el borrador pendiente de esa sección (sin esperar el debounce) al
+    // plegarla/desplegarla.
+    STEPS.find((s) => s.key === key)?.draft.flush();
     setOpenSections((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -465,9 +419,12 @@ export default function SolicitudWizard() {
         setApplication(result.application);
         // Re-hidrata con lo confirmado por el servidor (limpia el estado "dirty").
         s.form.reset((result.application.data?.[s.key] as SectionValues) ?? values);
-        // El guardado manual no pasa por `push`/`save` del hook, así que el borrador
-        // local no se limpia solo: se descarta explícitamente al confirmar éxito.
-        s.autosave.discard();
+        // Ya está en el servidor: el borrador local sobra.
+        s.draft.discard();
+        // Guardar con éxito equivale a "conservar lo mío": cierra cualquier conflicto
+        // pendiente de la sección (p. ej. uno detectado al cargar un borrador local,
+        // que no pasa por un 409).
+        setVersionConflicts((prev) => ({ ...prev, [s.key]: undefined }));
         return true;
       case "version_conflict":
         openVersionConflict(s.key, result.payload);
@@ -478,7 +435,6 @@ export default function SolicitudWizard() {
         return false;
       case "state_conflict":
         setGlobalError(`${result.message} Recarga la página para continuar.`);
-        setAutosaveGloballyEnabled(false);
         setSectionErrors((prev) => ({ ...prev, [s.key]: result.message }));
         return false;
       case "network":
@@ -512,7 +468,6 @@ export default function SolicitudWizard() {
       ...activeConflictPayload.data_versions,
     };
     setVersionConflicts((prev) => ({ ...prev, [activeConflictStep.key]: undefined }));
-    setSectionAutosaveEnabled((prev) => ({ ...prev, [activeConflictStep.key]: true }));
     await saveSection(activeConflictStep);
   };
 
@@ -527,7 +482,7 @@ export default function SolicitudWizard() {
       ...activeConflictPayload.data_versions,
     };
     activeConflictStep.form.reset(serverValues);
-    activeConflictStep.autosave.discard();
+    activeConflictStep.draft.discard();
     setApplication((prev) =>
       prev
         ? {
@@ -539,15 +494,17 @@ export default function SolicitudWizard() {
     );
     setSectionErrors((prev) => ({ ...prev, [key]: null }));
     setVersionConflicts((prev) => ({ ...prev, [key]: undefined }));
-    setSectionAutosaveEnabled((prev) => ({ ...prev, [key]: true }));
   };
 
   const handleSubmit = async () => {
     setGlobalError(null);
-    // Guarda primero cualquier sección con cambios sin guardar (cada una con su propio
-    // PATCH, no un guardado global) antes de enviar la solicitud completa.
+    // Guarda primero cualquier sección con algo que el servidor no tiene (cada una con
+    // su propio PATCH, no un guardado global) antes de enviar la solicitud completa.
+    // No basta `isDirty`: el pre-llenado del acudiente no marca la sección como
+    // modificada (ver el puente RHF → borrador), pero sí debe llegar al servidor.
     for (const s of STEPS) {
-      if (s.form.formState.isDirty) {
+      const server = (application?.data?.[s.key] as SectionValues) ?? {};
+      if (s.form.formState.isDirty || !valuesMatchServer(s.form.getValues(), server)) {
         const ok = await saveSection(s);
         if (!ok) {
           setGlobalError(
@@ -565,7 +522,7 @@ export default function SolicitudWizard() {
       });
       if (res.ok) {
         // Envío completo confirmado: ya no hace falta ningún borrador local.
-        STEPS.forEach((s) => s.autosave.discard());
+        STEPS.forEach((s) => s.draft.discard());
         navigate(`/admisiones/${code}`, { replace: true });
       } else {
         const data = await res.json().catch(() => ({}));
@@ -592,15 +549,7 @@ export default function SolicitudWizard() {
    *   (`application.data[key]` no vacío) y el formulario no tiene cambios sin guardar
    *   (`formState.isDirty === false`).
    * - "incomplete": todo lo demás — nunca se guardó, o hay ediciones locales
-   *   pendientes de guardar.
-   *
-   * Sin cambios respecto al Paso 3: el autoguardado (Paso 5) actualiza
-   * `application.data`/`data_versions` en éxito pero deliberadamente NO llama
-   * `form.reset()` (ver `makeAutosave`), así que `isDirty` sigue reflejando "hay
-   * cambios que el usuario no confirmó explícitamente" incluso si ya viajaron al
-   * servidor en segundo plano. El indicador de autoguardado (`AutosaveIndicator`) es
-   * el que informa de eso; el de la tarjeta sigue siendo la marca de "acción
-   * explícita completada".
+   *   pendientes de guardar (que viven solo en el borrador local).
    */
   const sectionStatus = (s: Step): SubSectionStatus | undefined => {
     if (sectionErrors[s.key] || Object.keys(s.form.formState.errors).length > 0) {
@@ -696,6 +645,34 @@ export default function SolicitudWizard() {
         </div>
       )}
 
+      {restoredSections.length > 0 && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-lg border border-info/25 bg-info/5 p-4 text-sm text-base-content/80"
+        >
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+          <span className="flex-1">
+            Tienes cambios sin guardar en{" "}
+            <strong>
+              {STEPS.filter((s) => restoredSections.includes(s.key))
+                .map((s) => s.title)
+                .join(", ")}
+            </strong>{" "}
+            que quedaron en este dispositivo. Revísalos y pulsa «Guardar sección» para
+            enviarlos.
+          </span>
+          <button
+            type="button"
+            onClick={() => setRestoredSections([])}
+            className="rounded-full p-1 text-base-content/40 transition-colors hover:bg-base-200 hover:text-base-content"
+            title="Cerrar aviso"
+            aria-label="Cerrar aviso"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Las 5 secciones, siempre presentes como tarjetas plegables — nada se oculta
           por completo como en el wizard anterior. */}
       <div className="space-y-4">
@@ -732,12 +709,17 @@ export default function SolicitudWizard() {
 
               <div className="mt-6 flex items-center justify-between gap-3 border-t border-base-300 pt-5">
                 {hasVersionConflict ? (
-                  <span className="inline-flex items-center gap-1.5 text-sm text-warning">
+                  // Reabre el modal si el usuario lo cerró con "Ahora no".
+                  <button
+                    type="button"
+                    onClick={() => setConflictModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-sm text-warning hover:underline"
+                  >
                     <AlertTriangle className="h-4 w-4" />
-                    Conflicto de versión — resuelve para seguir guardando
-                  </span>
+                    Conflicto de versión — elige qué versión conservar
+                  </button>
                 ) : (
-                  <AutosaveIndicator status={s.autosave.status} />
+                  <UnsavedIndicator dirty={s.form.formState.isDirty} />
                 )}
                 <button
                   type="button"
@@ -798,11 +780,19 @@ export default function SolicitudWizard() {
         acceptText="Conservar lo mío"
         cancelText="Ahora no"
       >
-        <p>
-          Alguien más (quizás tú, desde otro dispositivo o pestaña) guardó “
-          {activeConflictStep?.title}” mientras editabas aquí. Elige qué hacer con lo
-          que tienes escrito en esta pestaña:
-        </p>
+        {activeConflictPayload?.fromLocalDraft ? (
+          <p>
+            Tienes cambios sin guardar de “{activeConflictStep?.title}” en este
+            dispositivo, pero esa sección se guardó después desde otro lugar (quizás
+            tú, desde otro dispositivo o pestaña). Elige con cuál versión quedarte:
+          </p>
+        ) : (
+          <p>
+            Alguien más (quizás tú, desde otro dispositivo o pestaña) guardó “
+            {activeConflictStep?.title}” mientras editabas aquí. Elige qué hacer con lo
+            que tienes escrito en esta pestaña:
+          </p>
+        )}
         <ul className="list-disc space-y-1 pl-5">
           <li>
             <strong>Conservar lo mío:</strong> vuelve a guardar lo que ves aquí,

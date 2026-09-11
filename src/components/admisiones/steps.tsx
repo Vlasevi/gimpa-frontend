@@ -182,15 +182,19 @@ export function GuardiansStep({ control, register, setValue, getValues }: StepPr
     onToggle: () => setOpenSection((s) => (s === key ? null : key)),
   });
 
-  // El acudiente principal ES la cuenta: pre-llenamos una vez, si está vacío.
+  // El acudiente principal ES la cuenta: pre-llenamos una vez, si está vacío. Sin
+  // `shouldDirty` a propósito: no es algo que el usuario escribió, así que no deja la
+  // sección "con cambios sin guardar" ni crea un borrador local solo por abrir el
+  // formulario. "Enviar solicitud" igual lo guarda (compara contra el servidor, no
+  // solo `isDirty` — ver `handleSubmit` en SolicitudWizard).
   useEffect(() => {
     if (!user) return;
     const empty =
       !getValues("guardian_email") && !getValues("guardian_firstname1") && !guardianType;
     if (empty) {
-      setValue("guardian_firstname1", user.first_name ?? "", { shouldDirty: true });
-      setValue("guardian_lastname1", user.last_name ?? "", { shouldDirty: true });
-      setValue("guardian_email", user.email ?? "", { shouldDirty: true });
+      setValue("guardian_firstname1", user.first_name ?? "");
+      setValue("guardian_lastname1", user.last_name ?? "");
+      setValue("guardian_email", user.email ?? "");
     }
     // Solo al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,86 +1,84 @@
 /**
- * Autoguardado de borrador — Paso 1 del refactor de Admisiones
- * (docs/plan-admisiones-ui-rhf-acordeon.md).
+ * Autoguardado LOCAL de borrador (solo localStorage, nunca el servidor).
+ *
+ * MÉTODO ÚNICO de autoguardado de la plataforma — lo usan Admisiones
+ * (`SolicitudWizard`, un borrador por sección) y Matrículas (`MatriculasEstudiantes` +
+ * `Step3StudentData`, un borrador para todo el paso 3). No crear otro mecanismo.
+ *
+ * Decisión (2026-09-10): los formularios guardan en el servidor ÚNICAMENTE cuando el
+ * usuario lo confirma ("Guardar sección" / "Enviar solicitud" en Admisiones,
+ * "Siguiente" del paso 3 en Matrículas). Lo que escribe mientras tanto vive solo en
+ * este navegador, para no perderlo si recarga, cierra la pestaña o se queda sin red.
+ * Antes Admisiones hacía un PATCH con debounce de ~3s y Matrículas un POST a
+ * `save-student-data` a los 700ms; se eliminaron porque:
+ * - "Guardado en el servidor" y "sección completa" significaban cosas distintas (el
+ *   autoguardado subía datos, pero la tarjeta seguía "incompleta" hasta el botón).
+ * - Generaba bugs propios: reintentos que no reintentaban, conflictos de versión de la
+ *   pestaña contra sí misma (autoguardado en vuelo + botón), y PATCH disparados por
+ *   el pre-llenado sin que el usuario escribiera nada.
+ * Costo aceptado: lo no confirmado no viaja a otro dispositivo, y se pierde si se
+ * borran los datos del navegador.
  *
  * AGNÓSTICO AL MOTOR DE FORMULARIOS a propósito: no importa `react-hook-form` ni sabe
- * que existe Admisiones. Matrículas sigue con `useState` hoy y adoptará este mismo
- * hook más adelante (fuera de este plan) — si el hook conociera RHF, esa migración
- * quedaría bloqueada.
+ * que existe Admisiones.
  *
- * Una sola fuente de verdad local (localStorage con timestamp) y un solo camino a
- * backend (`save`). Esto es deliberado: el autoguardado ACTUAL de Matrículas
- * (`Step3StudentData.tsx`) tiene un defecto de arquitectura documentado en el Paso 0
- * (docs/paso0-informe-admisiones.md §10.2) — usa un segundo mecanismo de localStorage
- * (`enrollment_step3_<id>`) no sincronizado con su autoguardado a backend, y el envío
- * final lee de ese segundo mecanismo, no del primero. Este hook nuevo NO replica ese
- * defecto.
+ * API imperativa (no provoca re-renders en quien la usa):
  *
- * API imperativa (no fuerza re-renders en quien la usa, salvo por `status`):
+ *   const { push, flush, discard, peekDraft } = useAutosaveDraft({ key, enabled });
  *
- *   const { status, push, flush, discard, hydrate } = useAutosaveDraft({ key, save, enabled });
+ * - `push(value, meta?)`: registra un valor nuevo y programa su escritura en
+ *   localStorage con debounce (~500ms; cada llamada reinicia el temporizador). `meta`
+ *   es un dato OPACO para el hook (se guarda tal cual junto al borrador): el
+ *   consumidor lo usa al volver para decidir qué hacer con el borrador (ver
+ *   `peekDraft`).
+ * - `flush()`: escribe de inmediato lo pendiente. El hook ya lo llama solo al
+ *   desmontar y en `beforeunload` (es síncrono: alcanza a escribir antes de que la
+ *   página se descargue).
+ * - `discard()`: borra el borrador y cancela lo pendiente. Llamarlo cuando el dato ya
+ *   se confirmó en el servidor, o cuando deja de tener sentido (expediente enviado).
+ * - `peekDraft()`: lee el borrador (`{value, updatedAt, meta}`) o `null`. El hook NO
+ *   decide si el borrador gana sobre el servidor: esa comparación depende del dominio
+ *   (Admisiones guarda en `meta` la versión de la sección y la compara con
+ *   `data_versions` del backend — no fechas, que dependen del reloj del navegador).
+ * - `enabled = false` apaga `push`/`flush` (expediente no editable, sin permisos).
  *
- * - `push(value)`: registra un valor nuevo. Programa una escritura a localStorage con
- *   debounce corto (~500ms, con timestamp) y programa `save(value)` con debounce largo
- *   (~3s de inactividad). Cada llamada reinicia ambos temporizadores (debounce
- *   estándar).
- * - `flush()`: dispara de inmediato cualquier escritura local y guardado remoto
- *   pendientes. El hook ya lo llama solo en su propio cleanup (desmontaje) y en
- *   `beforeunload` — no hace falta que el componente que lo usa recuerde cablear
- *   ninguno de esos dos casos. Sigue expuesto porque un consumidor con lógica propia
- *   (p. ej. "guardar ya" al cambiar de sección sin desmontar) puede necesitar
- *   dispararlo a mano.
- * - `discard()`: borra el borrador local explícitamente (no toca el servidor) y
- *   cancela cualquier guardado pendiente.
- * - `status`: "idle" | "saving" | "saved" | "error", para un indicador visible.
- * - `hydrate(serverValue, serverUpdatedAt)`: función síncrona (no dispara efectos ni
- *   re-renders) que decide qué valor usar al montar. Devuelve el borrador local SOLO
- *   si existe y su timestamp es estrictamente posterior a `serverUpdatedAt`; en
- *   cualquier otro caso (sin borrador, sin timestamp del servidor para comparar,
- *   timestamp inválido, o servidor igual o más reciente) devuelve `serverValue`. No
- *   estaba en la firma imperativa mínima del plan, pero el contrato de hidratación que
- *   el plan sí exige ("expone el borrador local SOLO si su timestamp es posterior al
- *   del dato del servidor") no puede cumplirse sin exponer algo que compare ambos
- *   timestamps — se documenta aquí como decisión explícita.
- * - `enabled = false` apaga todo: `push`/`flush` no hacen nada, no se agenda ningún
- *   timer. Pensado para expedientes no editables o sin permisos de escritura.
+ * Todas las claves se guardan con el prefijo `DRAFT_KEY_PREFIX`, para que
+ * `clearAllDrafts()` pueda borrarlas todas al cerrar sesión: el formulario de
+ * admisiones incluye datos de salud, y en un computador compartido no deben quedar en
+ * el navegador del siguiente usuario.
  *
- * Resiliencia de localStorage: todo acceso (get/set/remove) va en try/catch. Si
- * localStorage lanza (modo privado, cuota llena, etc.) el hook degrada en silencio a
- * "solo guardado remoto" — nunca rompe la escritura del formulario.
- *
- * Un `save` fallido nunca bloquea la escritura ni descarta el borrador local: solo
- * pasa `status` a "error". El borrador local se limpia únicamente cuando `save`
- * confirma éxito.
+ * Resiliencia: todo acceso a localStorage va en try/catch. Si lanza (modo privado,
+ * cuota llena) el hook degrada en silencio a "sin borrador" — nunca rompe el formulario.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
-export type AutosaveStatus = "idle" | "saving" | "saved" | "error";
+export const DRAFT_KEY_PREFIX = "gimpa_draft:";
+// Prefijos de mecanismos anteriores (el guardado remoto de Admisiones y la copia del
+// paso 3 de Matrículas). Solo se usan para limpiar restos viejos en `clearAllDrafts`.
+const LEGACY_DRAFT_KEY_PREFIXES = ["gimpa_admision_draft_", "enrollment_step3_"];
 
-interface StoredDraft<T> {
+/** Borrador tal como queda en localStorage. `meta` es lo que el consumidor pasó a `push`. */
+export interface StoredDraft<T, M = unknown> {
   value: T;
   updatedAt: number;
+  meta?: M;
 }
 
-export interface UseAutosaveDraftOptions<T> {
-  /** Clave única de localStorage para este borrador (p. ej. por expediente + sección). */
+export interface UseAutosaveDraftOptions {
+  /** Clave única del borrador (p. ej. expediente + sección). Se le antepone el prefijo. */
   key: string;
-  /** Persiste `value` en el servidor. Debe resolver en éxito o rechazar/lanzar en error. */
-  save: (value: T) => Promise<unknown>;
-  /** Si es `false`, apaga todo autoguardado (local y remoto) sin romper la API. */
+  /** Si es `false`, `push`/`flush` no hacen nada. */
   enabled?: boolean;
-  /** Debounce corto antes de escribir a localStorage (ms). Default 500. */
-  localDebounceMs?: number;
-  /** Debounce largo de inactividad antes de llamar a `save` (ms). Default 3000. */
-  remoteDebounceMs?: number;
+  /** Debounce antes de escribir en localStorage (ms). Default 500. */
+  debounceMs?: number;
 }
 
-export interface UseAutosaveDraftResult<T> {
-  status: AutosaveStatus;
-  push: (value: T) => void;
+export interface UseAutosaveDraftResult<T, M = unknown> {
+  push: (value: T, meta?: M) => void;
   flush: () => void;
   discard: () => void;
-  hydrate: (serverValue: T, serverUpdatedAt?: number | string | null) => T;
+  peekDraft: () => StoredDraft<T, M> | null;
 }
 
 function safeGetItem(key: string): string | null {
@@ -95,7 +93,7 @@ function safeSetItem(key: string, value: string): void {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // Modo privado, cuota llena, etc. — degradamos a solo-servidor en silencio.
+    // Modo privado, cuota llena, etc. — degradamos a "sin borrador" en silencio.
   }
 }
 
@@ -107,11 +105,11 @@ function safeRemoveItem(key: string): void {
   }
 }
 
-function readDraft<T>(key: string): StoredDraft<T> | null {
-  const raw = safeGetItem(key);
+function readDraft<T, M>(storageKey: string): StoredDraft<T, M> | null {
+  const raw = safeGetItem(storageKey);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as StoredDraft<T>;
+    const parsed = JSON.parse(raw) as StoredDraft<T, M>;
     if (!parsed || typeof parsed.updatedAt !== "number") return null;
     return parsed;
   } catch {
@@ -119,162 +117,190 @@ function readDraft<T>(key: string): StoredDraft<T> | null {
   }
 }
 
-function normalizeTimestamp(value?: number | string | null): number | null {
-  if (value === null || value === undefined) return null;
-  const t = typeof value === "number" ? value : Date.parse(value);
-  return Number.isNaN(t) ? null : t;
+// ------------------------------------------------------------------------------------
+// Qué hacer con un borrador al volver — lógica COMPARTIDA por todos los formularios que
+// usan este hook (Admisiones y Matrículas), para que ambos resuelvan igual.
+// ------------------------------------------------------------------------------------
+
+/** Igualdad estructural de valores JSON (sin importar el orden de las claves). */
+export function jsonEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  return aKeys.every((k) =>
+    jsonEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+  );
 }
 
-export function useAutosaveDraft<T>({
-  key,
-  save,
-  enabled = true,
-  localDebounceMs = 500,
-  remoteDebounceMs = 3000,
-}: UseAutosaveDraftOptions<T>): UseAutosaveDraftResult<T> {
-  const [status, setStatus] = useState<AutosaveStatus>("idle");
+const isBlank = (v: unknown) =>
+  v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
-  // Refs "siempre al día": permiten que push/flush/runSave (estables vía useCallback)
-  // lean el valor más reciente sin tener que reconstruirse en cada render.
-  const keyRef = useRef(key);
-  const saveRef = useRef(save);
+/** ¿Todo lo de `values` (borrador o formulario) ya está en `server`? Compara clave por
+ * clave de primer nivel. Un campo vacío que el servidor no tiene cuenta como igual: es
+ * un campo que se registró en el formulario pero nunca se llenó. */
+export function valuesMatchServer(
+  values: Record<string, unknown>,
+  server: Record<string, unknown>,
+): boolean {
+  return Object.entries(values).every(([k, v]) =>
+    k in server ? jsonEqual(v, server[k]) : isBlank(v),
+  );
+}
+
+/** Huella corta y estable de un valor JSON (orden de claves normalizado, hash FNV-1a).
+ * Para formularios cuyo backend no expone un contador de versión: se guarda en `meta`
+ * la huella de lo que había en el servidor al escribir el borrador. */
+export function fingerprint(value: unknown): string {
+  const stable = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(stable);
+    if (v && typeof v === "object") {
+      return Object.fromEntries(
+        Object.keys(v as Record<string, unknown>)
+          .sort()
+          .map((k) => [k, stable((v as Record<string, unknown>)[k])]),
+      );
+    }
+    return v;
+  };
+  const text = JSON.stringify(stable(value)) ?? "";
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+export type DraftResolution = "none" | "stale" | "restore" | "conflict";
+
+/**
+ * Qué hacer al cargar con un borrador local. El borrador existe mientras haya cambios
+ * que el usuario no guardó (quien usa el hook lo descarta al guardar con éxito).
+ * - "none":     no hay borrador.
+ * - "stale":    lo del borrador ya está en el servidor → descartar.
+ * - "restore":  el servidor no cambió desde que se escribió el borrador
+ *               (`isSameBase(meta)`) → el borrador es lo más nuevo, se restaura.
+ * - "conflict": el servidor cambió (se guardó desde otra pestaña/dispositivo) y además
+ *               difiere del borrador → que el usuario elija. También cae aquí un
+ *               borrador sin `meta` (no hay forma de saber cuál es más nuevo).
+ *
+ * `isSameBase` depende del backend: Admisiones compara la versión de la sección
+ * (`data_versions`); Matrículas, la `fingerprint` de `user_data`.
+ */
+export function resolveDraft<T extends Record<string, unknown>, M>(
+  draft: StoredDraft<T, M> | null,
+  server: Record<string, unknown>,
+  isSameBase: (meta: M | undefined) => boolean,
+): DraftResolution {
+  if (!draft) return "none";
+  if (valuesMatchServer(draft.value, server)) return "stale";
+  if (draft.meta !== undefined && isSameBase(draft.meta)) return "restore";
+  return "conflict";
+}
+
+/** Borra todos los borradores de este navegador (cerrar sesión). */
+export function clearAllDrafts(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (
+        k &&
+        (k.startsWith(DRAFT_KEY_PREFIX) ||
+          LEGACY_DRAFT_KEY_PREFIXES.some((p) => k.startsWith(p)))
+      ) {
+        keys.push(k);
+      }
+    }
+    keys.forEach(safeRemoveItem);
+  } catch {
+    // localStorage inaccesible: no hay nada que limpiar.
+  }
+}
+
+export function useAutosaveDraft<T, M = unknown>({
+  key,
+  enabled = true,
+  debounceMs = 500,
+}: UseAutosaveDraftOptions): UseAutosaveDraftResult<T, M> {
+  // Refs "siempre al día": push/flush (estables vía useCallback) leen el valor más
+  // reciente sin reconstruirse en cada render.
+  const storageKeyRef = useRef(DRAFT_KEY_PREFIX + key);
   const enabledRef = useRef(enabled);
-  keyRef.current = key;
-  saveRef.current = save;
+  storageKeyRef.current = DRAFT_KEY_PREFIX + key;
   enabledRef.current = enabled;
 
-  const latestValueRef = useRef<T | undefined>(undefined);
-  const hasPendingLocalRef = useRef(false);
-  const hasPendingRemoteRef = useRef(false);
-  const localTimerRef = useRef<number | null>(null);
-  const remoteTimerRef = useRef<number | null>(null);
-  const mountedRef = useRef(true);
-  // Se incrementa en discard() para que un `save` en vuelo, resuelto después de
-  // descartar el borrador, no reviva el estado ni el localStorage que ya se limpiaron.
-  const epochRef = useRef(0);
+  const pendingRef = useRef<{ value: T; meta?: M } | null>(null);
+  const timerRef = useRef<number | null>(null);
 
-  const clearLocalTimer = useCallback(() => {
-    if (localTimerRef.current !== null) {
-      window.clearTimeout(localTimerRef.current);
-      localTimerRef.current = null;
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
   }, []);
 
-  const clearRemoteTimer = useCallback(() => {
-    if (remoteTimerRef.current !== null) {
-      window.clearTimeout(remoteTimerRef.current);
-      remoteTimerRef.current = null;
-    }
-  }, []);
-
-  const writeLocal = useCallback(() => {
-    clearLocalTimer();
-    if (!hasPendingLocalRef.current) return;
-    hasPendingLocalRef.current = false;
-    const value = latestValueRef.current;
-    if (value === undefined) return;
-    const draft: StoredDraft<T> = { value, updatedAt: Date.now() };
-    safeSetItem(keyRef.current, JSON.stringify(draft));
-  }, [clearLocalTimer]);
-
-  const runSave = useCallback(() => {
-    clearRemoteTimer();
-    if (!hasPendingRemoteRef.current) return;
-    const value = latestValueRef.current;
-    if (value === undefined) return;
-    hasPendingRemoteRef.current = false;
-    const epoch = epochRef.current;
-
-    setStatus("saving");
-    Promise.resolve()
-      .then(() => saveRef.current(value))
-      .then(() => {
-        if (!mountedRef.current || epoch !== epochRef.current) return;
-        // El servidor confirmó: el borrador local ya no hace falta para este valor.
-        clearLocalTimer();
-        hasPendingLocalRef.current = false;
-        safeRemoveItem(keyRef.current);
-        setStatus("saved");
-      })
-      .catch(() => {
-        if (!mountedRef.current || epoch !== epochRef.current) return;
-        // Fallo de red/servidor: NUNCA bloquea la escritura ni descarta el borrador
-        // local. Solo se refleja en `status` para el indicador visible.
-        setStatus("error");
-      });
-  }, [clearLocalTimer, clearRemoteTimer]);
+  const writePending = useCallback(() => {
+    clearTimer();
+    const pending = pendingRef.current;
+    if (!pending) return;
+    pendingRef.current = null;
+    const draft: StoredDraft<T, M> = {
+      value: pending.value,
+      updatedAt: Date.now(),
+      meta: pending.meta,
+    };
+    safeSetItem(storageKeyRef.current, JSON.stringify(draft));
+  }, [clearTimer]);
 
   const push = useCallback(
-    (value: T) => {
+    (value: T, meta?: M) => {
       if (!enabledRef.current) return;
-      latestValueRef.current = value;
-      hasPendingLocalRef.current = true;
-      hasPendingRemoteRef.current = true;
-
-      clearLocalTimer();
-      localTimerRef.current = window.setTimeout(writeLocal, localDebounceMs);
-
-      clearRemoteTimer();
-      remoteTimerRef.current = window.setTimeout(runSave, remoteDebounceMs);
+      pendingRef.current = { value, meta };
+      clearTimer();
+      timerRef.current = window.setTimeout(writePending, debounceMs);
     },
-    [clearLocalTimer, clearRemoteTimer, localDebounceMs, remoteDebounceMs, runSave, writeLocal],
+    [clearTimer, debounceMs, writePending],
   );
 
   const flush = useCallback(() => {
     if (!enabledRef.current) return;
-    writeLocal();
-    runSave();
-  }, [runSave, writeLocal]);
+    writePending();
+  }, [writePending]);
 
   const discard = useCallback(() => {
-    epochRef.current += 1;
-    clearLocalTimer();
-    clearRemoteTimer();
-    hasPendingLocalRef.current = false;
-    hasPendingRemoteRef.current = false;
-    latestValueRef.current = undefined;
-    safeRemoveItem(keyRef.current);
-    setStatus("idle");
-  }, [clearLocalTimer, clearRemoteTimer]);
+    clearTimer();
+    pendingRef.current = null;
+    safeRemoveItem(storageKeyRef.current);
+  }, [clearTimer]);
 
-  const hydrate = useCallback(
-    (serverValue: T, serverUpdatedAt?: number | string | null): T => {
-      const draft = readDraft<T>(keyRef.current);
-      if (!draft) return serverValue;
-      const serverTime = normalizeTimestamp(serverUpdatedAt);
-      const localIsNewer = serverTime !== null && draft.updatedAt > serverTime;
-      return localIsNewer ? draft.value : serverValue;
-    },
-    [],
-  );
+  const peekDraft = useCallback(() => readDraft<T, M>(storageKeyRef.current), []);
 
-  // Apagar todo si `enabled` pasa a false a mitad de camino (expediente que deja de
-  // ser editable, permisos revocados, etc.) — sin descartar el borrador ya escrito.
+  // Si `enabled` pasa a false a mitad de camino, cancela lo pendiente (sin borrar el
+  // borrador ya escrito).
   useEffect(() => {
     if (!enabled) {
-      clearLocalTimer();
-      clearRemoteTimer();
+      clearTimer();
+      pendingRef.current = null;
     }
-  }, [enabled, clearLocalTimer, clearRemoteTimer]);
+  }, [enabled, clearTimer]);
 
-  // flush() obligatorio en dos momentos (contrato del plan): al desmontar el
-  // componente que usa el hook, y en `beforeunload`. Se cablean los dos aquí adentro
-  // para que ningún consumidor tenga que acordarse de hacerlo por su cuenta.
+  // Escribe lo pendiente al desmontar y al cerrar/recargar la página.
   useEffect(() => {
-    mountedRef.current = true;
     const onBeforeUnload = () => flush();
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
-      mountedRef.current = false;
       window.removeEventListener("beforeunload", onBeforeUnload);
       flush();
-      clearLocalTimer();
-      clearRemoteTimer();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { status, push, flush, discard, hydrate };
+  return { push, flush, discard, peekDraft };
 }
 
 export default useAutosaveDraft;

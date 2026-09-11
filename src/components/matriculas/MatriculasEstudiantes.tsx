@@ -1,5 +1,5 @@
 // components/matriculas/MatriculasEstudiantes.tsx
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { Step1Verification } from "./Step1Verification";
 import { Step2GradeSelection } from "./Step2GradeSelection";
 import { Step3StudentData } from "./Step3StudentData";
@@ -12,6 +12,14 @@ import { EnrollmentBlockedMessage } from "./EnrollmentBlockedMessage";
 import { useAuth } from "@/components/Login/loginLogic";
 import { apiUrl, API_ENDPOINTS, apiFetch } from "@/utils/api";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+
+/** `meta` del borrador del paso 3: huella (`fingerprint`) del `user_data` que tenía el
+ * servidor cuando el usuario empezó a escribir. El backend de matrículas no expone un
+ * contador de versión, así que se compara esto al volver (ver `resolveDraft`). */
+export interface Step3DraftMeta {
+  baseHash: string;
+}
 
 // Tipado de la respuesta del backend (estructura optimizada)
 export interface EnrollmentResponse {
@@ -68,6 +76,30 @@ export const MatriculasEstudiantes = () => {
   const lastGeneratedHashRef = useRef<string | null>(null);
   const { user } = useAuth();
 
+  // --- Guardado del paso 3 (mismo método que Admisiones) ---
+  // - Mientras escribe: borrador SOLO local (`useAutosaveDraft`), nunca el servidor.
+  // - "Siguiente" del paso 3 es el guardado explícito: `generate-unsigned` persiste
+  //   `user_data` en el backend (enrollment/views/pdfs.py) — ahí se descarta el borrador.
+  const enrollmentId = enrollmentInfo?.actual_enrollment?.id ?? null;
+  const step3Draft = useAutosaveDraft<Record<string, unknown>, Step3DraftMeta>({
+    key: `matricula:${enrollmentId}:student_data`,
+    enabled: enrollmentId !== null,
+  });
+  // Lo último que el servidor tiene de `user_data`. Arranca con `existing_data` y se
+  // actualiza cuando "Siguiente" lo guarda — así, si el usuario vuelve al paso 3, se
+  // precarga lo recién guardado y no el `existing_data` viejo del primer GET.
+  const [savedUserDataOverride, setSavedUserDataOverride] =
+    useState<Record<string, unknown> | null>(null);
+  const savedUserData = useMemo<Record<string, unknown>>(
+    () => savedUserDataOverride ?? enrollmentInfo?.eligibility?.existing_data ?? {},
+    [savedUserDataOverride, enrollmentInfo],
+  );
+  // Valores del paso 3 tal como quedaron al pulsar "Siguiente". Los pasos 5 y 6 los leen
+  // (qué documentos pedir, y el `user_data` del envío final). Antes se pasaban por una
+  // copia en localStorage (`enrollment_step3_<id>`), un segundo mecanismo paralelo al
+  // autoguardado y con datos de salud que quedaban en el navegador indefinidamente.
+  const [step3Data, setStep3Data] = useState<Record<string, unknown> | null>(null);
+
   const nextStep = () => setCurrentStep((prev) => prev + 1);
   const prevStep = () => setCurrentStep((prev) => prev - 1);
 
@@ -82,15 +114,17 @@ export const MatriculasEstudiantes = () => {
   const base64ToUint8Array = (b64: string) =>
     Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-  const handleStep3Next = async () => {
-    const enrollmentId = enrollmentInfo?.actual_enrollment?.id;
+  const handleStep3Next = async (values: Record<string, unknown>) => {
     if (!enrollmentId) return;
+    setStep3Data(values);
 
     const currentHash = JSON.stringify(formData, Object.keys(formData).sort());
     if (
       lastGeneratedHashRef.current === currentHash &&
       unsignedPdfs.contrato !== null
     ) {
+      // Nada cambió desde el último guardado: el servidor ya lo tiene.
+      step3Draft.discard();
       nextStep();
       return;
     }
@@ -115,6 +149,9 @@ export const MatriculasEstudiantes = () => {
       });
       setSignedPdfs({ contrato: null, pagare: null, hoja_matricula: null });
       lastGeneratedHashRef.current = currentHash;
+      // `generate-unsigned` ya guardó `user_data`: el borrador local sobra.
+      setSavedUserDataOverride(formData);
+      step3Draft.discard();
       nextStep();
     } catch (e) {
       console.error("Error generando PDFs sin firma:", e);
@@ -246,10 +283,10 @@ export const MatriculasEstudiantes = () => {
                       uploadedFiles={uploadedFiles}
                       updateUploadedFiles={updateUploadedFiles}
                       enrollmentInfo={enrollmentInfo}
-                      enrollmentId={
-                        enrollmentInfo.actual_enrollment?.id ?? null
-                      }
+                      enrollmentId={enrollmentId}
                       preloadedDocuments={documents}
+                      draft={step3Draft}
+                      serverData={savedUserData}
                     />
                   )}
 
@@ -283,6 +320,7 @@ export const MatriculasEstudiantes = () => {
                       updateUploadedFiles={updateUploadedFiles}
                       enrollmentInfo={enrollmentInfo}
                       preloadedDocuments={documents}
+                      step3Data={step3Data}
                     />
                   )}
 
@@ -290,6 +328,7 @@ export const MatriculasEstudiantes = () => {
                     <Step6Confirmation
                       back={prevStep}
                       data={formData}
+                      step3Data={step3Data}
                       uploadedFiles={uploadedFiles}
                       enrollmentInfo={enrollmentInfo}
                       preloadedDocuments={documents}
