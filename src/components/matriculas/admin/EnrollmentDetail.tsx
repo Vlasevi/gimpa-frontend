@@ -65,7 +65,7 @@ const REVIEW_MESSAGES: Partial<Record<DocumentStatus, string>> = {
 const TAB_CLASS =
   "rounded-lg px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=inactive]:text-base-content/60 data-[state=inactive]:hover:bg-base-200";
 
-/** Rechazar / Cancelar / Inactivar: con contorno, como "Devolver para corrección". */
+/** Rechazar / Cancelar / Inactivar: con contorno, como "Solicitar corrección". */
 const dangerBtnClass = "btn btn-outline btn-error gap-2";
 
 interface EnrollmentDetailProps {
@@ -375,8 +375,8 @@ export function EnrollmentDetail({
               {can("return") &&
                 footerButton(
                   "return",
-                  "Devolver para corrección",
-                  "Devolviendo…",
+                  "Solicitar corrección",
+                  "Solicitando…",
                   Undo2,
                   "btn btn-outline btn-warning gap-2",
                   () => setDialog("return"),
@@ -405,7 +405,7 @@ export function EnrollmentDetail({
               runAction(
                 "return",
                 () => enrollmentApi.returnForCorrection(detail.id, comment, rejected),
-                "Matrícula devuelta para corrección",
+                "Corrección solicitada",
               )
             }
           />

@@ -1,4 +1,4 @@
-/** Pestaña "Correcciones": cada devolución con su comentario, los documentos que se
+/** Pestaña "Correcciones": cada corrección solicitada con su comentario, los documentos que se
  * pidieron corregir y si el estudiante ya reenvió. La más reciente primero. */
 
 import type { EnrollmentDetail } from "@/components/matriculas/enrollmentApi";
@@ -15,7 +15,7 @@ export function CorrectionsTab({ detail }: { detail: EnrollmentDetail }) {
   if (!detail.corrections.length) {
     return (
       <p className="py-8 text-center text-sm text-base-content/60">
-        Esta matrícula no se ha devuelto para corrección.
+        No se han solicitado correcciones en esta matrícula.
       </p>
     );
   }
@@ -31,7 +31,7 @@ export function CorrectionsTab({ detail }: { detail: EnrollmentDetail }) {
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <p className={itemTitleClass}>
-                Devuelta el <time dateTime={correction.requested_at}>{formatDateTime(correction.requested_at)}</time>
+                Solicitada el <time dateTime={correction.requested_at}>{formatDateTime(correction.requested_at)}</time>
               </p>
               {correction.requested_by && <p className={metaTextClass}>por {correction.requested_by}</p>}
             </div>

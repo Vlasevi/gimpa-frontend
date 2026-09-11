@@ -1,5 +1,5 @@
 /**
- * Diálogos de las acciones del staff sobre una matrícula (devolver, rechazar, cancelar,
+ * Diálogos de las acciones del staff sobre una matrícula (solicitar corrección, rechazar, cancelar,
  * inactivar, cambiar grado). Todos comparten `ActionDialog`: modal de 3 franjas, título
  * que nombra al diálogo, campos obligatorios con etiqueta visible y botón de envío con
  * `Loader2` + gerundio, deshabilitado mientras el formulario no es válido.
@@ -240,7 +240,7 @@ export function ReasonDialog({
   );
 }
 
-// --------------------------------------------------------------------- Devolver
+// --------------------------------------------------------------------- Solicitar corrección
 
 export function ReturnDialog({
   isOpen,
@@ -287,10 +287,10 @@ export function ReturnDialog({
     <ActionDialog
       isOpen={isOpen}
       onClose={onClose}
-      title="Devolver para corrección"
+      title="Solicitar corrección"
       description="El estudiante vuelve a tener la matrícula para corregirla y la reenvía. El acudiente recibe un correo con tu comentario y los documentos marcados."
-      submitLabel="Devolver matrícula"
-      pendingLabel="Devolviendo…"
+      submitLabel="Solicitar corrección"
+      pendingLabel="Solicitando…"
       submitClassName="btn btn-warning gap-2"
       pending={pending}
       canSubmit={canSubmit}

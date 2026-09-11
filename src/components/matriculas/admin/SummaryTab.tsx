@@ -2,7 +2,7 @@
  * Pestaña "Resumen" del detalle: el historial de la matrícula como línea de tiempo, con el
  * paso que sigue al final. Los documentos y los datos tienen su propia pestaña.
  *
- * Con varias devoluciones se ve cada vuelta: enviada → devuelta → reenviada → devuelta…
+ * Con varias correcciones se ve cada vuelta: enviada → corrección solicitada → reenviada → …
  * Cada corrección guarda el envío que devolvió (`submitted_at`), porque la matrícula solo
  * guarda el último.
  */
@@ -46,7 +46,7 @@ interface HistoryEvent {
   title: string;
   by?: string | null;
   note?: string | null;
-  /** Documentos que se pidieron corregir en una devolución. */
+  /** Documentos que se pidieron corregir en una corrección. */
   documents?: string[];
   tone: Tone;
   icon: LucideIcon;
@@ -73,7 +73,7 @@ function historyOf(detail: EnrollmentDetail): HistoryEvent[] {
     }
     events.push({
       at: correction.requested_at,
-      title: "Devuelta para corrección",
+      title: "Corrección solicitada",
       by: correction.requested_by,
       note: correction.comment,
       documents: correction.rejected_documents.map((doc) => doc.label),
@@ -121,7 +121,7 @@ function nextStep(detail: EnrollmentDetail): string | null {
     case "RETURNED":
       return "Pendiente: el estudiante corrige y reenvía.";
     case "SUBMITTED":
-      return "Pendiente: revisión de la institución (aprobar, devolver o rechazar).";
+      return "Pendiente: revisión de la institución (aprobar, solicitar corrección o rechazar).";
     case "ACTIVE":
       return detail.has_pending_documents ? "Pendiente: el estudiante sube los documentos que faltan." : null;
     default:
