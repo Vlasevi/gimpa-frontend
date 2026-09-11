@@ -315,6 +315,19 @@ export function StepSign({
         </p>
       </div>
 
+      {(enrollment.documents ?? []).some((d) => d.kind === "signed" && d.status === "REJECTED") && (
+        <div role="alert" className="alert alert-warning alert-soft text-sm">
+          <span>
+            La institución pidió volver a firmar:{" "}
+            {(enrollment.documents ?? [])
+              .filter((d) => d.kind === "signed" && d.status === "REJECTED")
+              .map((d) => `${d.label}${d.reject_reason ? ` (${d.reject_reason})` : ""}`)
+              .join(", ")}
+            .
+          </span>
+        </div>
+      )}
+
       <ol className="space-y-3" aria-label="Documentos por leer">
         {DOCS.map((d) => {
           const done = read.has(d.kind);

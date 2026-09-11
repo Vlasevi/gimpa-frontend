@@ -49,7 +49,9 @@ export function BulkRenewalDialog({ isOpen, onClose, onDone, flash, years }: Bul
 
   const changeFrom = (value: number) => {
     setFromYear(value);
-    if (toYear <= value) setToYear(value + 1);
+    // Las opciones de destino son origen + 1 y + 2: el destino se reinicia al siguiente
+    // año para que lo que se envía sea lo que se ve.
+    setToYear(value + 1);
     setPreview(null);
   };
 

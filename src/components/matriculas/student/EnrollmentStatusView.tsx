@@ -106,21 +106,37 @@ export function EnrollmentStatusView({
   }
 
   if (status === "ACTIVE") {
-    const pendingCount = enrollment.pending_documents?.length ?? 0;
+    // Se cuenta desde los documentos (no desde `pending_documents`), para que baje en
+    // cuanto el estudiante sube uno.
+    const family = documents.filter((d) => d.kind === "family" && d.required);
+    const pendingCount = family.filter((d) => d.status === "MISSING" || d.status === "REJECTED").length;
+    const inReviewCount = family.filter((d) => d.status === "UPLOADED").length;
     const card = (
       <StatusCard
         tone={pendingCount > 0 ? "warning" : "success"}
         icon={pendingCount > 0 ? FileWarning : CheckCircle2}
-        title={pendingCount > 0 ? "Aprobada · documentos pendientes" : "Aprobada"}
+        title={
+          pendingCount > 0
+            ? "Aprobada · documentos pendientes"
+            : inReviewCount > 0
+              ? "Aprobada · documentos en revisión"
+              : "Aprobada"
+        }
       >
-        <p>{message}</p>
+        <p>
+          {pendingCount > 0
+            ? message
+            : inReviewCount > 0
+              ? "Tu matrícula está aprobada. La institución está revisando los documentos que subiste."
+              : "Tu matrícula está aprobada."}
+        </p>
         <p className="text-base-content/60">
           {enrollment.grade.label} · año {enrollment.academic_year}
           {enrollment.approved_at && ` · aprobada el ${formatDate(enrollment.approved_at)}`}
         </p>
       </StatusCard>
     );
-    if (pendingCount === 0) return card;
+    if (pendingCount === 0 && inReviewCount === 0) return card;
     return (
       <Tabs value={tab} onValueChange={setTab} className="space-y-5">
         <TabsList className="tabs tabs-border" aria-label="Matrícula">
@@ -129,13 +145,13 @@ export function EnrollmentStatusView({
           </TabsTrigger>
           <TabsTrigger value="documentos" className={`tab gap-2 ${tab === "documentos" ? "tab-active" : ""}`}>
             Documentos
-            <span className="badge badge-warning badge-sm">{pendingCount}</span>
+            {pendingCount > 0 && <span className="badge badge-warning badge-sm">{pendingCount}</span>}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="resumen" className="space-y-4">
           {card}
           <button type="button" className="btn btn-primary" onClick={() => setTab("documentos")}>
-            Subir documentos pendientes
+            {pendingCount > 0 ? "Subir documentos pendientes" : "Ver documentos"}
           </button>
         </TabsContent>
         <TabsContent value="documentos" className="space-y-4">

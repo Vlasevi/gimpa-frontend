@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./Login/loginLogic";
 import { SIDEBAR_DRAWER_ID } from "./Sidebar";
@@ -26,6 +26,7 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
   const navigate = useNavigate();
   // La URL de la foto es firmada y vence: si falla, se vuelve al ícono.
   const [photoFailed, setPhotoFailed] = useState(false);
+  useEffect(() => setPhotoFailed(false), [user?.photo_url]);
 
   const handleLogout = () => {
     // El feedback de carga lo muestra el overlay global del AuthProvider.

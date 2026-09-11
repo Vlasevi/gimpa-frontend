@@ -260,7 +260,7 @@ export function DocumentsTab({
                                 onClick={() => onReview(doc, "APPROVED")}
                               />
                             )}
-                            {canReview && doc.has_file && doc.status !== "REJECTED" && (
+                            {canReview && doc.has_file && doc.status !== "REJECTED" && !(detail.status === "ACTIVE" && doc.kind !== "family") && (
                               <IconAction
                                 title="Rechazar"
                                 label={`Rechazar ${doc.label}`}

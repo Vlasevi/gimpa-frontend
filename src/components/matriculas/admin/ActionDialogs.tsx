@@ -252,19 +252,16 @@ export function ReturnDialog({
   const [marked, setMarked] = useState<Record<string, string>>({});
   const legendId = useId();
 
-  const withFile = documents.filter((doc) => doc.has_file);
+  // Los que ya se rechazaron uno por uno van en la corrección de todas formas (el backend
+  // incluye todo lo que esté rechazado): se muestran como información, no se pueden quitar.
+  const alreadyRejected = documents.filter((doc) => doc.status === "REJECTED");
+  const withFile = documents.filter((doc) => doc.has_file && doc.status !== "REJECTED");
 
-  // Al abrir, vienen marcados los documentos que ya se rechazaron uno por uno: el
-  // backend los incluye igual en la corrección.
   useEffect(() => {
     if (!isOpen) return;
     setComment("");
-    setMarked(
-      Object.fromEntries(
-        documents.filter((doc) => doc.status === "REJECTED").map((doc) => [doc.key, doc.reject_reason ?? ""]),
-      ),
-    );
-  }, [isOpen, documents]);
+    setMarked({});
+  }, [isOpen]);
 
   const markedKeys = Object.keys(marked);
   const missingReason = markedKeys.some((key) => !marked[key].trim());
@@ -304,6 +301,20 @@ export function ReturnDialog({
         errorText="Escribe un comentario."
         autoFocus
       />
+
+      {alreadyRejected.length > 0 && (
+        <div className="rounded-lg border border-error/30 bg-error/5 px-3 py-2.5 text-sm">
+          <p className="font-medium text-base-content">Ya rechazados (se incluyen en la corrección)</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-base-content/70">
+            {alreadyRejected.map((doc) => (
+              <li key={doc.key}>
+                {doc.label}
+                {doc.reject_reason ? `: ${doc.reject_reason}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {withFile.length > 0 && (
         <fieldset className="space-y-2" aria-describedby={`${legendId}-hint`}>

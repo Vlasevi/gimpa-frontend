@@ -362,6 +362,16 @@ export function StepProfile({
                           setHasLocalChanges(true);
                         }}
                       />
+                      {(() => {
+                        const doc = enrollment.documents?.find((d) => d.key === photo.key);
+                        if (doc?.status !== "REJECTED" || photos[photo.key].file) return null;
+                        return (
+                          <p className="mt-1 text-sm text-error" role="alert">
+                            La institución rechazó esta foto{doc.reject_reason ? `: ${doc.reject_reason}` : ""}. Sube
+                            una nueva.
+                          </p>
+                        );
+                      })()}
                       {errors[`photos.${photo.key}`] && (
                         <p className="mt-1 text-xs font-medium text-error">{errors[`photos.${photo.key}`]}</p>
                       )}
