@@ -18,7 +18,7 @@ import {
 // de 3347×1000 nunca se comiteó y se perdió al sobreescribirlo durante
 // esta prueba) y componiéndolos juntos SIN el hueco antes de reescalar:
 // así el texto sí sobrevive nítido a 640px de ancho.
-import logo from "@/assets/platform-logo.png";
+import logo from "@/assets/platform-logo.svg";
 // Escudo solo (sin wordmark) — versión compacta del logo para cuando el
 // sidebar está colapsado a modo "riel de íconos" (w-14 = 56px, donde el
 // wordmark completo no cabe).
