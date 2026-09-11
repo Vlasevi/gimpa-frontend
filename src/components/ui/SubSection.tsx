@@ -27,12 +27,18 @@
  *   quien lo consuma, para que este primitivo sirva también a Matrículas sin arrastrar
  *   una decisión de grilla que no le pertenece.
  *
- * Este componente NO se ha conectado todavía a ningún consumidor (Admisiones sigue
- * usando su `SubSection` local en `guardianFields.tsx` sin cambios) — eso es un paso
- * posterior del plan.
+ * Consumidores: Admisiones (`SolicitudWizard`, `admisiones/steps.tsx`) y Matrículas
+ * (paso 3 del estudiante).
+ *
+ * Accesibilidad (hallazgo #13 de la prueba E2E de matrícula):
+ * - El contenido plegado lleva `inert`: sus campos no reciben foco con Tab ni los lee un
+ *   lector de pantalla (antes el foco entraba a campos de alto 0).
+ * - Patrón de acordeón de la WAI: el `<h3>` envuelve al `<button>` (no al revés: un
+ *   encabezado dentro de un botón no se anuncia como encabezado) y el botón apunta a su
+ *   región con `aria-controls`.
  */
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { AlertCircle, CheckCircle2, ChevronDown } from "lucide-react";
 
 export type SubSectionStatus = "complete" | "incomplete" | "error";
@@ -47,6 +53,8 @@ export interface SubSectionProps {
   /** Indicador opcional de progreso. Sin esta prop se comporta como el acordeón original. */
   status?: SubSectionStatus;
   className?: string;
+  /** Id del contenedor (p. ej. para llevar el scroll a una sección con errores). */
+  id?: string;
 }
 
 const STATUS_ICON = {
@@ -67,12 +75,17 @@ export function SubSection({
   onToggle,
   status,
   className,
+  id,
 }: SubSectionProps) {
   const showsStatusIcon = status === "complete" || status === "error";
   const StatusIcon = showsStatusIcon ? STATUS_ICON[status] : null;
+  const regionId = `${useId()}-region`;
+  const statusText =
+    status === "complete" ? "Completa" : status === "error" ? "Con datos por corregir" : undefined;
 
   return (
     <div
+      id={id}
       className={`rounded-lg border bg-base-100 shadow-sm transition-all duration-200 ease-out motion-reduce:transition-none ${
         status === "error" ? "border-error/40" : "border-base-300"
       } ${className ?? ""}`}
@@ -85,36 +98,41 @@ export function SubSection({
           `rounded-b-lg` solo cuando está CERRADO, porque ahí el botón ocupa
           visualmente el bloque completo (sin contenido debajo); abierto, la esquina
           inferior ya no es responsabilidad del botón. */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className={`flex w-full items-center justify-between gap-3 rounded-t-lg px-5 py-4 text-left transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-          open ? "" : "rounded-b-lg"
-        }`}
-      >
-        <span className="flex min-w-0 items-center gap-2.5">
-          {StatusIcon && (
-            <StatusIcon
-              className={`h-5 w-5 shrink-0 ${STATUS_TONE[status as "complete" | "error"]}`}
-              aria-hidden="true"
-            />
-          )}
-          <span className="min-w-0">
-            <h3 className="truncate font-display text-base font-semibold text-secondary">
-              {title}
-            </h3>
-            {subtitle && (
-              <p className="truncate text-sm font-normal text-base-content/60">{subtitle}</p>
-            )}
-          </span>
-        </span>
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-base-content/40 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
+      <h3 className="m-0">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={regionId}
+          className={`flex w-full items-center justify-between gap-3 rounded-t-lg px-5 py-4 text-left transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+            open ? "" : "rounded-b-lg"
           }`}
-        />
-      </button>
+        >
+          <span className="flex min-w-0 items-center gap-2.5">
+            {StatusIcon && (
+              <StatusIcon
+                className={`h-5 w-5 shrink-0 ${STATUS_TONE[status as "complete" | "error"]}`}
+                aria-hidden="true"
+              />
+            )}
+            <span className="min-w-0">
+              <span className="block truncate font-display text-base font-semibold text-secondary">
+                {title}
+                {statusText && <span className="sr-only"> ({statusText})</span>}
+              </span>
+              {subtitle && (
+                <span className="block truncate text-sm font-normal text-base-content/60">{subtitle}</span>
+              )}
+            </span>
+          </span>
+          <ChevronDown
+            className={`h-5 w-5 shrink-0 text-base-content/40 transition-transform duration-200 motion-reduce:transition-none ${
+              open ? "rotate-180" : ""
+            }`}
+            aria-hidden="true"
+          />
+        </button>
+      </h3>
 
       {/* Animación grid-rows-[0fr]/[1fr]: anima a la altura real del contenido en vez
           de a un max-height arbitrario, y evita el "salto" del mount/unmount condicional. */}
@@ -125,7 +143,15 @@ export function SubSection({
       >
         {/* `overflow-hidden` solo mientras está cerrada/colapsando — ver comentario
             equivalente en Step3StudentData.tsx (`SectionCard`), mismo bug ahí. */}
-        <div className={open ? "overflow-visible" : "overflow-hidden"}>
+        <div
+          id={regionId}
+          role="region"
+          aria-label={title}
+          className={open ? "overflow-visible" : "overflow-hidden"}
+          // `inert` (React 18 no lo tipa): la sección plegada sale del orden de foco y del
+          // árbol de accesibilidad. Abierta, el atributo no se pone.
+          {...(open ? {} : { inert: "" })}
+        >
           <div className="border-t border-base-300 p-5">{children}</div>
         </div>
       </div>

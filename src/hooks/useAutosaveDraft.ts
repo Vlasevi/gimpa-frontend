@@ -2,12 +2,12 @@
  * Autoguardado LOCAL de borrador (solo localStorage, nunca el servidor).
  *
  * MÉTODO ÚNICO de autoguardado de la plataforma — lo usan Admisiones
- * (`SolicitudWizard`, un borrador por sección) y Matrículas (`MatriculasEstudiantes` +
- * `Step3StudentData`, un borrador para todo el paso 3). No crear otro mecanismo.
+ * (`SolicitudWizard`, un borrador por sección) y Matrículas (`student/StepProfile`, un
+ * borrador para toda la ficha del paso 3). No crear otro mecanismo.
  *
  * Decisión (2026-09-10): los formularios guardan en el servidor ÚNICAMENTE cuando el
  * usuario lo confirma ("Guardar sección" / "Enviar solicitud" en Admisiones,
- * "Siguiente" del paso 3 en Matrículas). Lo que escribe mientras tanto vive solo en
+ * "Guardar y continuar" del paso 3 en Matrículas). Lo que escribe mientras tanto vive solo en
  * este navegador, para no perderlo si recarga, cierra la pestaña o se queda sin red.
  * Antes Admisiones hacía un PATCH con debounce de ~3s y Matrículas un POST a
  * `save-student-data` a los 700ms; se eliminaron porque:
@@ -189,7 +189,7 @@ export type DraftResolution = "none" | "stale" | "restore" | "conflict";
  *               borrador sin `meta` (no hay forma de saber cuál es más nuevo).
  *
  * `isSameBase` depende del backend: Admisiones compara la versión de la sección
- * (`data_versions`); Matrículas, la `fingerprint` de `user_data`.
+ * (`data_versions`); Matrículas, la `fingerprint` de la ficha (`enrollment.data`).
  */
 export function resolveDraft<T extends Record<string, unknown>, M>(
   draft: StoredDraft<T, M> | null,

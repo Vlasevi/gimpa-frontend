@@ -2,8 +2,8 @@
  * `FIELD_REGISTRY` (type -> componente) + `<SchemaField>` (resuelve un único
  * `FieldDescriptor`) + `<SchemaSection>` (resuelve una lista completa, informe §4).
  *
- * Sin consumidores todavía (Paso 1 = solo fundación) — ni Admisiones ni Matrículas usan
- * esto aún, eso es el Paso 2/4 de `docs/plan-schema-driven-fields.md`.
+ * Consumidores: Admisiones (`steps.tsx`, `guardianFields.tsx`) y Matrículas (paso 3).
+ * Los errores por campo llegan por contexto (`FieldErrorsProvider`, `./fieldErrors`).
  */
 
 import { useMemo, type ComponentType } from "react";
@@ -62,6 +62,18 @@ export interface SchemaFieldProps {
   /** Notifica un cambio en un campo "photo"/"file" (archivo nuevo o quitado) — el padre
    * decide dónde persistir `photoValues` y cuándo subir el archivo (informe §3.2/§3.3). */
   onPhotoChange?: (dataKey: string, next: PhotoFieldValue) => void;
+  /** Ayuda que reemplaza la del descriptor (p. ej. "Tomado de tu cuenta de Microsoft"). */
+  hint?: string;
+}
+
+/** Hoy (AAAA-MM-DD) en hora de Colombia, para `max: "today"`. */
+function todayInBogota(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 // ---------------------------------------------------------------- Adaptadores
@@ -85,6 +97,9 @@ function TextTypeField(props: SchemaFieldProps) {
           full={d.full}
           disabled={props.disabled}
           required={props.required}
+          hint={props.hint ?? d.hint}
+          min={d.min}
+          max={d.max === "today" ? todayInBogota() : d.max}
         />
       );
     default:
@@ -106,6 +121,7 @@ function TextAreaTypeField(props: SchemaFieldProps) {
       disabled={props.disabled}
       required={props.required}
       rows={d.rows}
+      hint={props.hint ?? d.hint}
     />
   );
 }
@@ -123,6 +139,7 @@ function SelectTypeField(props: SchemaFieldProps) {
       full={d.full}
       disabled={props.disabled}
       required={props.required}
+      hint={props.hint ?? d.hint}
     />
   );
 }
@@ -148,7 +165,14 @@ function YesNoTypeField(props: SchemaFieldProps) {
   const d = props.descriptor;
   if (d.type !== "yesno") return null;
   return (
-    <YesNoField name={d.name} label={d.label} control={props.control} mode={d.mode} full={d.full} />
+    <YesNoField
+      name={d.name}
+      label={d.label}
+      control={props.control}
+      mode={d.mode}
+      full={d.full}
+      required={props.required}
+    />
   );
 }
 
@@ -296,6 +320,11 @@ export interface SchemaSectionProps {
   preloadedUrls?: Readonly<Record<string, string>>;
   photoValues?: Readonly<Record<string, PhotoFieldValue>>;
   onPhotoChange?: (dataKey: string, next: PhotoFieldValue) => void;
+  /** Campos deshabilitados desde afuera (no dependen de otros valores del formulario),
+   * p. ej. las partes del nombre que vienen de la cuenta de Microsoft. */
+  disabledFields?: readonly string[];
+  /** Ayudas por campo que reemplazan la del descriptor. */
+  fieldHints?: Readonly<Record<string, string>>;
 }
 
 function descriptorKey(d: FieldDescriptor, index: number): string {
@@ -320,6 +349,8 @@ export function SchemaSection({
   preloadedUrls,
   photoValues,
   onPhotoChange,
+  disabledFields,
+  fieldHints,
 }: SchemaSectionProps) {
   const watchNames = useMemo(() => {
     const names = new Set<string>();
@@ -346,9 +377,10 @@ export function SchemaSection({
         const show = descriptor.showWhen ? evaluateCondition(descriptor.showWhen, values) : true;
         if (!show) return null;
 
-        const disabled = descriptor.disabledWhen
-          ? evaluateCondition(descriptor.disabledWhen, values)
-          : false;
+        const name = "name" in descriptor ? descriptor.name : undefined;
+        const disabled =
+          (!!name && !!disabledFields?.includes(name)) ||
+          (descriptor.disabledWhen ? evaluateCondition(descriptor.disabledWhen, values) : false);
 
         const required =
           typeof descriptor.required === "boolean"
@@ -369,6 +401,7 @@ export function SchemaSection({
             preloadedUrls={preloadedUrls}
             photoValues={photoValues}
             onPhotoChange={onPhotoChange}
+            hint={name ? fieldHints?.[name] : undefined}
           />
         );
       })}

@@ -97,7 +97,10 @@ import {
 
 type GeoItem = { id: number; name: string };
 
-const STRATA = ["1", "2", "3", "4", "5", "6"];
+const STRATA = [
+  ...["1", "2", "3", "4", "5", "6"].map((v) => ({ value: v, label: v })),
+  { value: "COMERCIAL", label: "Comercial" },
+];
 
 const DEFAULT_LABELS = {
   country: "País de Residencia",
@@ -129,7 +132,7 @@ export function GeoCascadeField({
   const department = (useWatch({ control, name: k("department") }) as string) ?? "";
   const city = (useWatch({ control, name: k("city") }) as string) ?? "";
   const barrio = (useWatch({ control, name: k("barrio") }) as string) ?? "";
-  const departmentId = useWatch({ control, name: k("department_id") }) as number | undefined;
+  const storedDepartmentId = useWatch({ control, name: k("department_id") }) as number | null | undefined;
 
   const requiredDeps =
     typeof requiredWhen === "object" ? conditionDependencies(requiredWhen) : [];
@@ -164,6 +167,12 @@ export function GeoCascadeField({
       active = false;
     };
   }, [fetchDepartments, isColombia]);
+
+  // Fichas guardadas antes de la cascada con api (o migradas) traen el nombre del
+  // departamento pero no su id: se resuelve por nombre para poder cargar las ciudades,
+  // sin escribir en el formulario (escribir lo marcaría como cambio del usuario).
+  const departmentId =
+    storedDepartmentId ?? (department ? apiDepartments.find((d) => d.name === department)?.id : undefined);
 
   useEffect(() => {
     if (!fetchCities) return;
@@ -228,6 +237,7 @@ export function GeoCascadeField({
   return (
     <>
       <ComboBox
+        name={k("country")}
         label={L.country}
         value={country}
         onChange={onCountryChange}
@@ -249,6 +259,7 @@ export function GeoCascadeField({
        * GeoResidenceFields hoy). */}
       {isColombia ? (
         <ComboBox
+          name={k("department")}
           label={L.department}
           value={department}
           onChange={onDepartmentChange}
@@ -270,6 +281,7 @@ export function GeoCascadeField({
       {/* Ciudad: misma lógica de visibilidad que departamento. */}
       {isColombia && showCityCombo ? (
         <ComboBox
+          name={k("city")}
           label={L.city}
           value={city}
           onChange={onCityChange}
@@ -294,6 +306,7 @@ export function GeoCascadeField({
         (showBarrioCombo ? (
           <>
             <ComboBox
+              name={k("barrio")}
               label={L.barrio}
               value={barrio}
               onChange={onBarrioChange}
@@ -343,6 +356,7 @@ export function GeoCascadeField({
             register={register}
             options={STRATA}
             disabled={disabled}
+            required={required}
           />
         </>
       )}

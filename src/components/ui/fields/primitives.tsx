@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/formStyles";
 import { ComboBox } from "@/components/ui/ComboBox";
 import type { SectionValues } from "./types";
+import { errorAria, FieldErrorText, RequiredMark, useFieldError } from "./fieldErrors";
 
 interface FieldBaseProps {
   /** Nombre del campo para RHF. Soporta paths anidados ("repeated.grade"). */
@@ -48,7 +49,27 @@ interface FieldBaseProps {
   full?: boolean;
   disabled?: boolean;
   required?: boolean;
+  /** Texto de ayuda bajo el control (se asocia con `aria-describedby`). */
+  hint?: string;
 }
+
+/** Ayuda bajo el control; si hay error, el error la reemplaza. */
+function HintText({ htmlId, hint }: { htmlId: string; hint?: string }) {
+  if (!hint) return null;
+  return (
+    <p id={`${htmlId}-hint`} className="mt-1 text-xs text-base-content/50">
+      {hint}
+    </p>
+  );
+}
+
+function describedBy(htmlId: string, error?: string, hint?: string) {
+  if (error) return errorAria(htmlId, error);
+  return hint ? { "aria-describedby": `${htmlId}-hint` } : {};
+}
+
+/** `id` HTML válido a partir de una ruta con puntos ("student.birth.date"). */
+export const htmlIdFor = (name: string) => name.replace(/\./g, "-");
 
 export function TextField({
   name,
@@ -60,22 +81,41 @@ export function TextField({
   full,
   disabled,
   required,
-}: FieldBaseProps & { type?: "text" | "email" | "tel" | "number" | "date" }) {
-  const htmlId = id ?? name;
+  hint,
+  min,
+  max,
+  autoComplete,
+  inputMode,
+}: FieldBaseProps & {
+  type?: "text" | "email" | "tel" | "number" | "date";
+  min?: string;
+  max?: string;
+  autoComplete?: string;
+  inputMode?: "text" | "numeric" | "tel" | "email";
+}) {
+  const htmlId = id ?? htmlIdFor(name);
+  const error = useFieldError(name);
   return (
     <div className={full ? "sm:col-span-2" : undefined}>
       <label htmlFor={htmlId} className={labelClass}>
         {label}
+        <RequiredMark required={required} />
       </label>
       <input
         id={htmlId}
         type={type}
-        className={inputClass}
+        className={`${inputClass} ${error ? "input-error" : ""}`}
         placeholder={placeholder}
         disabled={disabled}
         required={required}
+        min={min}
+        max={max}
+        autoComplete={autoComplete}
+        inputMode={inputMode ?? (type === "tel" ? "tel" : undefined)}
+        {...describedBy(htmlId, error, hint)}
         {...register(name)}
       />
+      {error ? <FieldErrorText htmlId={htmlId} error={error} /> : <HintText htmlId={htmlId} hint={hint} />}
     </div>
   );
 }
@@ -92,19 +132,23 @@ export function SelectField({
   disabled,
   required,
   placeholder = "Selecciona…",
+  hint,
 }: FieldBaseProps & { options: readonly SelectFieldOption[] }) {
-  const htmlId = id ?? name;
+  const htmlId = id ?? htmlIdFor(name);
+  const error = useFieldError(name);
   const normalized = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
   return (
     <div className={full ? "sm:col-span-2" : undefined}>
       <label htmlFor={htmlId} className={labelClass}>
         {label}
+        <RequiredMark required={required} />
       </label>
       <select
         id={htmlId}
-        className={selectClass}
+        className={`${selectClass} ${error ? "select-error" : ""}`}
         disabled={disabled}
         required={required}
+        {...describedBy(htmlId, error, hint)}
         {...register(name)}
       >
         <option value="">{placeholder}</option>
@@ -114,6 +158,7 @@ export function SelectField({
           </option>
         ))}
       </select>
+      {error ? <FieldErrorText htmlId={htmlId} error={error} /> : <HintText htmlId={htmlId} hint={hint} />}
     </div>
   );
 }
@@ -128,22 +173,27 @@ export function TextAreaField({
   disabled,
   required,
   rows = 3,
+  hint,
 }: FieldBaseProps & { rows?: number }) {
-  const htmlId = id ?? name;
+  const htmlId = id ?? htmlIdFor(name);
+  const error = useFieldError(name);
   return (
     <div className={full ? "sm:col-span-2" : undefined}>
       <label htmlFor={htmlId} className={labelClass}>
         {label}
+        <RequiredMark required={required} />
       </label>
       <textarea
         id={htmlId}
         rows={rows}
-        className={textareaClass}
+        className={`${textareaClass} ${error ? "textarea-error" : ""}`}
         placeholder={placeholder}
         disabled={disabled}
         required={required}
+        {...describedBy(htmlId, error, hint)}
         {...register(name)}
       />
+      {error ? <FieldErrorText htmlId={htmlId} error={error} /> : <HintText htmlId={htmlId} hint={hint} />}
     </div>
   );
 }
@@ -159,7 +209,7 @@ export function CheckboxField({
   full,
   disabled,
 }: Omit<FieldBaseProps, "placeholder" | "required">) {
-  const htmlId = id ?? name;
+  const htmlId = id ?? htmlIdFor(name);
   return (
     <div className={full ? "sm:col-span-2" : undefined}>
       <label htmlFor={htmlId} className="flex cursor-pointer items-center gap-2">
@@ -200,13 +250,17 @@ export function YesNoField({
   control,
   mode = "string",
   full = true,
+  required,
 }: {
   name: string;
   label: string;
   control: Control<SectionValues>;
   mode?: "string" | "boolean";
   full?: boolean;
+  required?: boolean;
 }) {
+  const htmlId = htmlIdFor(name);
+  const error = useFieldError(name);
   const options: { text: string; val: string | boolean }[] =
     mode === "boolean"
       ? [
@@ -225,8 +279,14 @@ export function YesNoField({
       render={({ field }) => {
         const current = field.value;
         return (
-          <fieldset className={full ? "sm:col-span-2" : undefined}>
-            <legend className={labelClass}>{label}</legend>
+          <fieldset
+            className={full ? "sm:col-span-2" : undefined}
+            aria-describedby={error ? `${htmlId}-error` : undefined}
+          >
+            <legend className={labelClass}>
+              {label}
+              <RequiredMark required={required} />
+            </legend>
             <div className="flex gap-2">
               {options.map((o) => {
                 const active = current === o.val;
@@ -246,6 +306,7 @@ export function YesNoField({
                 );
               })}
             </div>
+            <FieldErrorText htmlId={htmlId} error={error} />
           </fieldset>
         );
       }}
@@ -372,6 +433,7 @@ export function ComboBoxField({
       render={({ field }) => (
         <div className={full ? "sm:col-span-2" : undefined}>
           <ComboBox
+            name={name}
             label={label}
             value={(field.value as string) ?? ""}
             onChange={field.onChange}

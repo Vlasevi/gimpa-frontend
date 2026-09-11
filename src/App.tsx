@@ -23,6 +23,7 @@ import Usuarios from "./pages/Usuarios";
 import Roles from "./pages/Roles";
 import Contratacion from "./pages/Contratacion";
 import MiContrato from "./pages/MiContrato";
+import Perfil from "./pages/Perfil";
 import AdmisionesAdmin from "./pages/AdmisionesAdmin";
 import MisAdmisiones from "./pages/admisiones/MisAdmisiones";
 import NuevaAdmision from "./pages/admisiones/NuevaAdmision";
@@ -116,6 +117,7 @@ const App = () => (
               <Route path="/roles" element={<Roles />} />
               <Route path="/contratacion" element={<Contratacion />} />
               <Route path="/mi-contrato" element={<MiContrato />} />
+              <Route path="/perfil" element={<Perfil />} />
             </Route>
 
             {/* --- Área del acudiente (admisiones) --- */}

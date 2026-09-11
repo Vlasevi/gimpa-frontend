@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { labelClass } from "@/components/ui/formStyles";
+import { errorAria, FieldErrorText, useFieldError } from "@/components/ui/fields/fieldErrors";
 
 /**
  * Dropdown buscable (mismo comportamiento que el `ComboBox` que tenía matrículas como
@@ -51,6 +52,8 @@ export function ComboBox({
   disabled,
   loading = false,
   required,
+  name,
+  hint,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -68,7 +71,13 @@ export function ComboBox({
    * Matrículas) pueda propagar `required` real.
    */
   required?: boolean;
+  /** Ruta del campo en el formulario: con ella se busca su error (`FieldErrorsProvider`)
+   * y se deja `data-field` para poder llevar el foco al primer campo con error. */
+  name?: string;
+  /** Texto de ayuda bajo el control. */
+  hint?: string;
 }) {
+  const error = useFieldError(name);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
@@ -144,10 +153,17 @@ export function ComboBox({
   };
 
   return (
-    <div className="dropdown form-control relative w-full">
+    // `dropdown-open` mientras la lista está abierta: sin él, daisyUI deja la lista con
+    // `visibility: hidden` hasta que el CSS de `:focus-within` aplica, y en ese intervalo
+    // las opciones no aparecen en el árbol de accesibilidad (hallazgo #14).
+    <div className={`dropdown form-control relative w-full ${open ? "dropdown-open" : ""}`}>
       <label htmlFor={inputId} className={labelClass}>
         {label}
-        {required && <span className="text-error ml-1">*</span>}
+        {required && (
+          <span className="text-error ml-1" aria-hidden="true">
+            *
+          </span>
+        )}
       </label>
       <input
         ref={inputRef}
@@ -159,7 +175,13 @@ export function ComboBox({
         aria-controls={listId}
         aria-activedescendant={open && highlighted >= 0 ? optionId(highlighted) : undefined}
         autoComplete="off"
-        className="input input-bordered w-full truncate transition-all focus:input-primary"
+        data-field={name}
+        {...(error
+          ? errorAria(inputId, error)
+          : hint
+            ? { "aria-describedby": `${inputId}-hint` }
+            : {})}
+        className={`input input-bordered w-full truncate transition-all focus:input-primary ${error ? "input-error" : ""}`}
         placeholder={placeholder ?? label}
         value={query}
         disabled={disabled}
@@ -199,10 +221,11 @@ export function ComboBox({
           ref={listRef}
           id={listId}
           role="listbox"
-          className="dropdown-content menu z-50 mt-1 w-full max-h-52 flex-nowrap overflow-auto rounded-lg border border-base-300 bg-base-100 p-0 shadow-lg"
+          aria-label={label}
+          className="dropdown-content z-50 mt-1 w-full max-h-52 overflow-auto rounded-lg border border-base-300 bg-base-100 p-0 shadow-lg"
         >
           {loading && (
-            <li className="flex items-center gap-2 px-4 py-2 text-sm text-base-content/60">
+            <li role="presentation" className="flex items-center gap-2 px-4 py-2 text-sm text-base-content/60">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
               Cargando…
             </li>
@@ -232,6 +255,13 @@ export function ComboBox({
           ))}
         </ul>
       )}
+      {error ? (
+        <FieldErrorText htmlId={inputId} error={error} />
+      ) : hint ? (
+        <p id={`${inputId}-hint`} className="mt-1 text-xs text-base-content/50">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 }

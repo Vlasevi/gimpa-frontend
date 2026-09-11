@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "./Login/loginLogic";
 import { SIDEBAR_DRAWER_ID } from "./Sidebar";
 import { ChevronDown, PanelLeft, User, LogOut } from "lucide-react";
@@ -21,6 +23,9 @@ interface NavbarProps {
 
 export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
   const { user, logout, isLoggingOut } = useAuth();
+  const navigate = useNavigate();
+  // La URL de la foto es firmada y vence: si falla, se vuelve al ícono.
+  const [photoFailed, setPhotoFailed] = useState(false);
 
   const handleLogout = () => {
     // El feedback de carga lo muestra el overlay global del AuthProvider.
@@ -28,8 +33,8 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
   };
 
   const handleProfile = () => {
-    // TODO: Implementar vista de perfil
-    console.log("Ver perfil de:", user?.email);
+    (document.activeElement as HTMLElement | null)?.blur();
+    navigate("/perfil");
   };
 
   return (
@@ -59,6 +64,8 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
             <div
               tabIndex={0}
               role="button"
+              aria-label={`Menú de ${user.displayname || "usuario"}`}
+              aria-haspopup="menu"
               className="flex cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors duration-200 hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
               <div className="hidden text-right sm:block">
@@ -67,20 +74,23 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
                 </p>
                 <p className="text-xs text-base-content/60">{user.email}</p>
               </div>
-              {/* Placeholder mientras no haya foto real (pendiente traerla de la
-                  API) — `avatar avatar-placeholder` de daisyUI: el div interno
-                  es el círculo recortado (aspect-ratio:1 + overflow:hidden viene
-                  del propio componente), el fondo/color y el tamaño son clases
-                  nuestras. Cuando haya URL real, este `User` se reemplaza por un
-                  `<img src={...} />` dentro del mismo div y se quita
-                  `avatar-placeholder` (esa clase es solo para centrar contenido
-                  que no sea una imagen). */}
-              <div className="avatar avatar-placeholder">
-                <div className="w-9 rounded-full bg-primary/10 text-primary">
-                  <User className="h-5 w-5" />
+              {/* Foto de perfil (`photo_url` de /me) o, si no hay, el ícono sobre
+                  `avatar-placeholder` de daisyUI (esa clase solo centra contenido
+                  que no es una imagen). */}
+              {user.photo_url && !photoFailed ? (
+                <div className="avatar">
+                  <div className="w-9 rounded-full ring-1 ring-base-300">
+                    <img src={user.photo_url} alt="" onError={() => setPhotoFailed(true)} />
+                  </div>
                 </div>
-              </div>
-              <ChevronDown className="h-4 w-4 text-base-content/40" />
+              ) : (
+                <div className="avatar avatar-placeholder">
+                  <div className="w-9 rounded-full bg-primary/10 text-primary">
+                    <User className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                </div>
+              )}
+              <ChevronDown className="h-4 w-4 text-base-content/40" aria-hidden="true" />
             </div>
 
             {/* Menú desplegable */}
@@ -93,8 +103,8 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
                   onClick={handleProfile}
                   className="flex items-center gap-2 rounded-md px-4 py-2 text-sm text-base-content/80 transition-colors hover:bg-base-200"
                 >
-                  <User className="h-4 w-4" />
-                  Ver Perfil
+                  <User className="h-4 w-4" aria-hidden="true" />
+                  Mi perfil
                 </button>
               </li>
               <div className="divider my-0"></div>
@@ -104,8 +114,8 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
                   className="flex items-center gap-2 rounded-md px-4 py-2 text-sm text-error transition-colors hover:bg-error/10 disabled:opacity-70"
                   disabled={isLoggingOut}
                 >
-                  <LogOut className="h-4 w-4" />
-                  Cerrar Sesión
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  Cerrar sesión
                 </button>
               </li>
             </ul>

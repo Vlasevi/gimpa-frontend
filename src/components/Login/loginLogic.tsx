@@ -95,6 +95,8 @@ export interface User {
   guardian_phone?: string;
   guardian_relationship?: string;
   user_data?: Record<string, any>;
+  /** URL firmada (1 hora) de la foto de perfil, o null. */
+  photo_url?: string | null;
 }
 
 // Payload que devuelven login-admissions y login-social/exchange.
@@ -110,6 +112,9 @@ interface AuthContextType {
   isLoading: boolean;
   isLoggingOut: boolean;
   checkAuth: () => Promise<void>;
+  /** Reemplaza el usuario en sesión con la respuesta de un endpoint que devuelve la
+   * cuenta actualizada (p. ej. la foto de perfil), sin pasar por la pantalla de carga. */
+  updateUser: (user: User) => void;
   loginWithPayload: (payload: AuthPayload) => void;
   logout: () => Promise<void>;
 }
@@ -120,6 +125,7 @@ const AuthContext = React.createContext<AuthContextType>({
   isLoading: true,
   isLoggingOut: false,
   checkAuth: async () => {},
+  updateUser: () => {},
   loginWithPayload: () => {},
   logout: async () => {},
 });
@@ -209,7 +215,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, isLoading, isLoggingOut, checkAuth, loginWithPayload, logout }}
+      value={{ isAuthenticated, user, isLoading, isLoggingOut, checkAuth, updateUser: setUser, loginWithPayload, logout }}
     >
       {children}
       {isLoggingOut && (

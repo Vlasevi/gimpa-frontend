@@ -7,11 +7,17 @@ import { cn } from "@/lib/utils";
  * para que el estilado con `data-[state=...]` siga funcionando igual.
  * Soporta uso controlado (`value` + `onValueChange`) y no controlado
  * (`defaultValue`).
+ *
+ * Accesibilidad (patrón de pestañas de la WAI): cada pestaña apunta a su panel
+ * (`aria-controls`) y cada panel se nombra con su pestaña (`aria-labelledby`); solo la
+ * pestaña activa entra al orden de Tab y las flechas ←/→ (e Inicio/Fin) cambian de
+ * pestaña.
  */
 
 interface TabsContextValue {
   value: string;
   setValue: (value: string) => void;
+  baseId: string;
 }
 
 const TabsContext = React.createContext<TabsContextValue | null>(null);
@@ -24,6 +30,9 @@ function useTabsContext(component: string): TabsContextValue {
   return ctx;
 }
 
+const tabId = (base: string, value: string) => `${base}-tab-${value}`;
+const panelId = (base: string, value: string) => `${base}-panel-${value}`;
+
 interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
   value?: string;
   defaultValue?: string;
@@ -35,6 +44,7 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
     const [internal, setInternal] = React.useState(defaultValue ?? "");
     const isControlled = value !== undefined;
     const current = isControlled ? value : internal;
+    const baseId = React.useId().replace(/:/g, "");
 
     const setValue = React.useCallback(
       (next: string) => {
@@ -45,7 +55,7 @@ const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
     );
 
     return (
-      <TabsContext.Provider value={{ value: current, setValue }}>
+      <TabsContext.Provider value={{ value: current, setValue, baseId }}>
         <div ref={ref} className={className} {...props}>
           {children}
         </div>
@@ -58,11 +68,30 @@ Tabs.displayName = "Tabs";
 const TabsList = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+>(({ className, onKeyDown, ...props }, ref) => (
   <div
     ref={ref}
     role="tablist"
     className={cn("inline-flex items-center", className)}
+    onKeyDown={(event) => {
+      onKeyDown?.(event);
+      const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+      if (event.defaultPrevented || !keys.includes(event.key)) return;
+      const tabs = Array.from(
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])'),
+      );
+      const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+      if (index < 0) return;
+      event.preventDefault();
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? tabs.length - 1
+            : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].focus();
+      tabs[next].click();
+    }}
     {...props}
   />
 ));
@@ -75,14 +104,17 @@ interface TabsTriggerProps
 
 const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
   ({ className, value, onClick, ...props }, ref) => {
-    const { value: current, setValue } = useTabsContext("TabsTrigger");
+    const { value: current, setValue, baseId } = useTabsContext("TabsTrigger");
     const isActive = current === value;
     return (
       <button
         ref={ref}
         type="button"
         role="tab"
+        id={tabId(baseId, value)}
+        aria-controls={panelId(baseId, value)}
         aria-selected={isActive}
+        tabIndex={isActive ? 0 : -1}
         data-state={isActive ? "active" : "inactive"}
         onClick={(event) => {
           setValue(value);
@@ -105,14 +137,17 @@ interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
   ({ className, value, ...props }, ref) => {
-    const { value: current } = useTabsContext("TabsContent");
+    const { value: current, baseId } = useTabsContext("TabsContent");
     if (current !== value) return null;
     return (
       <div
         ref={ref}
         role="tabpanel"
+        id={panelId(baseId, value)}
+        aria-labelledby={tabId(baseId, value)}
+        tabIndex={0}
         data-state="active"
-        className={className}
+        className={cn("focus-visible:outline-none", className)}
         {...props}
       />
     );

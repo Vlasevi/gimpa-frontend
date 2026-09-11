@@ -6,8 +6,8 @@
  * `docs/paso0-informe-schema-driven-fields.md` §3.1 (cascada geográfica), §3.2 (foto) y
  * §4 (`FieldType`/`FieldDescriptor`/`FieldCondition`) — no se rediseña nada aquí.
  *
- * Este archivo NO tiene consumidores todavía (Paso 1 = solo fundación). Admisiones y
- * Matrículas siguen usando su JSX de campo a mano hasta los Pasos 2 y 4.
+ * Consumidores: Admisiones (`steps.tsx`, `guardianFields.tsx`) y Matrículas
+ * (`matriculas/profileSchema.ts`, paso 3 del estudiante).
  */
 
 import type { Control, UseFormRegister, UseFormSetValue } from "react-hook-form";
@@ -204,10 +204,18 @@ interface FieldDescriptorBase {
   showWhen?: FieldCondition;
   /** Deshabilita sin ocultar (ej. campos de acudiente cuando guardian_type=Padre/Madre). */
   disabledWhen?: FieldCondition;
+  /** Texto de ayuda bajo el control. */
+  hint?: string;
 }
 
 export type FieldDescriptor =
-  | (FieldDescriptorBase & { type: "text" | "email" | "tel" | "number" | "date"; name: string })
+  | (FieldDescriptorBase & {
+      type: "text" | "email" | "tel" | "number" | "date";
+      name: string;
+      /** Límites de fechas/números. `"today"` = hoy en hora de Colombia. */
+      min?: string;
+      max?: string | "today";
+    })
   | (FieldDescriptorBase & { type: "textarea"; name: string; rows?: number })
   | (FieldDescriptorBase & {
       type: "select";

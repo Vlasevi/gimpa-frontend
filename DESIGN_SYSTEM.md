@@ -11,7 +11,7 @@ con la identidad de Gimnasio El Paraíso.
 > - **Pantalla de acceso:** `src/pages/Login.tsx` tiene un diseño propio y deliberado
 >   (ver §8). No copies su estilo a otras pantallas.
 >
-> _Última revisión contra el código: 2026-09-10._
+> _Última revisión contra el código: 2026-09-11 (Matrícula v2)._
 
 ---
 
@@ -426,14 +426,14 @@ Para confirmaciones, usa `Alert`. Referencia: `ApplicationDetail`.
 ancho de la scrollbar, para que el fondo no "salte". Soporta modales anidados.
 
 - `Modal` y `Alert` **ya lo llaman por dentro**: no lo llames aparte si los usas.
-- Los modales hechos a mano sí deben llamarlo. Hoy lo hacen `AnimatedModal`
-  (`MatriculasAdmin`, local, candidato a migrar a `Modal`), `UserFormModal`,
+- Los modales hechos a mano sí deben llamarlo. Hoy lo hacen `UserFormModal`,
   `DetailModal`/`Overlay` (Contratación), `PdfModal` (`PdfSignViewer`) y los modales
   de `Roles`.
 
 **Feedback dentro de un contenedor con `transform`:** un hijo `fixed` se posiciona
 respecto al contenedor transformado, no al viewport. Monta el toast o el `Alert` con
-`createPortal(..., document.body)`. Referencia: `StudentDataTabs`.
+`createPortal(..., document.body)`. En Matrículas ya no hace falta: el detalle de staff
+usa `ui/Modal` y los diálogos anidados van en su propio `Modal`.
 
 ---
 
@@ -448,14 +448,15 @@ amplía el compartido en vez de duplicarlo dentro de un módulo.
 | --- | --- | --- | --- |
 | `formStyles.ts` | `labelClass`, `inputClass`, `selectClass`, `textareaClass`, `controlClass` (alias de `selectClass`), `primaryBtnClass`, `ghostBtnClass` | Clases de campo y botón (§5.1). Idénticas a lo que Matrículas renderiza inline | Admisiones (13 archivos), `ComboBox`, `OtpInput`, `fields/*`. Matrículas aún no lo importa |
 | `LoadingState` | `{label?, compact?, className?}` | Carga de sección o página (§6) | Usuarios, Roles, Matrículas, Contratación, `PdfSignViewer`, `UserFormModal` |
-| `Toast` | `{toast: ToastState \| null}` | Presentación del toast; el estado lo da `useToast` (§6) | `ApplicationDetail` |
-| `Alert` | `variant` (warning/info/error/success), `acceptText`, `requireScrollToBottom`, … | Confirmaciones y avisos modales. Cierra con Escape y backdrop | `ApplicationDetail`, `SolicitudWizard`, `ContratacionAdmin`, `MatriculasAdmin`, `Step3StudentData`, `StudentDataTabs`, `Usuarios` |
-| `Modal` | `{isOpen, onClose, children, className?, closeOnBackdrop?}` | Modal genérico animado (§12) | `ApplicationDetail` |
-| `tabs` | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` (controlado o no) | Pestañas propias, sin Radix | `ApplicationDetail`, `ContratacionAdmin`, `StudentDataTabs` |
-| `FilterSelect` | `{value, onChange, options, placeholder?, className?, ariaLabel?}` | Filtros de listado (§11) | `MatriculasAdmin`, `Usuarios`, `ContratacionAdmin`, `AdmisionesAdmin` |
-| `ComboBox` | `{value, onChange, options, label, placeholder?, disabled?, loading?, required?}` | Lista buscable dentro de un formulario (§11) | `Step3StudentData`, `fields/*` |
-| `SubSection` | `{title, subtitle?, open, onToggle, status?: "complete"\|"incomplete"\|"error", children}` | Acordeón controlado por el padre, animado con `grid-rows` | `SolicitudWizard`, `admisiones/steps.tsx` |
-| `OtpInput` | `{value, onChange, length?=6, autoFocus?=true, onComplete?, error?, …}` | Código de verificación (componente `otp` de daisyUI). Solo acepta dígitos y restaura el foco | `Login`, `Step1Verification`, `ContratacionEmpleado` |
+| `Toast` | `{toast: ToastState \| null}` | Presentación del toast; el estado lo da `useToast` (§6). La región viva (`role="status"`) queda montada siempre para que los lectores de pantalla anuncien cada mensaje; los errores con `aria-live="assertive"` | `ApplicationDetail`, Matrículas (estudiante y staff), `Perfil` |
+| `Alert` | `variant` (warning/info/error/success), `acceptText`, `requireScrollToBottom`, … | Confirmaciones y avisos modales. Cierra con Escape y backdrop. Título y descripción con ids únicos, foco inicial dentro del diálogo (en el texto si hay que leerlo hasta el final) y de vuelta al control que lo abrió | `ApplicationDetail`, `SolicitudWizard`, `ContratacionAdmin`, `MatriculasAdmin`, Matrículas del estudiante, `Perfil`, `Usuarios` |
+| `Modal` | `{isOpen, onClose, children, className?, closeOnBackdrop?, labelledBy?, ariaLabel?}` | Modal genérico animado (§12). **Pasa siempre `labelledBy`** (id del título visible) o `ariaLabel`. Lleva el foco al diálogo, lo mantiene adentro con Tab y lo devuelve al cerrar | `ApplicationDetail`, panel de staff de Matrículas |
+| `tabs` | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` (controlado o no) | Pestañas propias, sin Radix. Patrón de pestañas de la WAI: `aria-controls`/`aria-labelledby` automáticos, solo la activa en el orden de Tab, flechas ←/→ e Inicio/Fin | `ApplicationDetail`, `ContratacionAdmin`, Matrículas (detalle de staff, vista de matrícula aprobada) |
+| `FilterSelect` | `{value, onChange, options, placeholder?, className?, ariaLabel?}` | Filtros de listado (§11). Combobox de solo selección accesible: `role="combobox"` + `listbox`/`option`, ↑/↓/Inicio/Fin/Enter/Escape. **Pasa siempre `ariaLabel`** | `MatriculasAdmin`, `Usuarios`, `ContratacionAdmin`, `AdmisionesAdmin` |
+| `ComboBox` | `{value, onChange, options, label, placeholder?, disabled?, loading?, required?, name?, hint?}` | Lista buscable dentro de un formulario (§11). Con `name` muestra su error del `FieldErrorsProvider` y deja `data-field` para enfocarlo. La lista abierta usa `dropdown-open` para que sus opciones estén en el árbol de accesibilidad | `fields/*` (Admisiones y Matrículas) |
+| `SubSection` | `{title, subtitle?, open, onToggle, status?: "complete"\|"incomplete"\|"error", id?, children}` | Acordeón controlado por el padre, animado con `grid-rows`. `<h3>` envuelve al botón (`aria-expanded` + `aria-controls`); la sección plegada lleva **`inert`** (sus campos no reciben foco ni se leen) | `SolicitudWizard`, `admisiones/steps.tsx`, paso 3 de Matrículas |
+| `OtpInput` | `{value, onChange, length?=6, autoFocus?=true, onComplete?, error?, …}` | Código de verificación (componente `otp` de daisyUI). Solo acepta dígitos y restaura el foco | `Login`, verificación de Matrículas, `ContratacionEmpleado` |
+| `pdf/PdfSignViewer` | `PdfModal {pdfData, title, onClose, overlays?, onReadToEnd?, footer?}`, `PdfViewer`, `embedImagesInPdf` | Visor de PDF con zonas de firma. `PdfModal` es un diálogo modal accesible (título, zoom "Alejar/Acercar", "Cerrar documento", foco atrapado y devuelto). `onReadToEnd` avisa cuando el usuario llegó al final del documento (se usa para firmar solo lo leído) | Firma de Matrículas, Contratación |
 
 ### 13.2 `components/ui/fields/` — campos declarativos
 
@@ -478,14 +479,17 @@ const SCHEMA: FieldDescriptor[] = [
 
 | Pieza | Qué contiene |
 | --- | --- |
-| `types.ts` | `FieldType` (text, email, tel, number, date, textarea, select, combobox, yesno, checkbox, checkbox-group, geo-cascade, photo, file), el descriptor `FieldDescriptor`, las condiciones `FieldCondition` (`equals`/`notEquals`/`in`, o `watch` + `predicate`) para `showWhen`/`disabledWhen`/`required` |
-| `registry.tsx` | `FIELD_REGISTRY` (tipo → componente), `SchemaField` y `SchemaSection`. `SchemaSection` observa con un solo `useWatch` únicamente los campos de los que dependen las condiciones |
-| `primitives.tsx` | `TextField`, `SelectField`, `TextAreaField`, `CheckboxField`, `YesNoField` (modo `"string"` → guarda `"Si"`/`"No"`, o `"boolean"`), `CheckboxGroupField`, `ComboBoxField` |
-| `GeoCascadeField.tsx` | Cascada país → departamento → ciudad → barrio, con dirección y estrato. Fuente `static` (listas fijas) o `api` (`/api/geo/`) |
+| `types.ts` | `FieldType` (text, email, tel, number, date, textarea, select, combobox, yesno, checkbox, checkbox-group, geo-cascade, photo, file), el descriptor `FieldDescriptor` (con `hint?` y, en fechas/números, `min?`/`max?`; `max: "today"` = hoy en hora de Colombia), las condiciones `FieldCondition` (`equals`/`notEquals`/`in`, o `watch` + `predicate`) para `showWhen`/`disabledWhen`/`required` |
+| `registry.tsx` | `FIELD_REGISTRY` (tipo → componente), `SchemaField` y `SchemaSection`. `SchemaSection` observa con un solo `useWatch` únicamente los campos de los que dependen las condiciones. Acepta `disabledFields` (bloqueados desde afuera, p. ej. el nombre que viene de Microsoft) y `fieldHints` |
+| `fieldErrors.tsx` | `FieldErrorsProvider {errors}` + `useFieldError(name)`: el padre pasa el mapa `{ruta: mensaje}` que devuelve el backend y cada campo muestra el suyo, con `aria-invalid` y `aria-describedby`. También el asterisco `RequiredMark` |
+| `primitives.tsx` | `TextField`, `SelectField`, `TextAreaField`, `CheckboxField`, `YesNoField` (modo `"string"` → guarda `"Si"`/`"No"`, o `"boolean"`), `CheckboxGroupField`, `ComboBoxField`. Todos con `<label htmlFor>` asociado (ids válidos aunque el nombre tenga puntos: `student.birth.date` → `student-birth-date`), asterisco si son obligatorios, ayuda y error asociados |
+| `GeoCascadeField.tsx` | Cascada país → departamento → ciudad → barrio, con dirección y estrato (1–6 y Comercial). Fuente `static` (listas fijas) o `api` (`/api/geo/`). El `prefix` admite rutas con punto (`residence.`, `father.birth.`). Si una ficha guardada trae el departamento sin su id, lo resuelve por nombre para cargar las ciudades |
 | `PhotoField.tsx` | Foto JPG/PNG de hasta 3 MB, controlada desde fuera (`value`/`onChange`). **No va dentro de RHF**: un `File` no sobrevive al JSON del autoguardado |
 
-Quién lo usa: **Admisiones** (`steps.tsx`, `guardianFields.tsx`). **Matrículas**
-(`Step3StudentData`) aún no: usa `ComboBox` y `PhotoField` sueltos, con sus campos a mano.
+Quién lo usa: **Admisiones** (`steps.tsx`, `guardianFields.tsx`) y **Matrículas**: la ficha
+del estudiante (esquema v1 por secciones) se declara una sola vez en
+`matriculas/profileSchema.ts` y sirve para el formulario del paso 3 (`student/StepProfile`)
+y para la vista de solo lectura del staff (`profileRows()`).
 
 ### 13.3 `hooks/`
 
@@ -493,7 +497,7 @@ Quién lo usa: **Admisiones** (`steps.tsx`, `guardianFields.tsx`). **Matrículas
 | --- | --- | --- | --- |
 | `useToast` (`use-toast.ts`) | `() → {toast, flash(type, msg), dismiss}` | Estado del toast compartido (§6) | `ApplicationDetail` |
 | `useBodyScrollLock` | `(active: boolean)` | Bloquea el scroll del body con un modal abierto (§12) | `Modal`, `Alert` y los modales hechos a mano |
-| `useAutosaveDraft` | `({key, enabled?, debounceMs?=500}) → {push(value, meta?), flush, discard, peekDraft}` + helpers `resolveDraft`, `valuesMatchServer`, `fingerprint`, `clearAllDrafts` | **Método único de autoguardado.** Borrador **solo local** (localStorage, nunca el servidor), con un `meta` opaco para saber sobre qué versión del servidor se escribió. El servidor se toca únicamente con una acción explícita del usuario. Al volver, `resolveDraft` decide: descartar, restaurar (con aviso) o conflicto (modal "Conservar lo mío / Usar lo guardado"). `clearAllDrafts()` se llama al cerrar sesión. Es agnóstico al motor de formularios | Admisiones: `SolicitudWizard` (un borrador por sección, `meta` = versión de la sección). Matrículas: `MatriculasEstudiantes` + `Step3StudentData` (un borrador para el paso 3, `meta` = `fingerprint` de `user_data`). `loginLogic` (`clearAllDrafts`) |
+| `useAutosaveDraft` | `({key, enabled?, debounceMs?=500}) → {push(value, meta?), flush, discard, peekDraft}` + helpers `resolveDraft`, `valuesMatchServer`, `fingerprint`, `clearAllDrafts` | **Método único de autoguardado.** Borrador **solo local** (localStorage, nunca el servidor), con un `meta` opaco para saber sobre qué versión del servidor se escribió. El servidor se toca únicamente con una acción explícita del usuario. Al volver, `resolveDraft` decide: descartar, restaurar (con aviso) o conflicto (modal "Conservar lo mío / Usar lo guardado"). `clearAllDrafts()` se llama al cerrar sesión. Es agnóstico al motor de formularios | Admisiones: `SolicitudWizard` (un borrador por sección, `meta` = versión de la sección). Matrículas: `student/StepProfile` (un borrador para toda la ficha, `meta` = `fingerprint` de `enrollment.data`). `loginLogic` (`clearAllDrafts`) |
 
 ### 13.4 Otros compartidos
 
@@ -501,7 +505,9 @@ Quién lo usa: **Admisiones** (`steps.tsx`, `guardianFields.tsx`). **Matrículas
 | --- | --- |
 | `components/shared/formLists.ts` | Catálogos: `COUNTRIES`, `DOCUMENT_TYPES`, `EPS_LIST`, `COLOMBIA_DEPARTMENTS`, `ATLANTICO_CITIES`, `BARRIOS_BARRANQUILLA`, `GENDERS`, `BLOOD_ABO/RH`, `ACCOUNT_TYPES`, `EDUCATION_LEVELS`. **No redeclares estas listas en un módulo** |
 | `components/auxiliar/Spinner.tsx` | Carga de pantalla completa durante la rehidratación de sesión (§6) |
-| `utils/statusHelpers.ts` | `getStatusLabel`/`getStatusBadgeClass` de matrículas. No cubre los estados de admisiones: esos los pinta `admisiones/StatusBadge.tsx` |
+| `utils/statusHelpers.ts` | Etiquetas y badges de los 8 estados de matrícula (`CREATED` … `INACTIVE`), de los estados por documento (`MISSING`, `UPLOADED`, `APPROVED`, `REJECTED`, `NOT_APPLICABLE`), origen y motivo de inactivación. No cubre admisiones: esos los pinta `admisiones/StatusBadge.tsx` |
+| `matriculas/enrollmentApi.ts` | Cliente tipado de la API de Matrícula v2 (`enrollmentApi.*`, `ApiError` con `code` y `errors` por campo, `openDocument()` para ver un archivo con su URL firmada) |
+| `matriculas/profileSchema.ts` | Ficha del estudiante v1: catálogos (códigos → etiquetas), secciones con sus `FieldDescriptor`, `profileRows()` para la vista de solo lectura, `relocateGuardianErrors()` |
 | `utils/documentSensitivity.ts` | `classifyDocument(key)` → `normal`/`medical`/`sensitive` (espejo del backend) |
 
 ---
@@ -519,56 +525,48 @@ A medida que toquemos cada pantalla, alinearla con esta guía.
       `AdmisionesAdmin`, `MisAdmisiones`, `DetalleAdmision`, `SolicitudWizard`,
       `ApplicationDetail`, `DecisionPanel`, `InterviewsPanel`, `GuardianDocumentsCard`,
       `GuardianInterviewsCard` y `GuardianPaymentCard`.
-- [ ] **Spinner nativo dentro de botones → `Loader2`** (§6): 28 usos en 12 archivos.
-      `ContratacionAdmin` (10), `ContratacionEmpleado` (6), `Step1Verification` (2),
-      `Step4Documents` (2), y uno en `enrollmentUpdate`, `userEnroll`, `userRegister`,
-      `userUpdate`, `MatriculasAdmin`, `Step5Documents`, `Step6Confirmation` y
-      `UserFormModal`.
-- [ ] **Toasts locales → `useToast` + `Toast`**: `ContratacionAdmin` (`notify`),
-      `MatriculasAdmin`, `StudentDataTabs`, `Roles` y `Usuarios` (`showToast`).
-- [ ] **`alert()` nativo → toast**: 4 llamadas en `matriculas/Step6Confirmation.tsx`.
-      Hay otras 4 en `matriculas/UploadPendingDocuments.tsx`, pero ese archivo es
-      código muerto (ver abajo).
-- [ ] **`AnimatedModal` local de `MatriculasAdmin` → `ui/Modal`**. Usan la misma técnica.
-- [ ] **Matrículas → `formStyles.ts`**: sigue con strings de clase inline.
-      `UserFormModal` redeclara `inputClass`/`selectClass`/`labelClass` con valores
-      propios. `Login` también, pero ahí es deliberado (§5.2).
-- [ ] **Matrículas → campos declarativos** (`Step3StudentData` a `<SchemaSection>`,
-      Paso 4 de `plan-schema-driven-fields.md`). También quitar las copias locales de
-      `BARRIOS_BARRANQUILLA`, `COUNTRIES`, `DOCUMENT_TYPES`, `EPS_LIST`,
-      `COLOMBIA_DEPARTMENTS` y `ATLANTICO_CITIES` que tiene ese archivo, y usar
-      `formLists.ts`.
-- [ ] **Copias locales de `ComboBox`** en `auxiliar/enrollmentUpdate.tsx` y
-      `auxiliar/userUpdate.tsx` → `ui/ComboBox`. `userUpdate.tsx` no se importa en
-      ningún lado: es código muerto.
+- [ ] **Spinner nativo dentro de botones → `Loader2`** (§6): 19 usos en 5 archivos.
+      `ContratacionAdmin` (10), `ContratacionEmpleado` (6), `userRegister`, `userUpdate`
+      y `UserFormModal` (1 cada uno).
+- [ ] **Toasts locales → `useToast` + `Toast`**: `ContratacionAdmin` (`notify`), `Roles`
+      y `Usuarios` (`showToast`).
+- [ ] **`UserFormModal` redeclara `inputClass`/`selectClass`/`labelClass`** con valores
+      propios → `formStyles.ts`. `Login` también, pero ahí es deliberado (§5.2).
+- [ ] **Copia local de `ComboBox`** en `auxiliar/userUpdate.tsx`, que además no se
+      importa en ningún lado: es código muerto.
 - [ ] **CTA de legado** (§5.3) en `NotFound.tsx` y `Roles.tsx` → `primaryBtnClass`.
-- [~] **Grises y colores crudos → tokens**. Hecho en el marco, Matrículas admin,
-      Usuarios y Contratación. Queda:
-  - `text-gray-*`: 34 usos en 10 archivos (`userUpdate`, `Step6Confirmation`,
-    `UploadPendingDocuments`, `Step4Documents`, `Step3StudentData`,
-    `EnrollmentBlockedMessage`, `userRegister`, `PdfSignViewer`, `Step5Documents`,
-    `Step1Verification`).
-  - Otros `*-gray-*`: 21 usos.
-  - Paleta cruda (`red-*`, `blue-*`, `green-*`, `yellow-*`): 40 usos, sobre todo en
-    `EnrollmentBlockedMessage`, `userUpdate` y `userRegister`.
-  - `bg-white`: 14 usos.
+- [~] **Grises y colores crudos → tokens**. Hecho en el marco, Matrículas (estudiante y
+      staff), Usuarios y Contratación. Queda `text-gray-*` en `userUpdate` (7) y
+      `userRegister` (2), y la paleta cruda de esos dos archivos.
 - [ ] Unificar radios/sombras/transiciones al estándar de §4.
-- [ ] Revisar foco visible y `motion-reduce` en componentes interactivos.
-- [ ] **Comentarios desactualizados en el código**, que ya no coinciden con esta guía:
-  - `ui/fields/types.ts`, `ui/fields/registry.tsx`, `ui/SubSection.tsx` y
-    `hooks/use-toast.ts` dicen "sin consumidores todavía", pero ya tienen.
-  - `ui/Toast.tsx` habla del "amarillo de `--color-info`", que ahora es azul `#003496`.
-  - `REGRESSION_CHECKLIST.md` dice que `use-toast.ts` importa un `ui/toast`
-    inexistente; ya no es así.
-- [ ] **Código muerto de UI**: no se importan en ningún lado
-      `hooks/use-mobile.tsx`, `src/App.css`, `assets/login-hero.webp`,
-      `matriculasUI/GradeAccordion.tsx`, `matriculasUI/SectionCard.tsx`,
-      `matriculas/UploadPendingDocuments.tsx`, `matriculas/StudentDataModal.tsx`
-      (vacío, 0 bytes) y `auxiliar/userUpdate.tsx`. Antes de migrar su estilo, decide si
-      se borran. Varios puntos de esta lista (`text-gray-*`, spinners, `alert()`)
-      incluyen usos dentro de estos archivos.
+- [ ] **Comentarios desactualizados**: `REGRESSION_CHECKLIST.md` dice que
+      `use-toast.ts` importa un `ui/toast` inexistente; ya no es así.
+- [ ] **Código muerto de UI**: no se importan `hooks/use-mobile.tsx`, `src/App.css`,
+      `assets/login-hero.webp` ni `auxiliar/userUpdate.tsx`.
 
 ### Hecho
+
+- [x] **Matrícula v2 — frontend** _(2026-09-11)_. Detalle en
+      `gimpa-backend/docs/implementacion-matricula-v2.md`.
+  - Paso 3 del estudiante sobre **campos declarativos** (`profileSchema.ts` +
+    `SchemaSection` + `GeoCascadeField` con `/api/geo/`); se borraron las copias locales
+    de catálogos que tenía `Step3StudentData`.
+  - Se reescribieron el asistente del estudiante (`MatriculasEstudiantes` +
+    `matriculas/student/*`) y el panel de staff (`MatriculasAdmin` + `matriculas/admin/*`,
+    con `ui/Modal` en lugar del `AnimatedModal` local, `useToast` y `Alert`).
+  - Se borraron `Step1…Step6`, `EnrollmentBlockedMessage`, `UploadPendingDocuments`,
+    `StudentDataModal`, `StudentDataTabs`, `auxiliar/enrollmentUpdate`,
+    `matriculasUI/GradeAccordion` y `matriculasUI/SectionCard` (con ellos se fueron los
+    `alert()` nativos, los spinners nativos y los `text-gray-*` de Matrículas).
+  - **Accesibilidad en los compartidos**: `SubSection` (`inert` al plegar, `<h3>` que
+    envuelve al botón), `ComboBox` (errores asociados, opciones visibles en el árbol de
+    accesibilidad), `FilterSelect` (combobox de solo selección con teclado), `tabs`
+    (patrón de la WAI), `Modal` y `Alert` (nombre, foco inicial, foco atrapado y
+    devuelto), `PdfModal` (diálogo con nombre, zoom con etiquetas, lectura hasta el
+    final), `Toast` (región viva permanente), campos con `label`/`htmlFor`, asterisco,
+    ayuda y error asociados (`fieldErrors.tsx`).
+  - **Página "Mi perfil"** (`pages/Perfil.tsx`) con foto de perfil; el `Navbar` muestra
+    la foto.
 
 - [x] **Toast, modal, acordeón y clases de formulario compartidos** _(2026-09-07 →
       09-10, plan de Admisiones)_: `hooks/use-toast.ts` (reescrito, el anterior

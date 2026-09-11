@@ -1,6 +1,11 @@
 // components/ui/Alert.tsx
+//
+// Accesibilidad: diálogo modal con título y descripción asociados (ids únicos por
+// instancia), foco inicial dentro del diálogo, foco de vuelta al control que lo abrió al
+// cerrar, y el contenido desplazable con teclado cuando se exige leerlo hasta el final.
 import {
   ReactNode,
+  useId,
   useRef,
   useState,
   useEffect,
@@ -118,7 +123,20 @@ export const Alert = ({
   requireScrollToBottom = false,
 }: AlertProps) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const titleId = useId();
+  const contentId = useId();
+
+  // Foco al abrir (en el contenido si hay que leerlo; si no, en el diálogo) y de vuelta
+  // al control que lo abrió al cerrar.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const target = requireScrollToBottom ? contentRef.current : dialogRef.current;
+    target?.focus();
+    return () => previous?.focus?.();
+  }, [isOpen, requireScrollToBottom]);
 
   // Resetear el estado cuando el modal se abre
   useEffect(() => {
@@ -177,15 +195,18 @@ export const Alert = ({
 
       {/* Contenedor del modal */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="alert-title"
-        className="animate-modal-pop relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-base-100 shadow-xl"
+        aria-labelledby={titleId}
+        aria-describedby={contentId}
+        tabIndex={-1}
+        className="animate-modal-pop relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-base-100 shadow-xl focus:outline-none"
       >
         {/* Header fijo */}
         <div className="flex-shrink-0 px-6 pt-6">
           <h2
-            id="alert-title"
+            id={titleId}
             className="flex items-center gap-3 text-xl font-semibold text-base-content"
           >
             <span className={variantStyles[variant]}>{variantIcons[variant]}</span>
@@ -199,14 +220,21 @@ export const Alert = ({
         {/* Contenido scrollable */}
         <div
           ref={contentRef}
+          id={contentId}
           onScroll={handleScroll}
-          className="flex-1 space-y-4 overflow-y-auto px-6 py-4 leading-relaxed text-base-content/80"
+          tabIndex={requireScrollToBottom ? 0 : undefined}
+          className="flex-1 space-y-4 overflow-y-auto px-6 py-4 leading-relaxed text-base-content/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
         >
           {children}
         </div>
 
         {/* Footer fijo */}
-        <div className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-base-300 px-6 py-4 sm:flex-row sm:justify-end">
+        <div className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-base-300 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+          {isAcceptDisabled && (
+            <p className="text-xs text-base-content/60 sm:mr-auto" role="status">
+              Lee el texto hasta el final para continuar.
+            </p>
+          )}
           <button
             type="button"
             className={cn(buttonVariantClasses[cancelButtonVariant], cancelButtonClassName)}

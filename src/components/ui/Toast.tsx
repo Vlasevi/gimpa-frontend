@@ -24,8 +24,7 @@ const ICONS: Record<ToastVariant, typeof CheckCircle2> = {
   info: Info,
 };
 
-// "info" usa text-primary, no text-info: así lo hace MatriculasAdmin.tsx hoy (el
-// amarillo de --color-info del theme "gimpa" no se lee bien como tono informativo aquí).
+// "info" usa text-primary (el azul de marca), igual que el resto de avisos neutros.
 const TONE: Record<ToastVariant, string> = {
   success: "text-success",
   error: "text-error",
@@ -37,20 +36,30 @@ export interface ToastProps {
   toast: ToastState | null;
 }
 
+/**
+ * La región viva queda montada siempre (vacía cuando no hay toast): los lectores de
+ * pantalla solo anuncian cambios dentro de una región que ya existía. Los errores se
+ * anuncian de inmediato (`assertive`); el resto, al terminar lo que se esté leyendo.
+ */
 export function Toast({ toast }: ToastProps) {
-  if (!toast) return null;
-  const Icon = ICONS[toast.type];
+  const Icon = toast ? ICONS[toast.type] : null;
 
   return (
     <div
       role="status"
-      aria-live="polite"
-      className="fixed right-6 top-6 z-[60] animate-in fade-in slide-in-from-top-2 slide-in-from-right-4 duration-300 motion-reduce:animate-none"
+      aria-live={toast?.type === "error" ? "assertive" : "polite"}
+      aria-atomic="true"
+      className="pointer-events-none fixed right-6 top-6 z-[60]"
     >
-      <div className="flex max-w-[calc(100vw-2rem)] items-center gap-2.5 rounded-xl border border-base-300 bg-base-100 px-4 py-3 text-sm text-base-content shadow-lg">
-        <Icon className={`h-5 w-5 shrink-0 ${TONE[toast.type]}`} aria-hidden="true" />
-        <span>{toast.msg}</span>
-      </div>
+      {toast && Icon && (
+        <div
+          key={toast.id}
+          className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-2.5 rounded-xl border border-base-300 bg-base-100 px-4 py-3 text-sm text-base-content shadow-lg animate-in fade-in slide-in-from-top-2 slide-in-from-right-4 duration-300 motion-reduce:animate-none"
+        >
+          <Icon className={`h-5 w-5 shrink-0 ${TONE[toast.type]}`} aria-hidden="true" />
+          <span>{toast.msg}</span>
+        </div>
+      )}
     </div>
   );
 }
