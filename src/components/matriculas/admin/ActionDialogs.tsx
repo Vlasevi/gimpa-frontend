@@ -34,7 +34,7 @@ interface ActionDialogProps {
   submitLabel: string;
   pendingLabel: string;
   submitClassName?: string;
-  /** Botón que cierra sin hacer nada. "Volver" donde la acción ya se llama "Cancelar …". */
+  /** Botón que cierra sin hacer nada. "Volver" donde la acción ya se llama "Cancelar". */
   dismissLabel?: string;
   pending: boolean;
   canSubmit: boolean;
@@ -187,9 +187,9 @@ const REASON_DIALOGS = {
       "Cierra la matrícula sin decidir sobre ella, por ejemplo si la familia no continúa. Es definitivo y no se envía correo. Si más adelante sigue el proceso, hay que crearle una matrícula nueva.",
     label: "Motivo de la cancelación",
     hint: "Queda registrado en la matrícula.",
-    submitLabel: "Cancelar matrícula",
+    submitLabel: "Cancelar",
     pendingLabel: "Cancelando…",
-    // No "Cancelar" junto a "Cancelar matrícula".
+    // La acción es "Cancelar": el botón que cierra sin hacer nada no puede llamarse igual.
     dismissLabel: "Volver",
   },
 } as const;

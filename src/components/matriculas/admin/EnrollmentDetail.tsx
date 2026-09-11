@@ -65,7 +65,7 @@ const REVIEW_MESSAGES: Partial<Record<DocumentStatus, string>> = {
 const TAB_CLASS =
   "rounded-lg px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=inactive]:text-base-content/60 data-[state=inactive]:hover:bg-base-200";
 
-/** Rechazar / Cancelar matrícula / Inactivar: con contorno, como "Devolver para corrección". */
+/** Rechazar / Cancelar / Inactivar: con contorno, como "Devolver para corrección". */
 const dangerBtnClass = "btn btn-outline btn-error gap-2";
 
 interface EnrollmentDetailProps {
@@ -361,7 +361,7 @@ export function EnrollmentDetail({
               {can("reject") &&
                 footerButton("reject", "Rechazar", "Rechazando…", XCircle, dangerBtnClass, () => setDialog("reject"))}
               {can("cancel") &&
-                footerButton("cancel", "Cancelar matrícula", "Cancelando…", Ban, dangerBtnClass, () => setDialog("cancel"))}
+                footerButton("cancel", "Cancelar", "Cancelando…", Ban, dangerBtnClass, () => setDialog("cancel"))}
               {can("inactivate") &&
                 footerButton("inactivate", "Inactivar", "Inactivando…", Archive, dangerBtnClass, () =>
                   setDialog("inactivate"),
