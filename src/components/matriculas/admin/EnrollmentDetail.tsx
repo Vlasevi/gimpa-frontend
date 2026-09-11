@@ -65,7 +65,8 @@ const REVIEW_MESSAGES: Partial<Record<DocumentStatus, string>> = {
 const TAB_CLASS =
   "rounded-lg px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=inactive]:text-base-content/60 data-[state=inactive]:hover:bg-base-200";
 
-const dangerBtnClass = `${ghostBtnClass} text-error hover:bg-error/10`;
+/** Rechazar / Anular / Inactivar: con contorno, como "Devolver para corrección". */
+const dangerBtnClass = "btn btn-outline btn-error gap-2";
 
 interface EnrollmentDetailProps {
   enrollmentId: number | null;

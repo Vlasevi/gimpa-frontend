@@ -473,16 +473,20 @@ export interface ProfileRow {
   value: string;
 }
 
-const GEO_PARTS: { key: string; label: string; withBarrio?: boolean }[] = [
-  { key: "country", label: "País" },
-  { key: "country_other", label: "¿Cuál país?" },
-  { key: "department", label: "Departamento" },
-  { key: "city", label: "Ciudad" },
-  { key: "barrio", label: "Barrio", withBarrio: true },
-  { key: "barrio_other", label: "Otro barrio", withBarrio: true },
-  { key: "address", label: "Dirección", withBarrio: true },
-  { key: "address_complement", label: "Complemento", withBarrio: true },
-  { key: "stratum", label: "Estrato", withBarrio: true },
+type GeoLabelKey = keyof NonNullable<Extract<FieldDescriptor, { type: "geo-cascade" }>["labels"]>;
+
+/** Partes de una cascada geográfica en solo lectura. La etiqueta es corta, como en el
+ * formulario: la de la cascada si la trae ("Departamento de nacimiento"); si no, la de
+ * residencia (las cascadas sin `labels` son todas de residencia). "Otro" se reemplaza por
+ * lo que se escribió en `…_other`. */
+const GEO_PARTS: { key: string; labelKey: GeoLabelKey; label: string; other?: string; withBarrio?: boolean }[] = [
+  { key: "country", labelKey: "country", label: "País de residencia", other: "country_other" },
+  { key: "department", labelKey: "department", label: "Departamento de residencia" },
+  { key: "city", labelKey: "city", label: "Ciudad de residencia" },
+  { key: "barrio", labelKey: "barrio", label: "Barrio", other: "barrio_other", withBarrio: true },
+  { key: "address", labelKey: "address", label: "Dirección", withBarrio: true },
+  { key: "address_complement", labelKey: "addressComplement", label: "Complemento", withBarrio: true },
+  { key: "stratum", labelKey: "stratum", label: "Estrato", withBarrio: true },
 ];
 
 function conditionHolds(condition: FieldCondition | undefined, data: unknown): boolean {
@@ -517,9 +521,10 @@ export function profileRows(section: ProfileSection, data: unknown): ProfileRow[
     if (d.type === "geo-cascade") {
       for (const part of GEO_PARTS) {
         if (part.withBarrio && !d.hasBarrio) continue;
-        const value = getPath(data, `${d.prefix}${part.key}`);
+        let value = getPath(data, `${d.prefix}${part.key}`);
+        if (value === "Otro" && part.other) value = getPath(data, `${d.prefix}${part.other}`) || value;
         if (value === null || value === undefined || value === "") continue;
-        rows.push({ label: `${part.label} (${d.label.toLowerCase()})`, value: String(value) });
+        rows.push({ label: d.labels?.[part.labelKey] ?? part.label, value: String(value) });
       }
       continue;
     }
