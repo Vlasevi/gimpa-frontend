@@ -1,31 +1,17 @@
-import { useAuth } from "@/components/Login/loginLogic";
+import welcome from "@/assets/welcome.png";
 
 export default function Dashboard() {
-  const { user } = useAuth();
-
   return (
-    <div className="rounded-2xl border border-base-300 bg-base-100 p-8 shadow-sm">
-      <div className="text-center space-y-4">
-        <h1 className="font-display text-3xl font-bold text-secondary">
-          ¡Bienvenido a la plataforma de GIMPA!
-        </h1>
-        <div className="space-y-2">
-          <p className="text-lg text-base-content/70">
-            Has iniciado sesión exitosamente
-          </p>
-          {user?.email && (
-            <p className="text-base text-base-content/70">
-              <span className="font-semibold text-base-content">Email:</span> {user.email}
-            </p>
-          )}
-          {user?.displayname && (
-            <p className="text-base text-base-content/70">
-              <span className="font-semibold text-base-content">Usuario:</span>{" "}
-              {user.displayname}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+    // El banner ya trae el título, el mensaje y su propio fondo redondeado: va sin
+    // tarjeta alrededor. Dentro del <h1> para que la página conserve su encabezado
+    // (el `alt` es el nombre accesible del título).
+    <h1 className="mx-auto max-w-3xl">
+      <img
+        src={welcome}
+        alt="¡Bienvenido a la plataforma de GIMPA! Has iniciado sesión exitosamente"
+        className="h-auto w-full select-none"
+        draggable={false}
+      />
+    </h1>
   );
 }
