@@ -203,9 +203,9 @@ const personFields = (who: "father" | "mother", noun: string): FieldDescriptor[]
   const ifGuardian = guardianIs(who === "father" ? "FATHER" : "MOTHER");
   return [
     { type: "text", name: `${who}.first_name1`, label: "Primer nombre", required: ifGuardian },
-    { type: "text", name: `${who}.first_name2`, label: "Segundo nombre (opcional)" },
+    { type: "text", name: `${who}.first_name2`, label: "Segundo nombre" },
     { type: "text", name: `${who}.last_name1`, label: "Primer apellido", required: ifGuardian },
-    { type: "text", name: `${who}.last_name2`, label: "Segundo apellido (opcional)" },
+    { type: "text", name: `${who}.last_name2`, label: "Segundo apellido" },
     { type: "select", name: `${who}.id_type`, label: "Tipo de documento", options: ID_TYPES, required: ifGuardian },
     { type: "text", name: `${who}.id_number`, label: "Número de documento", required: ifGuardian },
     { type: "tel", name: `${who}.phone`, label: "Celular", required: ifGuardian },
@@ -242,11 +242,22 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
     prefixes: ["student.", "photos.student_photo"],
     fields: [
       { type: "text", name: "student.first_name1", label: "Primer nombre", required: true },
-      { type: "text", name: "student.first_name2", label: "Segundo nombre (opcional)" },
+      { type: "text", name: "student.first_name2", label: "Segundo nombre" },
       { type: "text", name: "student.last_name1", label: "Primer apellido", required: true },
-      { type: "text", name: "student.last_name2", label: "Segundo apellido (opcional)" },
+      { type: "text", name: "student.last_name2", label: "Segundo apellido" },
       { type: "select", name: "student.sex", label: "Sexo", options: SEXES, required: true },
       { type: "date", name: "student.birth.date", label: "Fecha de nacimiento", required: true, max: "today" },
+      // Calculada desde la fecha de nacimiento: un campo más del grid, bloqueado (no se guarda).
+      {
+        type: "computed",
+        id: "student-age",
+        label: "Edad",
+        watch: ["student.birth.date"],
+        compute: (v) => {
+          const age = ageFrom(v["student.birth.date"] as string | null);
+          return age === null ? "" : `${age} ${age === 1 ? "año" : "años"}`;
+        },
+      },
       {
         type: "geo-cascade",
         prefix: "student.birth.",
@@ -269,19 +280,37 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
         labels: { country: "País de expedición", department: "Departamento de expedición", city: "Ciudad de expedición" },
       },
       { type: "select", name: "student.religion", label: "Religión", options: RELIGIONS, required: true },
-      { type: "yesno", name: "student.has_cellphone", label: "¿Tiene celular propio?", mode: "boolean", required: true },
+      // Pregunta Sí/No a la izquierda (empieza fila) y lo que revela a su derecha.
+      {
+        type: "yesno",
+        name: "student.has_cellphone",
+        label: "¿Tiene celular propio?",
+        mode: "boolean",
+        required: true,
+        full: false,
+        startsRow: true,
+      },
       {
         type: "tel",
         name: "student.cellphone",
         label: "Número de celular",
         showWhen: is("student.has_cellphone", true),
       },
-      { type: "yesno", name: "student.has_siblings", label: "¿Tiene hermanos?", mode: "boolean", required: true },
+      {
+        type: "yesno",
+        name: "student.has_siblings",
+        label: "¿Tiene hermanos?",
+        mode: "boolean",
+        required: true,
+        full: false,
+        startsRow: true,
+      },
       {
         type: "yesno",
         name: "student.siblings_in_school",
         label: "¿Alguno estudia en el colegio?",
         mode: "boolean",
+        full: false,
         showWhen: is("student.has_siblings", true),
       },
     ],
@@ -403,9 +432,9 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
       // Otra persona
       { type: "text", name: "guardian.relationship", label: "Parentesco con el estudiante", showWhen: guardianIs("OTHER"), required: true, placeholder: "Abuela, tío…" },
       { type: "text", name: "guardian.first_name1", label: "Primer nombre", showWhen: guardianIs("OTHER"), required: true },
-      { type: "text", name: "guardian.first_name2", label: "Segundo nombre (opcional)", showWhen: guardianIs("OTHER") },
+      { type: "text", name: "guardian.first_name2", label: "Segundo nombre", showWhen: guardianIs("OTHER") },
       { type: "text", name: "guardian.last_name1", label: "Primer apellido", showWhen: guardianIs("OTHER"), required: true },
-      { type: "text", name: "guardian.last_name2", label: "Segundo apellido (opcional)", showWhen: guardianIs("OTHER") },
+      { type: "text", name: "guardian.last_name2", label: "Segundo apellido", showWhen: guardianIs("OTHER") },
       { type: "select", name: "guardian.id_type", label: "Tipo de documento", options: ID_TYPES, showWhen: guardianIs("OTHER"), required: true },
       { type: "text", name: "guardian.id_number", label: "Número de documento", showWhen: guardianIs("OTHER"), required: true },
       // Otra persona o empresa
@@ -528,8 +557,9 @@ export function profileRows(section: ProfileSection, data: unknown): ProfileRow[
       }
       continue;
     }
-    if (!("name" in d) || !d.name) continue;
-    rows.push({ label: d.label.replace(" (opcional)", ""), value: display(d, getPath(data, d.name)) });
+    // Lo calculado (la edad) no es un dato guardado de la ficha.
+    if (d.type === "computed" || !("name" in d) || !d.name) continue;
+    rows.push({ label: d.label, value: display(d, getPath(data, d.name)) });
   }
   return rows;
 }

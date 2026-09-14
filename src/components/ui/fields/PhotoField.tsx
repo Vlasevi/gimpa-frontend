@@ -46,6 +46,7 @@
 import { useEffect, useState } from "react";
 import { Camera, X } from "lucide-react";
 
+import { RequiredMark } from "./fieldErrors";
 import type { PhotoFieldProps } from "./types";
 
 const MAX_FILE_SIZE_BYTES = 3 * 1024 * 1024;
@@ -58,7 +59,7 @@ const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png"];
  * `PhotoFieldProps`, `./types.ts`): quien lo consuma decide dónde vive ese estado, igual
  * que `uploadedFiles`/`updateUploadedFiles` ya funciona hoy en Matrículas.
  */
-export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldProps) {
+export function PhotoField({ label, value, onChange, preloadedUrl, required }: PhotoFieldProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,7 +111,10 @@ export function PhotoField({ label, value, onChange, preloadedUrl }: PhotoFieldP
 
   return (
     <div className="form-control w-full rounded-lg border border-base-300 bg-base-200/40 p-4 shadow-sm">
-      <span className="label-text mb-2 block font-medium text-base-content/70">{label}</span>
+      <span className="label-text mb-2 block font-medium text-base-content/70">
+        {label}
+        <RequiredMark required={required} />
+      </span>
       <div className="flex items-start gap-4">
         <div className="group relative h-20 w-20 shrink-0">
           {/* El input ES el cuadro — la foto es su propio `background-image`, no una capa

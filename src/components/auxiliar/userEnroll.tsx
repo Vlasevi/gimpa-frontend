@@ -6,12 +6,12 @@
  * - Editar (`enrollment`): solo cambia el grado (`enrollmentApi.changeGrade`). El
  *   backend lo permite antes de aprobar.
  *
- * Los errores del backend (p. ej. 409, ya tiene matrícula ese año) se muestran aquí
- * mismo; el éxito lo anuncia quien abre el formulario.
+ * Formato de diálogo de formulario (DESIGN_SYSTEM §12b): secciones con `FormSection`,
+ * obligatorios con asterisco, `FormActions`. Los errores (p. ej. 409, ya tiene matrícula ese
+ * año) van en el toast de la página (`flash`); el éxito lo anuncia quien abre el formulario.
  */
 
 import { useEffect, useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Loader2 } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import {
@@ -23,7 +23,18 @@ import {
 } from "@/components/matriculas/enrollmentApi";
 import { currentYear, errorMessage } from "@/components/matriculas/admin/shared";
 import { ORIGIN_LABELS } from "@/utils/statusHelpers";
-import { ghostBtnClass, inputClass, labelClass, primaryBtnClass, selectClass } from "@/components/ui/formStyles";
+import { Search } from "lucide-react";
+
+import {
+  FormActions,
+  FormGrid,
+  FormSection,
+  FormSelect,
+  formHintClass,
+  formInputClass,
+  formLabelClass,
+} from "@/components/ui/FormDialog";
+import type { ToastVariant } from "@/hooks/use-toast";
 
 interface StudentOption {
   email: string;
@@ -39,13 +50,20 @@ interface UserEnrollProps {
   enrollment?: Pick<EnrollmentListItem, "id" | "student" | "student_name" | "grade" | "academic_year">;
   /** Grados ya cargados por el padre; si no llegan, se piden. */
   grades?: GradeInfo[];
+  /** Toast de la página (arriba a la derecha) para los errores. */
+  flash: (type: ToastVariant, msg: string) => void;
 }
 
 const MAX_SUGGESTIONS = 6;
 const normalize = (text: string) =>
   text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gradesProp }: UserEnrollProps) {
+/** Ref de montaje: enfoca el `Select` del bloque (lo que antes hacía `autoFocus`). */
+const focusSelectOnMount = (el: HTMLDivElement | null) => {
+  el?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+};
+
+export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gradesProp, flash }: UserEnrollProps) {
   const isEdit = Boolean(enrollment);
   const ids = useId();
   const fieldId = (name: string) => `${ids}-${name}`;
@@ -63,7 +81,6 @@ export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gr
   const [year, setYear] = useState("");
   const [origin, setOrigin] = useState<"" | EnrollmentOrigin>("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const thisYear = currentYear();
   const years = [thisYear, thisYear + 1];
@@ -77,11 +94,11 @@ export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gr
     enrollmentApi
       .grades()
       .then((list) => alive && setGrades([...list].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))))
-      .catch(() => alive && setError("No se pudieron cargar los grados."));
+      .catch(() => alive && flash("error", "No se pudieron cargar los grados."));
     return () => {
       alive = false;
     };
-  }, [gradesProp]);
+  }, [gradesProp, flash]);
 
   // Estudiantes para el buscador (solo al crear). Se ocultan las cuentas con otro rol.
   useEffect(() => {
@@ -92,12 +109,12 @@ export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gr
       .then((list: StudentOption[]) => {
         if (alive) setStudents(list.filter((u) => !u.role || u.role === "student"));
       })
-      .catch(() => alive && setError("No se pudo cargar la lista de estudiantes."))
+      .catch(() => alive && flash("error", "No se pudo cargar la lista de estudiantes."))
       .finally(() => alive && setStudentsLoading(false));
     return () => {
       alive = false;
     };
-  }, [isEdit]);
+  }, [isEdit, flash]);
 
   const suggestions = useMemo(() => {
     const term = normalize(query.trim());
@@ -115,7 +132,6 @@ export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gr
     setSelected(student);
     setQuery(`${student.first_name} ${student.last_name} (${student.email})`);
     setListOpen(false);
-    setError(null);
   };
 
   const onStudentKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -143,7 +159,6 @@ export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gr
     event.preventDefault();
     if (!isValid || submitting) return;
     setSubmitting(true);
-    setError(null);
     try {
       const result = enrollment
         ? await enrollmentApi.changeGrade(enrollment.id, Number(gradeId))
@@ -155,196 +170,174 @@ export default function UserEnroll({ onCancel, onSuccess, enrollment, grades: gr
           });
       onSuccess(result);
     } catch (err) {
-      setError(errorMessage(err));
+      flash("error", errorMessage(err));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const errorId = fieldId("error");
+  const studentField = enrollment ? (
+    <div>
+      <span className={formLabelClass}>Estudiante</span>
+      <p className="rounded-lg bg-base-200 px-3 py-2 text-sm text-base-content/80">
+        {enrollment.student_name}
+        <span className="block text-xs text-base-content/60">{enrollment.student.email}</span>
+      </p>
+    </div>
+  ) : (
+    // Combobox con búsqueda por nombre o correo.
+    <div>
+      <label className={formLabelClass} htmlFor={fieldId("student")}>
+        Estudiante
+        <span className="ml-0.5 text-error" aria-hidden="true">
+          *
+        </span>
+      </label>
+      <div className="group relative">
+        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-base-content/50 transition-colors group-focus-within:text-primary">
+          <Search className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <input
+          id={fieldId("student")}
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={showList}
+          aria-controls={listId}
+          aria-activedescendant={showList ? optionId(highlight) : undefined}
+          aria-describedby={fieldId("student-hint")}
+          aria-required="true"
+          autoComplete="off"
+          autoFocus
+          placeholder={studentsLoading ? "Cargando estudiantes…" : "Nombre o correo del estudiante"}
+          disabled={studentsLoading}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSelected(null);
+            setHighlight(0);
+            setListOpen(true);
+          }}
+          onKeyDown={onStudentKeyDown}
+          onBlur={() => setListOpen(false)}
+          className={`${formInputClass} pl-9`}
+        />
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Estudiantes"
+          hidden={!showList}
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
+        >
+          {suggestions.map((s, index) => (
+            <li
+              key={s.email}
+              id={optionId(index)}
+              role="option"
+              aria-selected={index === highlight}
+              // mousedown: elige antes de que el blur del input cierre la lista
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickStudent(s);
+              }}
+              onMouseEnter={() => setHighlight(index)}
+              className={`cursor-pointer rounded-md px-3 py-2 text-sm ${
+                index === highlight ? "bg-primary text-primary-content" : "text-base-content/80"
+              }`}
+            >
+              {s.first_name} {s.last_name}
+              <span className={`block text-xs ${index === highlight ? "text-primary-content/80" : "text-base-content/60"}`}>
+                {s.email}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p id={fieldId("student-hint")} className={formHintClass}>
+        {query.trim() && !selected && !suggestions.length && !studentsLoading
+          ? "Ningún estudiante coincide. Si no tiene cuenta, regístralo primero."
+          : "Escribe y elige de la lista."}
+      </p>
+    </div>
+  );
+
+  const gradeField = (
+    <div ref={isEdit ? focusSelectOnMount : undefined}>
+      <FormSelect
+        id={fieldId("grade")}
+        label={isEdit ? "Nuevo grado" : "Grado"}
+        required
+        value={gradeId}
+        onChange={setGradeId}
+        placeholder="Selecciona un grado"
+        options={grades.map((g) => ({ value: String(g.id), label: g.label }))}
+        hint={
+          isEdit
+            ? "Si la matrícula aún está en manos del estudiante, tendrá que volver a firmar el contrato, el pagaré y la hoja de matrícula con el grado nuevo."
+            : undefined
+        }
+      />
+    </div>
+  );
+
+  const actions = (
+    <FormActions
+      onCancel={onCancel}
+      busy={submitting}
+      submitDisabled={!isValid}
+      submitText={isEdit ? "Cambiar grado" : "Crear matrícula"}
+      busyText={isEdit ? "Cambiando…" : "Creando…"}
+    />
+  );
+
+  // Cambiar grado: un solo campo, en una sola tarjeta.
+  if (enrollment) {
+    return (
+      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+        <FormSection title="Grado">
+          {studentField}
+          {gradeField}
+        </FormSection>
+        {actions}
+      </form>
+    );
+  }
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-      {error && (
-        <div id={errorId} role="alert" className="rounded-lg border border-error/25 bg-error/5 p-3 text-sm text-error">
-          {error}
-        </div>
-      )}
+      <FormSection title="Estudiante" required>
+        {studentField}
+      </FormSection>
 
-      {/* Estudiante: combobox con búsqueda por nombre o correo */}
-      <div>
-        {enrollment ? (
-          <>
-            <span className={labelClass}>Estudiante</span>
-            <p className="rounded-lg bg-base-200 px-3 py-2.5 text-sm text-base-content/80">
-              {enrollment.student_name}
-              <span className="block text-xs text-base-content/50">{enrollment.student.email}</span>
-            </p>
-          </>
-        ) : (
-          <>
-            <label className={labelClass} htmlFor={fieldId("student")}>
-              Estudiante
-            </label>
-            <div className="relative">
-              <input
-                id={fieldId("student")}
-                type="text"
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={showList}
-                aria-controls={listId}
-                aria-activedescendant={showList ? optionId(highlight) : undefined}
-                aria-describedby={`${fieldId("student-hint")}${error ? ` ${errorId}` : ""}`}
-                aria-required="true"
-                autoComplete="off"
-                autoFocus
-                placeholder={studentsLoading ? "Cargando estudiantes…" : "Nombre o correo del estudiante"}
-                disabled={studentsLoading}
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setSelected(null);
-                  setHighlight(0);
-                  setListOpen(true);
-                }}
-                onKeyDown={onStudentKeyDown}
-                onBlur={() => setListOpen(false)}
-                className={inputClass}
-              />
-              <ul
-                id={listId}
-                role="listbox"
-                aria-label="Estudiantes"
-                hidden={!showList}
-                className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
-              >
-                {suggestions.map((s, index) => (
-                  <li
-                    key={s.email}
-                    id={optionId(index)}
-                    role="option"
-                    aria-selected={index === highlight}
-                    // mousedown: elige antes de que el blur del input cierre la lista
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      pickStudent(s);
-                    }}
-                    onMouseEnter={() => setHighlight(index)}
-                    className={`cursor-pointer rounded-md px-3 py-2 text-sm ${
-                      index === highlight ? "bg-primary text-primary-content" : "text-base-content/80"
-                    }`}
-                  >
-                    {s.first_name} {s.last_name}
-                    <span className={`block text-xs ${index === highlight ? "text-primary-content/80" : "text-base-content/50"}`}>
-                      {s.email}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p id={fieldId("student-hint")} className="mt-1 text-xs text-base-content/50">
-              {query.trim() && !selected && !suggestions.length && !studentsLoading
-                ? "Ningún estudiante coincide. Si no tiene cuenta, regístralo primero."
-                : "Escribe y elige de la lista."}
-            </p>
-          </>
-        )}
-      </div>
+      <FormSection title="Matrícula" required>
+        <FormGrid>
+          {gradeField}
+          <FormSelect
+            id={fieldId("year")}
+            label="Año lectivo"
+            required
+            value={year}
+            onChange={setYear}
+            placeholder="Selecciona el año"
+            options={years.map((y) => ({ value: String(y), label: String(y) }))}
+          />
+          <FormSelect
+            id={fieldId("origin")}
+            label="Origen"
+            full
+            value={origin}
+            onChange={(v) => setOrigin(v as "" | EnrollmentOrigin)}
+            options={[
+              { value: "", label: "Automático" },
+              { value: "NEW", label: ORIGIN_LABELS.NEW },
+              { value: "RENEWAL", label: ORIGIN_LABELS.RENEWAL },
+            ]}
+            hint="Automático: renovación si el estudiante ya tuvo una matrícula aprobada; si no, estudiante nuevo. Define qué documentos se le piden."
+          />
+        </FormGrid>
+      </FormSection>
 
-      <div>
-        <label className={labelClass} htmlFor={fieldId("grade")}>
-          {isEdit ? "Nuevo grado" : "Grado"}
-        </label>
-        <select
-          id={fieldId("grade")}
-          required
-          className={selectClass}
-          value={gradeId}
-          onChange={(e) => setGradeId(e.target.value)}
-          autoFocus={isEdit}
-        >
-          <option value="">Selecciona un grado</option>
-          {grades.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.label}
-            </option>
-          ))}
-        </select>
-        {isEdit && (
-          <p className="mt-1 text-xs text-base-content/50">
-            Si la matrícula aún está en manos del estudiante, tendrá que volver a firmar el contrato, el
-            pagaré y la hoja de matrícula con el grado nuevo.
-          </p>
-        )}
-      </div>
-
-      {enrollment ? (
-        <div>
-          <span className={labelClass}>Año lectivo</span>
-          <p className="rounded-lg bg-base-200 px-3 py-2.5 text-sm text-base-content/80">{enrollment.academic_year}</p>
-        </div>
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label className={labelClass} htmlFor={fieldId("year")}>
-              Año lectivo
-            </label>
-            <select
-              id={fieldId("year")}
-              required
-              className={selectClass}
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-            >
-              <option value="">Selecciona el año</option>
-              {years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor={fieldId("origin")}>
-              Origen
-            </label>
-            <select
-              id={fieldId("origin")}
-              className={selectClass}
-              value={origin}
-              aria-describedby={fieldId("origin-hint")}
-              onChange={(e) => setOrigin(e.target.value as "" | EnrollmentOrigin)}
-            >
-              <option value="">Automático</option>
-              <option value="NEW">{ORIGIN_LABELS.NEW}</option>
-              <option value="RENEWAL">{ORIGIN_LABELS.RENEWAL}</option>
-            </select>
-          </div>
-          <p id={fieldId("origin-hint")} className="-mt-3 text-xs text-base-content/50 sm:col-span-2">
-            Automático: renovación si el estudiante ya tuvo una matrícula aprobada; si no, estudiante nuevo.
-            Define qué documentos se le piden.
-          </p>
-        </div>
-      )}
-
-      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onCancel} disabled={submitting} className={ghostBtnClass}>
-          Cancelar
-        </button>
-        <button type="submit" disabled={!isValid || submitting} className={primaryBtnClass}>
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              {isEdit ? "Cambiando…" : "Creando…"}
-            </>
-          ) : isEdit ? (
-            "Cambiar grado"
-          ) : (
-            "Crear matrícula"
-          )}
-        </button>
-      </div>
+      {actions}
     </form>
   );
 }

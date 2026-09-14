@@ -24,10 +24,10 @@ import { apiFetch, apiUrl, API_ENDPOINTS } from "@/utils/api";
 import { usePermissions } from "@/components/Login/loginLogic";
 import { Modal } from "@/components/ui/Modal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert } from "@/components/ui/Alert";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { Toast } from "@/components/ui/Toast";
 import { useToast } from "@/hooks/use-toast";
-import { adminGhostBtnClass } from "@/components/ui/formStyles";
+import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
 import { StatusBadge } from "@/components/admisiones/StatusBadge";
 import { SolicitudTab } from "@/components/admisiones/admin/tabs/SolicitudTab";
 import { ValidacionTab } from "@/components/admisiones/admin/tabs/ValidacionTab";
@@ -65,8 +65,10 @@ export function ApplicationDetail({
   const [confirm, setConfirm] = useState<{
     title: string;
     message: string;
-    acceptText: string;
-    onAccept: () => void;
+    confirmText: string;
+    /** `false`: se puede restaurar (no se muestra "Este cambio es irreversible."). */
+    irreversible: boolean;
+    onConfirm: () => Promise<boolean>;
   } | null>(null);
 
   // Toast de feedback (hook compartido, Paso 1) + qué acción concreta está en curso
@@ -139,7 +141,8 @@ export function ApplicationDetail({
     }
   };
 
-  /** Elimina el expediente (soft o hard). Al terminar cierra el modal. */
+  /** Elimina el expediente (soft o hard). Al terminar cierra el modal. `false` = falló
+   * (la confirmación queda abierta para reintentar). */
   const doDelete = async (hard: boolean) => {
     setBusy(true);
     setError(null);
@@ -149,14 +152,17 @@ export function ApplicationDetail({
       );
       const res = await fetch(url, { method: "DELETE" });
       if (res.ok) {
+        flash("success", hard ? "Solicitud eliminada permanentemente" : "Solicitud eliminada");
         onChanged();
         onClose();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.detail || "No se pudo eliminar.");
+        return true;
       }
+      const data = await res.json().catch(() => ({}));
+      flash("error", typeof data?.detail === "string" ? data.detail : "No se pudo eliminar.");
+      return false;
     } catch {
-      setError("No pudimos conectar con el servidor.");
+      flash("error", "No pudimos conectar con el servidor.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -221,9 +227,10 @@ export function ApplicationDetail({
                   type="button"
                   onClick={onClose}
                   aria-label="Cerrar"
-                  className="rounded-full p-2 text-base-content/40 transition-colors hover:bg-base-200 hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  title="Cerrar"
+                  className={`${iconBtnClass} ${iconHover.neutral}`}
                 >
-                  <X className="h-5 w-5" />
+                  <X className={iconClass} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -318,9 +325,9 @@ export function ApplicationDetail({
                 type="button"
                 onClick={doRestore}
                 disabled={busy}
-                className={`${adminGhostBtnClass} text-accent hover:bg-accent/10`}
+                className="btn btn-outline btn-accent gap-2"
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
                 Restaurar
               </button>
             ) : (
@@ -331,12 +338,13 @@ export function ApplicationDetail({
                   onClick={() =>
                     setConfirm({
                       title: "Eliminar solicitud",
-                      message: `La solicitud de ${application.applicant.full_name} (${application.code}) se ocultará de los listados.`,
-                      acceptText: "Eliminar",
-                      onAccept: () => doDelete(false),
+                      message: `La solicitud de ${application.applicant.full_name} (${application.code}) se ocultará de los listados. Se puede restaurar más adelante.`,
+                      confirmText: "Eliminar solicitud",
+                      irreversible: false,
+                      onConfirm: () => doDelete(false),
                     })
                   }
-                  className={`${adminGhostBtnClass} text-error hover:bg-error/10`}
+                  className="btn btn-outline btn-error gap-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Eliminar
@@ -347,12 +355,13 @@ export function ApplicationDetail({
                   onClick={() =>
                     setConfirm({
                       title: "Eliminar permanentemente",
-                      message: `Esto borra la solicitud de ${application.applicant.full_name} (${application.code}), con sus pagos, documentos y archivos. No se puede deshacer.`,
-                      acceptText: "Eliminar para siempre",
-                      onAccept: () => doDelete(true),
+                      message: `Se borrará la solicitud de ${application.applicant.full_name} (${application.code}), con sus pagos, documentos y archivos.`,
+                      confirmText: "Eliminar permanentemente",
+                      irreversible: true,
+                      onConfirm: () => doDelete(true),
                     })
                   }
-                  className={`${adminGhostBtnClass} text-error hover:bg-error/10`}
+                  className="btn btn-outline btn-error gap-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Eliminar permanentemente
@@ -366,22 +375,16 @@ export function ApplicationDetail({
       {/* Confirmación de borrado (soft/hard) — fuera de <Modal> por la misma razón que
           el toast de arriba (containing block del `transform` del panel). */}
       {confirm && (
-        <Alert
-          isOpen={true}
+        <ConfirmDeleteDialog
+          isOpen
           onClose={() => setConfirm(null)}
-          onAccept={() => {
-            const cb = confirm.onAccept;
-            setConfirm(null);
-            cb();
-          }}
+          onConfirm={confirm.onConfirm}
           title={confirm.title}
-          variant="error"
-          acceptText={confirm.acceptText}
-          cancelText="Cancelar"
-          acceptButtonVariant="destructive"
+          confirmText={confirm.confirmText}
+          irreversible={confirm.irreversible}
         >
-          <p className="text-base-content/80">{confirm.message}</p>
-        </Alert>
+          <p>{confirm.message}</p>
+        </ConfirmDeleteDialog>
       )}
     </>
   );

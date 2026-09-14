@@ -17,6 +17,7 @@ import {
   computeAge,
   CONTRACT_DEFAULTS,
 } from "./contractConfig";
+import { BusyLabel } from "@/components/ui/BusyLabel";
 
 interface Contract {
   id: number;
@@ -235,7 +236,7 @@ const StepOTP = ({ next }: { next: () => void }) => {
       {!sent && error && <div className="alert alert-error"><span>{error}</span></div>}
       {!sent ? (
         <button className="btn btn-primary" onClick={request} disabled={loading}>
-          {loading ? <span className="loading loading-spinner" /> : "Enviar Código"}
+          <BusyLabel busy={loading} busyText="Enviando código…">Enviar código</BusyLabel>
         </button>
       ) : (
         // `w-fit` en vez de `w-full max-w-xs`: ver Step1Verification.tsx (misma
@@ -254,7 +255,7 @@ const StepOTP = ({ next }: { next: () => void }) => {
             />
           </div>
           <button className="btn btn-secondary w-full mb-2" onClick={() => validate()} disabled={loading || code.length !== 6}>
-            {loading ? <span className="loading loading-spinner loading-sm" /> : "Validar y Continuar"}
+            <BusyLabel busy={loading} busyText="Validando…">Validar y continuar</BusyLabel>
           </button>
           <p className="text-center text-sm text-base-content/60">
             ¿No recibiste el código?{" "}
@@ -449,7 +450,7 @@ const StepData = ({
 
       <div className="flex justify-end mt-2">
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? <span className="loading loading-spinner loading-sm" /> : "Guardar y Continuar"}
+          <BusyLabel busy={saving} busyText="Guardando…">Guardar y continuar</BusyLabel>
         </button>
       </div>
     </div>
@@ -543,7 +544,7 @@ const StepDocuments = ({
                 </h4>
                 {uploading === d.key ? (
                   <div className="flex items-center gap-2 py-2 text-sm text-primary">
-                    <span className="loading loading-spinner loading-sm" /> Subiendo documento...
+                    <span className="loading loading-spinner loading-sm" aria-hidden="true" /> Subiendo documento…
                   </div>
                 ) : uploaded ? (
                   <div className="space-y-2">
@@ -752,7 +753,7 @@ const StepSign = ({
                 onClick={() => setOpen(true)}
                 disabled={!unsigned}
               >
-                {unsigned ? "Ver y firmar" : <span className="loading loading-spinner loading-xs" />}
+                <BusyLabel busy={!unsigned} busyText="Preparando…">Ver y firmar</BusyLabel>
               </button>
             </div>
           </div>
@@ -761,7 +762,7 @@ const StepSign = ({
           <div className="flex justify-between mt-4">
             <button className="btn btn-ghost" onClick={back} disabled={submitting}>Atrás</button>
             <button className="btn btn-primary" onClick={signAndSubmit} disabled={submitting || !allFilled}>
-              {submitting ? <span className="loading loading-spinner loading-sm" /> : "Firmar y Enviar"}
+              <BusyLabel busy={submitting} busyText="Enviando…">Firmar y enviar</BusyLabel>
             </button>
           </div>
 

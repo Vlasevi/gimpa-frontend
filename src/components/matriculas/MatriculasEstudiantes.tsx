@@ -255,8 +255,10 @@ export const MatriculasEstudiantes = () => {
                   enrollment={enrollment}
                   onBack={() => goTo(5)}
                   onGoToStep={goTo}
-                  onSubmitted={(next) => {
-                    setEnrollment(next);
+                  onSubmitted={(res) => {
+                    // La respuesta ya trae la matrícula en revisión y su mensaje; `load()`
+                    // solo refresca lo demás (otras matrículas con pendientes).
+                    setResponse((prev) => ({ ...res, other_pending: prev?.other_pending }));
                     load();
                   }}
                   flash={flash}

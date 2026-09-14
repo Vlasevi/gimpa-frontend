@@ -2,14 +2,22 @@
  * Paso 6 — Resumen y envío. Enviar es una sola llamada (la transición a "En revisión",
  * plan 15.2, hallazgo #27): los datos, las firmas y los documentos ya están guardados.
  * El resumen muestra la lista real de pendientes (hallazgo #20).
+ *
+ * La confirmación es la minimalista de la plataforma (`ConfirmDialog`): una frase, spinner
+ * mientras envía y el resultado en el toast de arriba a la derecha, nunca en el diálogo.
  */
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Send } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Send } from "lucide-react";
 
-import { Alert } from "@/components/ui/Alert";
-import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
-import { ApiError, enrollmentApi, type StudentEnrollment } from "@/components/matriculas/enrollmentApi";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import {
+  ApiError,
+  enrollmentApi,
+  type MyEnrollmentResponse,
+  type StudentEnrollment,
+} from "@/components/matriculas/enrollmentApi";
 import { getDocumentStatusLabel } from "@/utils/statusHelpers";
 import type { FlashFn } from "./types";
 import { titleClass } from "@/components/ui/textStyles";
@@ -38,11 +46,11 @@ export function StepSubmit({
   enrollment: StudentEnrollment;
   onBack: () => void;
   onGoToStep: (step: number) => void;
-  onSubmitted: (next: StudentEnrollment) => void;
+  /** Respuesta del envío (matrícula en revisión y su mensaje). */
+  onSubmitted: (response: MyEnrollmentResponse) => void;
   flash: FlashFn;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const [sending, setSending] = useState(false);
 
   const dataSaved = !!enrollment.progress?.data_saved;
   const signed = !!enrollment.progress?.signed;
@@ -51,17 +59,16 @@ export function StepSubmit({
   );
   const canSubmit = dataSaved && signed;
 
+  // `false` deja el diálogo abierto para reintentar; el error va en el toast.
   const submit = async () => {
-    setConfirming(false);
-    setSending(true);
     try {
       const res = await enrollmentApi.submit(enrollment.id);
-      if (res.enrollment) onSubmitted(res.enrollment);
       flash("success", "Matrícula enviada a revisión");
+      onSubmitted(res);
+      return true;
     } catch (e) {
       flash("error", e instanceof ApiError ? e.message : "No se pudo enviar la matrícula.");
-    } finally {
-      setSending(false);
+      return false;
     }
   };
 
@@ -96,8 +103,8 @@ export function StepSubmit({
         <CheckRow ok={pending.length === 0}>
           <p className="font-medium">
             {pending.length === 0
-              ? "Documentos obligatorios entregados"
-              : `${pending.length} ${pending.length === 1 ? "documento obligatorio pendiente" : "documentos obligatorios pendientes"}`}
+              ? "Documentos entregados"
+              : `${pending.length} ${pending.length === 1 ? "documento pendiente" : "documentos pendientes"}`}
           </p>
           {pending.length > 0 && (
             <>
@@ -121,35 +128,32 @@ export function StepSubmit({
       </ul>
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-        <button type="button" className={ghostBtnClass} onClick={onBack} disabled={sending}>
+        <button type="button" className={outlineBtnClass} onClick={onBack}>
           Atrás
         </button>
-        <button type="button" className={primaryBtnClass} onClick={() => setConfirming(true)} disabled={!canSubmit || sending}>
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-          {sending ? "Enviando…" : "Enviar matrícula"}
+        <button type="button" className={primaryBtnClass} onClick={() => setConfirming(true)} disabled={!canSubmit}>
+          <Send className="h-4 w-4" aria-hidden="true" />
+          Enviar matrícula
         </button>
       </div>
 
-      <Alert
+      <ConfirmDialog
         isOpen={confirming}
         onClose={() => setConfirming(false)}
-        onAccept={submit}
+        onConfirm={submit}
         title="¿Enviar la matrícula a revisión?"
-        variant="info"
-        acceptText="Enviar matrícula"
-        cancelText="Seguir revisando"
+        tone="primary"
+        confirmText="Enviar matrícula"
+        pendingText="Enviando…"
       >
         <p>
-          La institución revisará los datos, las firmas y los documentos. Te avisaremos por correo al
-          acudiente cuando la aprueben o si piden alguna corrección.
+          Se enviará la matrícula de{" "}
+          <strong>
+            {enrollment.grade.label} {enrollment.academic_year}
+          </strong>{" "}
+          a revisión. Después no podrás editarla hasta que la institución responda.
         </p>
-        {pending.length > 0 && (
-          <p>
-            Quedan <strong>{pending.length}</strong> documentos obligatorios por subir. Podrás subirlos
-            cuando la institución apruebe la matrícula.
-          </p>
-        )}
-      </Alert>
+      </ConfirmDialog>
     </section>
   );
 }

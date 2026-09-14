@@ -6,16 +6,32 @@
 // botones con nombre ("Alejar", "Acercar", "Cerrar"), foco inicial en el diálogo y
 // devolución del foco al cerrar. `onReadToEnd` avisa cuando el usuario llegó al final
 // del documento (plan 15.6: solo se firma lo que se leyó).
-import { useState, useEffect, useId, useRef, type ReactNode } from "react";
+//
+// Zonas de firma (`overlays`):
+// - Con `onSelect`/`onClear` son interactivas: el usuario sube la imagen sobre el PDF
+//   (Contratación).
+// - Sin ellos son solo una vista previa: la imagen ya cargada aparece donde quedará al
+//   firmar y, si todavía no hay imagen, no se dibuja nada (Matrículas: la firma y la huella
+//   se cargan una sola vez en el panel de firmantes).
+//
+// Rendimiento: el documento de pdf.js (y su Web Worker) se destruye al cerrar el visor;
+// las páginas no se vuelven a dibujar si solo cambia el padre (mismo `page` y `scale`).
+import { memo, useState, useEffect, useId, useRef, type ReactNode } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
-import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import { PDFDocument } from "pdf-lib";
+import type { PDFPageProxy } from "pdfjs-dist";
+import { PDFDocument, type PDFImage } from "pdf-lib";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { LoadingState } from "@/components/ui/LoadingState";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+/** Zoom con el que abre el visor: 100 % (1 px de pantalla por punto del PDF). */
+const DEFAULT_SCALE = 1;
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 3;
+const SCALE_STEP = 0.2;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type FieldRect = { page: number; x: number; y: number; w: number; h: number };
@@ -25,8 +41,9 @@ export interface FieldOverlay {
   label: string;
   rect: FieldRect;
   preview: string | null;
-  onSelect: (file: File) => void;
-  onClear: () => void;
+  /** Sin `onSelect` la zona es solo vista previa (no invita a subir nada). */
+  onSelect?: (file: File) => void;
+  onClear?: () => void;
 }
 
 // ─── OverlayZone ──────────────────────────────────────────────────────────────
@@ -46,27 +63,39 @@ export const OverlayZone = ({
   height: number;
   label: string;
   preview: string | null;
-  onSelect: (file: File) => void;
-  onClear: () => void;
+  onSelect?: (file: File) => void;
+  onClear?: () => void;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Solo vista previa: la imagen donde quedará estampada, sin botones.
+  if (!onSelect) {
+    if (!preview) return null;
+    return (
+      <div className="pointer-events-none absolute" style={{ left, top, width, height }}>
+        <img src={preview} alt={label} className="h-full w-full object-contain" draggable={false} />
+      </div>
+    );
+  }
 
   return (
     <div className="absolute" style={{ left, top, width, height }}>
       {preview ? (
         <div className="w-full h-full relative group cursor-pointer">
           <img src={preview} alt={label} className="w-full h-full object-contain" />
-          <button
-            type="button"
-            aria-label={`Quitar ${label.toLowerCase()}`}
-            className="absolute -top-1 -right-1 btn btn-xs btn-circle btn-error opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity z-10"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClear();
-            }}
-          >
-            <X className="h-3 w-3" aria-hidden="true" />
-          </button>
+          {onClear && (
+            <button
+              type="button"
+              aria-label={`Quitar ${label.toLowerCase()}`}
+              className="absolute -top-1 -right-1 btn btn-xs btn-circle btn-error opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear();
+              }}
+            >
+              <X className="h-3 w-3" aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             aria-label={`Cambiar ${label.toLowerCase()}`}
@@ -105,7 +134,9 @@ export const OverlayZone = ({
 };
 
 // ─── PdfPage ──────────────────────────────────────────────────────────────────
-const PdfPage = ({
+// `memo`: con el mismo `page`, `scale` y `overlays` no se vuelve a renderizar (p. ej.
+// cuando el padre cambia el pie "Leíste el documento completo").
+const PdfPage = memo(function PdfPage({
   page,
   scale,
   pageIndex,
@@ -115,7 +146,7 @@ const PdfPage = ({
   scale: number;
   pageIndex: number;
   overlays?: FieldOverlay[];
-}) => {
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pageHeightPts = page.getViewport({ scale: 1 }).height;
 
@@ -133,6 +164,8 @@ const PdfPage = ({
 
     const ctx = canvas.getContext("2d")!;
     const renderTask = page.render({ canvas, canvasContext: ctx, viewport } as Parameters<typeof page.render>[0]);
+    // Cancelar un render lo rechaza: no es un error.
+    renderTask.promise.catch(() => undefined);
 
     return () => {
       renderTask.cancel();
@@ -159,7 +192,7 @@ const PdfPage = ({
       ))}
     </div>
   );
-};
+});
 
 // ─── PdfViewer ────────────────────────────────────────────────────────────────
 export const PdfViewer = ({
@@ -176,79 +209,75 @@ export const PdfViewer = ({
 }) => {
   const [pages, setPages] = useState<PDFPageProxy[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const docRef = useRef<PDFDocumentProxy | null>(null);
-  const dataRef = useRef<Uint8Array>(new Uint8Array(pdfData));
-
+  const onLoadedRef = useRef(onLoaded);
   useEffect(() => {
-    const updateWidth = () => {
-      if (!containerRef.current) return;
-      setContainerWidth(containerRef.current.clientWidth);
-    };
-    updateWidth();
-    window.addEventListener("resize", updateWidth);
-    return () => window.removeEventListener("resize", updateWidth);
+    onLoadedRef.current = onLoaded;
+  }, [onLoaded]);
+
+  // Ancho disponible (sin el padding) para que la página nunca se salga del visor. El
+  // contenedor existe desde el primer render, así que se mide también al abrir.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setContainerWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    dataRef.current = new Uint8Array(pdfData);
-  }, [pdfData]);
-
-  useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setFailed(false);
+    // pdf.js se queda con el buffer que recibe (lo pasa al worker): se le da una copia.
+    const task = pdfjs.getDocument({ data: pdfData.slice() });
 
-    const load = async () => {
-      setLoading(true);
-      if (docRef.current) {
-        docRef.current.destroy();
-        docRef.current = null;
-      }
-
-      const loadingTask = pdfjs.getDocument({ data: dataRef.current.slice(0) });
-      const doc = await loadingTask.promise;
-      if (cancelled) {
-        doc.destroy();
-        return;
-      }
-
-      docRef.current = doc;
-      const loaded: PDFPageProxy[] = [];
-      for (let i = 1; i <= doc.numPages; i++) {
-        const p = await doc.getPage(i);
-        if (cancelled) {
-          doc.destroy();
-          return;
+    task.promise
+      .then(async (doc) => {
+        const loaded: PDFPageProxy[] = [];
+        for (let i = 1; i <= doc.numPages; i++) {
+          const page = await doc.getPage(i);
+          if (cancelled) return;
+          loaded.push(page);
         }
-        loaded.push(p);
-      }
-      setPages(loaded);
-      setLoading(false);
-      onLoaded?.();
-    };
+        if (cancelled) return;
+        setPages(loaded);
+        setLoading(false);
+        onLoadedRef.current?.();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFailed(true);
+        setLoading(false);
+      });
 
-    load();
     return () => {
       cancelled = true;
+      // Libera el documento y su Web Worker (antes quedaban vivos tras cerrar el visor).
+      void task.destroy();
     };
   }, [pdfData]);
-
-  if (loading) {
-    return <LoadingState compact className="h-48" label="Cargando documento…" />;
-  }
 
   const firstPageWidth = pages[0]?.getViewport({ scale: 1 }).width ?? 0;
   const fitScale =
-    containerWidth > 0 && firstPageWidth > 0
-      ? Math.max(0.4, (containerWidth - 8) / firstPageWidth)
-      : scale;
+    containerWidth > 0 && firstPageWidth > 0 ? Math.max(MIN_SCALE, containerWidth / firstPageWidth) : scale;
   const effectiveScale = Math.min(scale, fitScale);
 
   return (
     <div ref={containerRef} className="flex flex-col gap-4 p-4 w-full overflow-x-hidden">
-      {pages.map((page, i) => (
-        <PdfPage key={i} page={page} scale={effectiveScale} pageIndex={i} overlays={overlays} />
-      ))}
+      {loading ? (
+        <LoadingState compact className="h-48" label="Cargando documento…" />
+      ) : failed ? (
+        <p role="alert" className="py-12 text-center text-sm text-error">
+          No se pudo mostrar el documento. Ciérralo y vuelve a abrirlo.
+        </p>
+      ) : (
+        pages.map((page, i) => (
+          <PdfPage key={i} page={page} scale={effectiveScale} pageIndex={i} overlays={overlays} />
+        ))
+      )}
     </div>
   );
 };
@@ -271,9 +300,9 @@ export const PdfModal = ({
   /** Franja inferior opcional (p. ej. "Llegaste al final del documento"). */
   footer?: ReactNode;
 }) => {
-  const [scale, setScale] = useState(1.2);
-  const zoomIn = () => setScale((s) => Math.min(s + 0.2, 3));
-  const zoomOut = () => setScale((s) => Math.max(s - 0.2, 0.4));
+  const [scale, setScale] = useState(DEFAULT_SCALE);
+  const zoomIn = () => setScale((s) => Math.min(Math.round((s + SCALE_STEP) * 10) / 10, MAX_SCALE));
+  const zoomOut = () => setScale((s) => Math.max(Math.round((s - SCALE_STEP) * 10) / 10, MIN_SCALE));
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -352,7 +381,7 @@ export const PdfModal = ({
                 type="button"
                 className="btn btn-ghost btn-xs h-7 min-h-0 px-2"
                 onClick={zoomOut}
-                disabled={scale <= 0.4}
+                disabled={scale <= MIN_SCALE}
                 aria-label="Alejar"
                 title="Alejar"
               >
@@ -365,7 +394,7 @@ export const PdfModal = ({
                 type="button"
                 className="btn btn-ghost btn-xs h-7 min-h-0 px-2"
                 onClick={zoomIn}
-                disabled={scale >= 3}
+                disabled={scale >= MAX_SCALE}
                 aria-label="Acercar"
                 title="Acercar"
               >
@@ -403,24 +432,45 @@ export const PdfModal = ({
 };
 
 // ─── pdf-lib helper ───────────────────────────────────────────────────────────
+/** Una imagen para estampar en un campo: sus bytes (PNG o JPG) o un data URL. */
+export type EmbedImage = { fieldName: string } & (
+  | { bytes: Uint8Array; dataUrl?: never }
+  | { dataUrl: string; bytes?: never }
+);
+
+const isPngBytes = (b: Uint8Array) => b.length > 3 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+
+/**
+ * Estampa imágenes (firma, huella) en los rectángulos de sus campos. Recibe los bytes
+ * directamente (o un data URL, que pdf-lib decodifica sin `fetch`). Si la misma imagen va
+ * en varios campos del documento, se incrusta una sola vez.
+ */
 export async function embedImagesInPdf(
   pdfBytes: Uint8Array,
-  images: { fieldName: string; dataUrl: string }[],
+  images: EmbedImage[],
   fieldRects: Record<string, FieldRect>,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.load(pdfBytes.slice(0));
   const pages = doc.getPages();
+  const embedded = new Map<Uint8Array | string, PDFImage>();
 
-  for (const { fieldName, dataUrl } of images) {
-    const rect = fieldRects[fieldName];
-    if (!rect || !dataUrl) continue;
+  const embed = async (source: Uint8Array | string): Promise<PDFImage> => {
+    const cached = embedded.get(source);
+    if (cached) return cached;
+    const png = typeof source === "string" ? source.startsWith("data:image/png") : isPngBytes(source);
+    const img = png ? await doc.embedPng(source) : await doc.embedJpg(source);
+    embedded.set(source, img);
+    return img;
+  };
 
-    const imgBytes = await fetch(dataUrl).then((r) => r.arrayBuffer());
-    const isPng = dataUrl.includes("image/png");
-    const img = isPng ? await doc.embedPng(imgBytes) : await doc.embedJpg(imgBytes);
+  for (const image of images) {
+    const rect = fieldRects[image.fieldName];
+    const source = image.bytes ?? image.dataUrl;
+    if (!rect || !source) continue;
 
     const page = pages[rect.page];
     if (!page) continue;
+    const img = await embed(source);
 
     const aspect = img.width / img.height;
     let drawW = rect.w;

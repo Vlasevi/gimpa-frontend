@@ -12,7 +12,7 @@ import { Link } from "react-router-dom";
 import { Camera, Loader2, Trash2, User } from "lucide-react";
 
 import { useAuth } from "@/components/Login/loginLogic";
-import { Alert } from "@/components/ui/Alert";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { Toast } from "@/components/ui/Toast";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/utils/api";
@@ -69,14 +69,16 @@ export default function Perfil() {
     }
   };
 
+  /** `false` = falló: el diálogo queda abierto para reintentar. */
   const remove = async () => {
-    setConfirmDelete(false);
     setBusy("delete");
     try {
       await send("DELETE");
       flash("success", "Foto eliminada");
+      return true;
     } catch (e) {
       flash("error", (e as Error).message);
+      return false;
     } finally {
       setBusy(null);
     }
@@ -190,18 +192,16 @@ export default function Perfil() {
         </section>
       )}
 
-      <Alert
+      <ConfirmDeleteDialog
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        onAccept={remove}
-        title="¿Eliminar tu foto de perfil?"
-        variant="warning"
-        acceptText="Eliminar foto"
-        acceptButtonVariant="destructive"
-        cancelText="Cancelar"
+        onConfirm={remove}
+        title="Eliminar tu foto de perfil"
+        confirmText="Eliminar foto"
+        irreversible={false}
       >
         <p>Tu cuenta quedará sin foto hasta que subas otra.</p>
-      </Alert>
+      </ConfirmDeleteDialog>
     </div>
   );
 }

@@ -8,8 +8,9 @@ import type { LucideIcon } from "lucide-react";
 import { apiUrl, API_ENDPOINTS, apiFetch, buildHeaders } from "@/utils/api";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DisplayField } from "@/components/matriculas/matriculasUI/DisplayField";
-import { Alert } from "@/components/ui/Alert";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { Select } from "@/components/ui/Select";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import {
@@ -24,6 +25,8 @@ import {
   computeAge,
   formatMoney,
 } from "./contractConfig";
+import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
+import { BusyLabel } from "@/components/ui/BusyLabel";
 
 interface Contract {
   id: number;
@@ -205,11 +208,13 @@ export const ContratacionAdmin = ({ readOnly = false }: { readOnly?: boolean }) 
                   </td>
                   <td>
                     <button
-                      className="p-2 text-base-content/40 hover:text-primary hover:bg-primary/10 rounded-full transition-all cursor-pointer"
+                      type="button"
+                      className={`${iconBtnClass} ${iconHover.primary}`}
                       title="Ver detalles"
+                      aria-label="Ver detalles"
                       onClick={() => setSelected(c)}
                     >
-                      <Eye className="h-5 w-5" />
+                      <Eye className={iconClass} aria-hidden="true" />
                     </button>
                   </td>
                 </tr>
@@ -510,7 +515,7 @@ const EnableModal = ({
       <div className="flex justify-end gap-2 mt-4">
         <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
         <button className="btn btn-primary" onClick={submit} disabled={saving}>
-          {saving ? <span className="loading loading-spinner loading-sm" /> : "Habilitar"}
+          <BusyLabel busy={saving} busyText="Habilitando…">Habilitar</BusyLabel>
         </button>
       </div>
     </Overlay>
@@ -565,12 +570,14 @@ const DetailModal = ({
   const [correctionText, setCorrectionText] = useState("");
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<"soft" | "hard" | "restore" | null>(null);
+  // Confirmaciones de eliminar (documento, contratación, eliminación permanente).
   const [confirmState, setConfirmState] = useState<{
     title: string;
     message: string;
-    acceptText: string;
-    variant: "warning" | "error" | "info" | "success";
-    onAccept: () => void;
+    confirmText: string;
+    /** `false`: la eliminación se puede restaurar (no se muestra "Este cambio es irreversible."). */
+    irreversible: boolean;
+    onConfirm: () => Promise<boolean>;
   } | null>(null);
   const [meta, setMeta] = useState({
     position_id: contract.position?.id ? String(contract.position.id) : "",
@@ -654,7 +661,11 @@ const DetailModal = ({
       notify("success", hard ? "Contratación eliminada permanentemente." : "Contratación eliminada.");
       onChanged();
       onClose();
-    } catch (e: any) { notify("error", e.message || "Error al eliminar"); } finally { setBusy(false); setPendingAction(null); }
+      return true;
+    } catch (e: any) {
+      notify("error", e.message || "Error al eliminar");
+      return false;
+    } finally { setBusy(false); setPendingAction(null); }
   };
 
   const restoreContract = async () => {
@@ -696,7 +707,11 @@ const DetailModal = ({
       await loadDocs();
       notify("success", "Documento eliminado.");
       onChanged();
-    } catch (e: any) { notify("error", e.message || "Error"); } finally { setBusy(false); }
+      return true;
+    } catch (e: any) {
+      notify("error", e.message || "Error");
+      return false;
+    } finally { setBusy(false); }
   };
 
   const photoUrl: string | null = docs["profile_photo"]?.url || null;
@@ -729,31 +744,35 @@ const DetailModal = ({
       </div>
       <div className="flex items-center gap-1 shrink-0">
         {meta.url && (
-          <a className="p-2 text-primary hover:bg-primary/10 rounded-lg" href={meta.url} target="_blank" rel="noreferrer" title="Abrir">
-            <Download className="h-4 w-4" />
+          <a className={`${iconBtnClass} ${iconHover.primary}`} href={meta.url} target="_blank" rel="noreferrer"
+            title="Abrir" aria-label={`Abrir ${docLabel(key)}`}>
+            <Download className={iconClass} aria-hidden="true" />
           </a>
         )}
         {canManage && (
           <>
-            <label className="p-2 text-info hover:bg-info/10 rounded-lg cursor-pointer" title="Cambiar">
-              <Upload className="h-4 w-4" />
+            <label className={`${iconBtnClass} ${iconHover.primary}`} title="Cambiar"
+              aria-label={`Cambiar ${docLabel(key)}`}>
+              <Upload className={iconClass} aria-hidden="true" />
               <input type="file" className="hidden"
                 onChange={(e) => { uploadDoc(key, e.target.files?.[0]); e.currentTarget.value = ""; }} />
             </label>
             <button
-              className="p-2 text-error hover:bg-error/10 rounded-lg"
+              type="button"
+              className={`${iconBtnClass} ${iconHover.error}`}
+              aria-label={`Eliminar ${docLabel(key)}`}
               onClick={() =>
                 setConfirmState({
                   title: "Eliminar documento",
-                  message: "¿Eliminar este documento? Esta acción no se puede deshacer.",
-                  acceptText: "Eliminar",
-                  variant: "error",
-                  onAccept: () => deleteDoc(key),
+                  message: "Se borrará este documento de la contratación.",
+                  confirmText: "Eliminar documento",
+                  irreversible: true,
+                  onConfirm: () => deleteDoc(key),
                 })
               }
-              title="Borrar"
+              title="Eliminar"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className={iconClass} aria-hidden="true" />
             </button>
           </>
         )}
@@ -834,7 +853,7 @@ const DetailModal = ({
                   </button>
                   <button className="btn btn-primary btn-sm" disabled={busy}
                     onClick={async () => { await saveData(); setEditing(false); }}>
-                    {busy ? <span className="loading loading-spinner loading-xs" /> : "Guardar datos"}
+                    <BusyLabel busy={busy} busyText="Guardando…">Guardar datos</BusyLabel>
                   </button>
                 </div>
               ) : (
@@ -945,11 +964,12 @@ const DetailModal = ({
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div className="form-control">
                               <label className="label py-1"><span className="label-text text-xs font-semibold text-base-content/60">Puesto</span></label>
-                              <select className="select select-bordered select-sm" value={meta.position_id}
-                                onChange={(e) => setMeta({ ...meta, position_id: e.target.value })}>
-                                <option value="">— Ninguno —</option>
-                                {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </select>
+                              <Select ariaLabel="Puesto" className="[&>button]:h-8" value={meta.position_id}
+                                onChange={(v) => setMeta({ ...meta, position_id: v })}
+                                options={[
+                                  { value: "", label: "— Ninguno —" },
+                                  ...positions.map((p) => ({ value: String(p.id), label: p.name })),
+                                ]} />
                             </div>
                             <div className="form-control">
                               <label className="label py-1"><span className="label-text text-xs font-semibold text-base-content/60">Subcargo</span></label>
@@ -1082,7 +1102,7 @@ const DetailModal = ({
             <div className="flex flex-wrap gap-2">
               {contract.is_deleted ? (
                 <button className="btn btn-success btn-sm" disabled={busy} onClick={restoreContract}>
-                  {pendingAction === "restore" ? <span className="loading loading-spinner loading-xs" /> : "Restaurar"}
+                  <BusyLabel busy={pendingAction === "restore"} busyText="Restaurando…">Restaurar</BusyLabel>
                 </button>
               ) : (
                 <button
@@ -1091,14 +1111,14 @@ const DetailModal = ({
                   onClick={() =>
                     setConfirmState({
                       title: "Eliminar contratación",
-                      message: "¿Eliminar esta contratación? Podrás restaurarla más adelante.",
-                      acceptText: "Eliminar",
-                      variant: "warning",
-                      onAccept: () => deleteContract(false),
+                      message: "La contratación deja de verse en el listado. Podrás restaurarla más adelante.",
+                      confirmText: "Eliminar contratación",
+                      irreversible: false,
+                      onConfirm: () => deleteContract(false),
                     })
                   }
                 >
-                  {pendingAction === "soft" ? <span className="loading loading-spinner loading-xs" /> : <><Trash2 size={14} /> Eliminar</>}
+                  <BusyLabel busy={pendingAction === "soft"} busyText="Eliminando…"><Trash2 size={14} aria-hidden="true" /> Eliminar</BusyLabel>
                 </button>
               )}
               <button
@@ -1107,15 +1127,14 @@ const DetailModal = ({
                 onClick={() =>
                   setConfirmState({
                     title: "Eliminar permanentemente",
-                    message:
-                      "¿Eliminar PERMANENTEMENTE esta contratación y sus documentos? Esta acción no se puede deshacer.",
-                    acceptText: "Eliminar",
-                    variant: "error",
-                    onAccept: () => deleteContract(true),
+                    message: "Se eliminarán por completo la contratación y todos sus documentos.",
+                    confirmText: "Eliminar permanentemente",
+                    irreversible: true,
+                    onConfirm: () => deleteContract(true),
                   })
                 }
               >
-                {pendingAction === "hard" ? <span className="loading loading-spinner loading-xs" /> : <><Trash2 size={14} /> Eliminar permanentemente</>}
+                <BusyLabel busy={pendingAction === "hard"} busyText="Eliminando…"><Trash2 size={14} aria-hidden="true" /> Eliminar permanentemente</BusyLabel>
               </button>
             </div>
 
@@ -1127,10 +1146,10 @@ const DetailModal = ({
                   Solicitar corrección
                 </button>
                 <button className="btn btn-error btn-sm" disabled={busy} onClick={() => setStatus("REJECTED")}>
-                  {pendingStatus === "REJECTED" ? <span className="loading loading-spinner loading-xs" /> : "Rechazar"}
+                  <BusyLabel busy={pendingStatus === "REJECTED"} busyText="Rechazando…">Rechazar</BusyLabel>
                 </button>
                 <button className="btn btn-success btn-sm" disabled={busy} onClick={() => setStatus("APPROVED")}>
-                  {pendingStatus === "APPROVED" ? <span className="loading loading-spinner loading-xs" /> : "Aprobar"}
+                  <BusyLabel busy={pendingStatus === "APPROVED"} busyText="Aprobando…">Aprobar</BusyLabel>
                 </button>
               </div>
             )}
@@ -1158,30 +1177,24 @@ const DetailModal = ({
               disabled={busy || !correctionText.trim()}
               onClick={() => setStatus("PENDING", correctionText.trim())}
             >
-              {pendingStatus === "PENDING" ? <span className="loading loading-spinner loading-xs" /> : "Enviar corrección"}
+              <BusyLabel busy={pendingStatus === "PENDING"} busyText="Enviando…">Enviar corrección</BusyLabel>
             </button>
           </div>
         </Overlay>
       )}
 
-      {/* Confirmación con estilo (reemplaza confirm() nativo) */}
+      {/* Confirmación de eliminar (componente compartido) */}
       {confirmState && (
-        <Alert
-          isOpen={true}
+        <ConfirmDeleteDialog
+          isOpen
           onClose={() => setConfirmState(null)}
-          onAccept={() => {
-            const cb = confirmState.onAccept;
-            setConfirmState(null);
-            cb();
-          }}
+          onConfirm={confirmState.onConfirm}
           title={confirmState.title}
-          variant={confirmState.variant}
-          acceptText={confirmState.acceptText}
-          cancelText="Cancelar"
-          acceptButtonVariant={confirmState.variant === "error" ? "destructive" : "default"}
+          confirmText={confirmState.confirmText}
+          irreversible={confirmState.irreversible}
         >
-          <p className="text-base-content/80">{confirmState.message}</p>
-        </Alert>
+          <p>{confirmState.message}</p>
+        </ConfirmDeleteDialog>
       )}
     </div>
   );
@@ -1209,6 +1222,7 @@ const TemplatesModal = ({
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
+  /** `false` = falló: el diálogo queda abierto para reintentar. */
   const remove = async (id: number) => {
     setDeletingId(id);
     try {
@@ -1218,8 +1232,10 @@ const TemplatesModal = ({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Error al eliminar");
       notify("success", "Plantilla eliminada.");
       onChanged();
+      return true;
     } catch (e: any) {
       notify("error", e.message || "Error al eliminar la plantilla");
+      return false;
     } finally {
       setDeletingId(null);
     }
@@ -1305,7 +1321,7 @@ const TemplatesModal = ({
         </p>
         <div className="flex justify-end">
           <button className="btn btn-primary btn-sm" onClick={upload} disabled={saving}>
-            {saving ? <span className="loading loading-spinner loading-xs" /> : "Subir plantilla"}
+            <BusyLabel busy={saving} busyText="Subiendo…">Subir plantilla</BusyLabel>
           </button>
         </div>
       </div>
@@ -1320,12 +1336,14 @@ const TemplatesModal = ({
               <li key={t.id} className="flex items-center justify-between gap-2 text-sm p-2 border border-base-300 rounded-lg">
                 <span className="truncate">{t.name}</span>
                 <button
-                  className="btn btn-ghost btn-xs text-error"
+                  type="button"
+                  className={`${iconBtnClass} ${iconHover.error}`}
                   onClick={() => setConfirmId(t.id)}
                   disabled={deletingId === t.id}
                   title="Eliminar plantilla"
+                  aria-label={`Eliminar la plantilla ${t.name}`}
                 >
-                  {deletingId === t.id ? <span className="loading loading-spinner loading-xs" /> : <Trash2 size={14} />}
+                  <Trash2 className={iconClass} aria-hidden="true" />
                 </button>
               </li>
             ))}
@@ -1334,24 +1352,17 @@ const TemplatesModal = ({
       </div>
 
       {confirmId != null && (
-        <Alert
-          isOpen={true}
+        <ConfirmDeleteDialog
+          isOpen
           onClose={() => setConfirmId(null)}
-          onAccept={() => {
-            const id = confirmId;
-            setConfirmId(null);
-            remove(id);
-          }}
+          onConfirm={() => remove(confirmId)}
           title="Eliminar plantilla"
-          variant="error"
-          acceptText="Eliminar"
-          cancelText="Cancelar"
-          acceptButtonVariant="destructive"
+          confirmText="Eliminar plantilla"
         >
-          <p className="text-base-content/80">
-            ¿Eliminar esta plantilla? Esta acción no se puede deshacer.
+          <p>
+            Se eliminará la plantilla <strong>{templates.find((t) => t.id === confirmId)?.name ?? ""}</strong>.
           </p>
-        </Alert>
+        </ConfirmDeleteDialog>
       )}
     </Overlay>
   );

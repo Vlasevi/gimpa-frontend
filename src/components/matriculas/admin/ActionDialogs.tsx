@@ -10,12 +10,14 @@
  */
 
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowRightLeft, Loader2 } from "lucide-react";
 
 import { Modal } from "@/components/ui/Modal";
 import { ghostBtnClass, labelClass, primaryBtnClass, textareaClass, inputClass } from "@/components/ui/formStyles";
 import { smallTitleClass } from "@/components/ui/textStyles";
 import UserEnroll from "@/components/auxiliar/userEnroll";
+import { FormDialog } from "@/components/ui/FormDialog";
+import type { ToastVariant } from "@/hooks/use-toast";
 import type { EnrollmentDetail, EnrollmentDocument, GradeInfo } from "@/components/matriculas/enrollmentApi";
 import { getDocumentStatusBadgeClass, getDocumentStatusLabel } from "@/utils/statusHelpers";
 
@@ -155,12 +157,12 @@ function RequiredText({
         <input {...common} type="text" className={`${inputClass} ${showError ? "input-error" : ""}`} />
       )}
       {hint && (
-        <p id={`${id}-hint`} className="mt-1 text-xs text-base-content/50">
+        <p id={`${id}-hint`} className="mt-1 text-sm text-base-content/60">
           {hint}
         </p>
       )}
       {showError && (
-        <p id={`${id}-error`} className="mt-1 text-xs text-error">
+        <p id={`${id}-error`} className="mt-1 text-sm font-medium text-error">
           {errorText}
         </p>
       )}
@@ -327,7 +329,7 @@ export function ReturnDialog({
       {withFile.length > 0 && (
         <fieldset className="space-y-2" aria-describedby={`${legendId}-hint`}>
           <legend className="text-sm font-medium text-base-content/70">Documentos a corregir (opcional)</legend>
-          <p id={`${legendId}-hint`} className="text-xs text-base-content/50">
+          <p id={`${legendId}-hint`} className="text-sm text-base-content/60">
             Marca los que debe volver a subir o firmar. Cada uno necesita un motivo.
           </p>
           <ul className="divide-y divide-base-300 rounded-lg border border-base-300">
@@ -348,7 +350,7 @@ export function ReturnDialog({
                     />
                     <label htmlFor={checkboxId} className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-2 text-sm">
                       <span className="text-base-content">{doc.label}</span>
-                      <span className={`badge badge-xs ${getDocumentStatusBadgeClass(doc.status)}`}>
+                      <span className={`badge badge-sm ${getDocumentStatusBadgeClass(doc.status)}`}>
                         {getDocumentStatusLabel(doc.status)}
                       </span>
                     </label>
@@ -370,7 +372,7 @@ export function ReturnDialog({
                         className={`input input-bordered input-sm w-full focus:input-primary ${reasonMissing ? "input-error" : ""}`}
                       />
                       {reasonMissing && (
-                        <p id={`${reasonId}-error`} className="mt-1 text-xs text-error">
+                        <p id={`${reasonId}-error`} className="mt-1 text-sm font-medium text-error">
                           Escribe el motivo de este documento.
                         </p>
                       )}
@@ -457,7 +459,7 @@ export function InactivateDialog({
               />
               <span>
                 <span className="block text-sm font-medium text-base-content">{option.label}</span>
-                <span id={`${id}-hint`} className="block text-xs text-base-content/60">
+                <span id={`${id}-hint`} className="block text-sm text-base-content/60">
                   {option.hint}
                 </span>
               </span>
@@ -485,33 +487,26 @@ export function ChangeGradeDialog({
   grades,
   onClose,
   onChanged,
+  flash,
 }: {
   isOpen: boolean;
   enrollment: EnrollmentDetail;
   grades: GradeInfo[];
   onClose: () => void;
   onChanged: (updated: EnrollmentDetail) => void;
+  flash: (type: ToastVariant, msg: string) => void;
 }) {
-  const titleId = useId();
   return (
-    <div className="relative z-[55]">
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        closeOnBackdrop={false}
-        labelledBy={titleId}
-        className={`${PANEL_CLASS} p-6 gap-4`}
-      >
-        <div>
-          <h2 id={titleId} className={smallTitleClass}>
-            Cambiar grado
-          </h2>
-          <p className="mt-1 text-sm text-base-content/60">
-            Grado actual: {enrollment.grade.label} · {enrollment.academic_year}
-          </p>
-        </div>
-        <UserEnroll enrollment={enrollment} grades={grades} onCancel={onClose} onSuccess={onChanged} />
-      </Modal>
-    </div>
+    <FormDialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Cambiar grado"
+      description={`Grado actual: ${enrollment.grade.label} · ${enrollment.academic_year}`}
+      icon={ArrowRightLeft}
+      size="sm"
+      stacked
+    >
+      <UserEnroll enrollment={enrollment} grades={grades} onCancel={onClose} onSuccess={onChanged} flash={flash} />
+    </FormDialog>
   );
 }

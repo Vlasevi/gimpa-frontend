@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 import type { DocumentStatus, EnrollmentDetail, EnrollmentDocument } from "@/components/matriculas/enrollmentApi";
-import { ghostBtnClass, labelClass, textareaClass } from "@/components/ui/formStyles";
+import { ghostBtnClass, iconBtnClass, iconClass, iconHover, labelClass, textareaClass } from "@/components/ui/formStyles";
 import {
   cardClass,
   cardHeaderClass,
@@ -74,13 +74,6 @@ const ACCEPT: Record<EnrollmentDocument["kind"], string> = {
 
 type Tone = "primary" | "success" | "error" | "neutral";
 
-const HOVER: Record<Tone, string> = {
-  primary: "hover:text-primary hover:bg-primary/10",
-  success: "hover:text-success hover:bg-success/10",
-  error: "hover:text-error hover:bg-error/10",
-  neutral: "hover:text-base-content hover:bg-base-200",
-};
-
 function IconAction({
   label,
   title,
@@ -106,9 +99,9 @@ function IconAction({
       aria-expanded={expanded}
       onClick={onClick}
       disabled={disabled}
-      className={`cursor-pointer rounded-full p-2 text-base-content/40 transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40 ${HOVER[tone]}`}
+      className={`${iconBtnClass} ${iconHover[tone]}`}
     >
-      <Icon className="h-5 w-5" aria-hidden="true" />
+      <Icon className={iconClass} aria-hidden="true" />
     </button>
   );
 }
@@ -252,12 +245,15 @@ export function DocumentsTab({
                       <div className="flex min-w-0 gap-3">
                         <Icon className="mt-0.5 h-5 w-5 shrink-0 text-base-content/40" aria-hidden="true" />
                         <div className="min-w-0">
-                          <p className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 ${itemTitleClass}`}>
+                          <p className={itemTitleClass}>
                             {doc.label}
-                            {doc.kind === "family" && (
-                              <span className="text-sm font-normal text-base-content/60">
-                                {doc.required ? "Obligatorio" : "Opcional"}
-                              </span>
+                            {doc.required && (
+                              <>
+                                <span className="ml-0.5 text-error" aria-hidden="true">
+                                  *
+                                </span>
+                                <span className="sr-only"> (obligatorio)</span>
+                              </>
                             )}
                           </p>
                           <p className={`break-words ${metaTextClass}`}>{meta.join(" · ")}</p>

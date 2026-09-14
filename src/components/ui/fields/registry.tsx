@@ -23,6 +23,7 @@ import {
   YesNoField,
   CheckboxGroupField,
   ComboBoxField,
+  LockedField,
 } from "./primitives";
 import { GeoCascadeField } from "./GeoCascadeField";
 import { PhotoField } from "./PhotoField";
@@ -95,6 +96,7 @@ function TextTypeField(props: SchemaFieldProps) {
           type={d.type}
           placeholder={d.placeholder}
           full={d.full}
+          startsRow={d.startsRow}
           disabled={props.disabled}
           required={props.required}
           hint={props.hint ?? d.hint}
@@ -118,6 +120,7 @@ function TextAreaTypeField(props: SchemaFieldProps) {
       register={props.register}
       placeholder={d.placeholder}
       full={d.full}
+      startsRow={d.startsRow}
       disabled={props.disabled}
       required={props.required}
       rows={d.rows}
@@ -134,9 +137,10 @@ function SelectTypeField(props: SchemaFieldProps) {
       name={d.name}
       id={d.id}
       label={d.label}
-      register={props.register}
+      control={props.control}
       options={d.options}
       full={d.full}
+      startsRow={d.startsRow}
       disabled={props.disabled}
       required={props.required}
       hint={props.hint ?? d.hint}
@@ -156,6 +160,7 @@ function ComboBoxTypeField(props: SchemaFieldProps) {
       disabled={props.disabled}
       placeholder={d.placeholder}
       full={d.full}
+      startsRow={d.startsRow}
       required={props.required}
     />
   );
@@ -171,6 +176,7 @@ function YesNoTypeField(props: SchemaFieldProps) {
       control={props.control}
       mode={d.mode}
       full={d.full}
+      startsRow={d.startsRow}
       required={props.required}
     />
   );
@@ -186,6 +192,7 @@ function CheckboxTypeField(props: SchemaFieldProps) {
       label={d.label}
       register={props.register}
       full={d.full}
+      startsRow={d.startsRow}
       disabled={props.disabled}
     />
   );
@@ -233,6 +240,7 @@ function PhotoTypeField(props: SchemaFieldProps) {
       value={value}
       preloadedUrl={preloadedUrl}
       onChange={(next) => props.onPhotoChange?.(d.dataKey, next)}
+      required={props.required}
     />
   );
 }
@@ -287,6 +295,28 @@ function FileTypeField(props: SchemaFieldProps) {
   );
 }
 
+const NO_NAMES: readonly string[] = [];
+
+/** `type: "computed"` — dato calculado (p. ej. la edad), bloqueado y fuera de RHF. */
+function ComputedTypeField(props: SchemaFieldProps) {
+  const d = props.descriptor;
+  const names = d.type === "computed" ? d.watch : NO_NAMES;
+  const watched = useWatch({ control: props.control, name: names as string[] });
+  const values = useMemo(() => watchedValuesFrom(names, watched), [names, watched]);
+  if (d.type !== "computed") return null;
+  return (
+    <LockedField
+      id={d.id ?? `computed-${d.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+      label={d.label}
+      value={d.compute(values)}
+      placeholder={d.placeholder}
+      full={d.full}
+      startsRow={d.startsRow}
+      hint={props.hint ?? d.hint}
+    />
+  );
+}
+
 // -------------------------------------------------------------------- Registro
 
 export const FIELD_REGISTRY: Record<FieldType, ComponentType<SchemaFieldProps>> = {
@@ -304,6 +334,7 @@ export const FIELD_REGISTRY: Record<FieldType, ComponentType<SchemaFieldProps>> 
   "geo-cascade": GeoCascadeTypeField,
   photo: PhotoTypeField,
   file: FileTypeField,
+  computed: ComputedTypeField,
 };
 
 /** Resuelve un único `FieldDescriptor` contra `FIELD_REGISTRY`. */
@@ -331,6 +362,7 @@ function descriptorKey(d: FieldDescriptor, index: number): string {
   if ("name" in d && d.name) return d.name;
   if (d.type === "geo-cascade") return `geo-${d.prefix}`;
   if (d.type === "photo" || d.type === "file") return `file-${d.dataKey}`;
+  if (d.type === "computed" && d.id) return `computed-${d.id}`;
   return `field-${index}`;
 }
 

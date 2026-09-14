@@ -31,12 +31,12 @@ import {
 import {
   labelClass,
   inputClass,
-  selectClass,
   textareaClass,
 } from "@/components/ui/formStyles";
 import { ComboBox } from "@/components/ui/ComboBox";
+import { Select } from "@/components/ui/Select";
 import type { SectionValues } from "./types";
-import { errorAria, FieldErrorText, RequiredMark, useFieldError } from "./fieldErrors";
+import { errorAria, errorIdFor, FieldErrorText, RequiredMark, useFieldError } from "./fieldErrors";
 
 interface FieldBaseProps {
   /** Nombre del campo para RHF. Soporta paths anidados ("repeated.grade"). */
@@ -47,10 +47,18 @@ interface FieldBaseProps {
   register: UseFormRegister<SectionValues>;
   placeholder?: string;
   full?: boolean;
+  /** Empieza una fila nueva del grid (ver `FieldDescriptor.startsRow`). */
+  startsRow?: boolean;
   disabled?: boolean;
   required?: boolean;
   /** Texto de ayuda bajo el control (se asocia con `aria-describedby`). */
   hint?: string;
+}
+
+/** Clases de la celda en el grid de 2 columnas: ancho completo y/o inicio de fila. */
+function cellClass(full?: boolean, startsRow?: boolean): string | undefined {
+  const classes = [full && "sm:col-span-2", startsRow && "sm:col-start-1"].filter(Boolean);
+  return classes.length ? classes.join(" ") : undefined;
 }
 
 /** Ayuda bajo el control; si hay error, el error la reemplaza. */
@@ -79,6 +87,7 @@ export function TextField({
   type = "text",
   placeholder,
   full,
+  startsRow,
   disabled,
   required,
   hint,
@@ -96,7 +105,7 @@ export function TextField({
   const htmlId = id ?? htmlIdFor(name);
   const error = useFieldError(name);
   return (
-    <div className={full ? "sm:col-span-2" : undefined}>
+    <div className={cellClass(full, startsRow)}>
       <label htmlFor={htmlId} className={labelClass}>
         {label}
         <RequiredMark required={required} />
@@ -120,44 +129,95 @@ export function TextField({
   );
 }
 
+/**
+ * Campo bloqueado que solo muestra un valor (p. ej. un dato calculado como la edad). Se ve
+ * igual que los demás campos del grid, deshabilitado. No se registra en RHF: no se guarda
+ * ni se envía.
+ */
+export function LockedField({
+  id,
+  label,
+  value,
+  placeholder = "—",
+  full,
+  startsRow,
+  hint,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  placeholder?: string;
+  full?: boolean;
+  startsRow?: boolean;
+  hint?: string;
+}) {
+  return (
+    <div className={cellClass(full, startsRow)}>
+      <label htmlFor={id} className={labelClass}>
+        {label}
+      </label>
+      <input
+        id={id}
+        type="text"
+        className={inputClass}
+        value={value}
+        placeholder={placeholder}
+        disabled
+        readOnly
+        {...(hint ? { "aria-describedby": `${id}-hint` } : {})}
+      />
+      <HintText htmlId={id} hint={hint} />
+    </div>
+  );
+}
+
 export type SelectFieldOption = string | { value: string; label: string };
 
 export function SelectField({
   name,
   id,
   label,
-  register,
+  control,
   options,
   full,
+  startsRow,
   disabled,
   required,
   placeholder = "Selecciona…",
   hint,
-}: FieldBaseProps & { options: readonly SelectFieldOption[] }) {
+}: Omit<FieldBaseProps, "register"> & {
+  control: Control<SectionValues>;
+  options: readonly SelectFieldOption[];
+}) {
   const htmlId = id ?? htmlIdFor(name);
   const error = useFieldError(name);
   const normalized = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+  const describedById = error ? errorIdFor(htmlId) : hint ? `${htmlId}-hint` : undefined;
   return (
-    <div className={full ? "sm:col-span-2" : undefined}>
+    <div className={cellClass(full, startsRow)}>
       <label htmlFor={htmlId} className={labelClass}>
         {label}
         <RequiredMark required={required} />
       </label>
-      <select
-        id={htmlId}
-        className={`${selectClass} ${error ? "select-error" : ""}`}
-        disabled={disabled}
-        required={required}
-        {...describedBy(htmlId, error, hint)}
-        {...register(name)}
-      >
-        <option value="">{placeholder}</option>
-        {normalized.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      {/* El `Select` de la plataforma (lista propia, no la del sistema operativo). */}
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <Select
+            id={htmlId}
+            value={field.value == null ? "" : String(field.value)}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            options={normalized}
+            placeholder={placeholder}
+            disabled={disabled}
+            required={required}
+            invalid={Boolean(error)}
+            describedBy={describedById}
+          />
+        )}
+      />
       {error ? <FieldErrorText htmlId={htmlId} error={error} /> : <HintText htmlId={htmlId} hint={hint} />}
     </div>
   );
@@ -170,6 +230,7 @@ export function TextAreaField({
   register,
   placeholder,
   full = true,
+  startsRow,
   disabled,
   required,
   rows = 3,
@@ -178,7 +239,7 @@ export function TextAreaField({
   const htmlId = id ?? htmlIdFor(name);
   const error = useFieldError(name);
   return (
-    <div className={full ? "sm:col-span-2" : undefined}>
+    <div className={cellClass(full, startsRow)}>
       <label htmlFor={htmlId} className={labelClass}>
         {label}
         <RequiredMark required={required} />
@@ -207,11 +268,12 @@ export function CheckboxField({
   label,
   register,
   full,
+  startsRow,
   disabled,
 }: Omit<FieldBaseProps, "placeholder" | "required">) {
   const htmlId = id ?? htmlIdFor(name);
   return (
-    <div className={full ? "sm:col-span-2" : undefined}>
+    <div className={cellClass(full, startsRow)}>
       <label htmlFor={htmlId} className="flex cursor-pointer items-center gap-2">
         <input
           id={htmlId}
@@ -250,13 +312,17 @@ export function YesNoField({
   control,
   mode = "string",
   full = true,
+  startsRow,
   required,
 }: {
   name: string;
   label: string;
   control: Control<SectionValues>;
   mode?: "string" | "boolean";
+  /** Por defecto ocupa la fila entera. Con `full={false}` (y `startsRow`) el campo que
+   * revela la respuesta queda a su derecha. */
   full?: boolean;
+  startsRow?: boolean;
   required?: boolean;
 }) {
   const htmlId = htmlIdFor(name);
@@ -280,7 +346,7 @@ export function YesNoField({
         const current = field.value;
         return (
           <fieldset
-            className={full ? "sm:col-span-2" : undefined}
+            className={cellClass(full, startsRow)}
             aria-describedby={error ? `${htmlId}-error` : undefined}
           >
             <legend className={labelClass}>
@@ -392,6 +458,7 @@ export function ComboBoxField({
   disabled,
   placeholder,
   full,
+  startsRow,
   required,
 }: {
   name: string;
@@ -401,6 +468,7 @@ export function ComboBoxField({
   disabled?: boolean;
   placeholder?: string;
   full?: boolean;
+  startsRow?: boolean;
   required?: boolean;
 }) {
   const isAsync = typeof options === "function";
@@ -431,7 +499,7 @@ export function ComboBoxField({
       control={control}
       defaultValue=""
       render={({ field }) => (
-        <div className={full ? "sm:col-span-2" : undefined}>
+        <div className={cellClass(full, startsRow)}>
           <ComboBox
             name={name}
             label={label}

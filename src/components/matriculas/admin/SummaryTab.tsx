@@ -57,7 +57,7 @@ const sameMoment = (a: string, b: string) => Math.abs(new Date(a).getTime() - ne
 
 function historyOf(detail: EnrollmentDetail): HistoryEvent[] {
   const events: HistoryEvent[] = [
-    { at: detail.enrollment_date, title: `Matrícula creada · ${detail.origin_label}`, tone: "neutral", icon: FilePlus2 },
+    { at: detail.enrollment_date, title: `Matrícula creada · ${detail.origin_label}`, tone: "success", icon: FilePlus2 },
   ];
   // Envíos ya en la línea de tiempo (para no repetir el último, que también está en la matrícula).
   const submissions: string[] = [];
@@ -117,13 +117,13 @@ function nextStep(detail: EnrollmentDetail): string | null {
   switch (detail.status) {
     case "CREATED":
     case "DRAFT":
-      return "Pendiente: el estudiante diligencia y envía la matrícula.";
+      return "A la espera de que el acudiente diligencie y envíe la matrícula.";
     case "RETURNED":
-      return "Pendiente: el estudiante corrige y reenvía.";
+      return "A la espera de corrección por parte del acudiente.";
     case "SUBMITTED":
-      return "Pendiente: revisión de la institución (aprobar, solicitar corrección o rechazar).";
+      return "A la espera de revisión por parte de la institución.";
     case "ACTIVE":
-      return detail.has_pending_documents ? "Pendiente: el estudiante sube los documentos que faltan." : null;
+      return detail.has_pending_documents ? "A la espera de los documentos pendientes por parte del acudiente." : null;
     default:
       return null;
   }
@@ -180,7 +180,7 @@ export function SummaryTab({ detail }: { detail: EnrollmentDetail }) {
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-base-300 text-base-content/50">
               <Clock className="h-4 w-4" aria-hidden="true" />
             </span>
-            <p className="min-w-0 flex-1 pt-1 text-base-content/70">{next}</p>
+            <p className="min-w-0 flex-1 pt-1 font-semibold text-base-content/80">{next}</p>
           </li>
         )}
       </ol>

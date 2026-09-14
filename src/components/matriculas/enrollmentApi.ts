@@ -78,7 +78,8 @@ export type StudentProfile = Record<string, unknown>;
 export interface StudentEnrollment {
   id: number;
   academic_year: number;
-  grade: GradeInfo;
+  /** Solo lo que muestra el estudiante (el staff recibe el grado completo). */
+  grade: Pick<GradeInfo, "id" | "label">;
   status: EnrollmentStatus;
   status_label: string;
   origin: EnrollmentOrigin;
@@ -324,6 +325,7 @@ export const enrollmentApi = {
     post<EnrollmentDetail>(`${E}/`, body),
   changeGrade: (id: number, gradeId: number) =>
     request<EnrollmentDetail>(`${E}/${id}/`, { method: "PATCH", body: JSON.stringify({ grade_id: gradeId }) }),
+  /** Elimina una matrícula (cualquier estado) con sus archivos en R2 (permiso de eliminar). */
   remove: (id: number) => request<void>(`${E}/${id}/`, { method: "DELETE" }),
   approve: (id: number) => post<EnrollmentDetail>(`${E}/${id}/approve/`),
   returnForCorrection: (id: number, comment: string, rejected: { key: string; reason: string }[]) =>

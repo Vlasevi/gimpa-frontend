@@ -4,8 +4,13 @@
  * permite el backend (`allowed_actions`). Nada se decide aquí sobre qué transición
  * procede: si el backend no la lista, el botón no aparece.
  *
- * Modal de 3 franjas (DESIGN_SYSTEM §12). Los diálogos de acción, las confirmaciones
- * (`Alert`) van FUERA del panel: el `transform` del panel acotaría su `position: fixed`.
+ * Modal de 3 franjas (DESIGN_SYSTEM §12). Los diálogos de acción y las confirmaciones
+ * (`ConfirmDialog`) van FUERA del panel: el `transform` del panel acotaría su `position: fixed`.
+ *
+ * Un diálogo que se cierra porque su acción terminó conserva su estado "trabajando"
+ * (`settled`) mientras dura su animación de salida: si volviera a su estado inicial en ese
+ * mismo render, el diálogo que se va se repinta listo para enviar otra vez y parece que se
+ * abre solo antes de desaparecer.
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -34,10 +39,11 @@ import {
   type StaffAction,
 } from "@/components/matriculas/enrollmentApi";
 import { Modal } from "@/components/ui/Modal";
-import { Alert } from "@/components/ui/Alert";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { ghostBtnClass, iconBtnClass, iconClass, iconHover, primaryBtnClass } from "@/components/ui/formStyles";
 import { titleClass } from "@/components/ui/textStyles";
 import { getStatusBadgeClass, getStatusLabel, INACTIVE_REASON_LABELS } from "@/utils/statusHelpers";
 import { ChangeGradeDialog, InactivateDialog, ReasonDialog, ReturnDialog } from "./ActionDialogs";
@@ -67,6 +73,15 @@ const TAB_CLASS =
 
 /** Rechazar / Cancelar / Inactivar: con contorno, como "Solicitar corrección". */
 const dangerBtnClass = "btn btn-outline btn-error gap-2";
+
+/**
+ * Aprobar: verde lleno, con hover visible. El hover de daisyUI solo oscurece el fondo un
+ * 7 % (con `success` #166534, ya muy oscuro, no se nota) y su sombra de elevación depende
+ * de `--depth`, que el theme `gimpa` no define; además `shadow-sm` pisa el `box-shadow` del
+ * `btn`. Por eso el hover se declara aquí: fondo más claro y sombra.
+ */
+const approveBtnClass =
+  "btn btn-success gap-2 shadow-sm hover:[--btn-bg:color-mix(in_oklab,var(--color-success),white_14%)] hover:shadow-md";
 
 interface EnrollmentDetailProps {
   enrollmentId: number | null;
@@ -98,6 +113,8 @@ export function EnrollmentDetail({
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [pending, setPending] = useState<StaffAction | null>(null);
+  // Acción que terminó bien: su diálogo se está cerrando y sigue mostrándose "trabajando".
+  const [settled, setSettled] = useState<StaffAction | null>(null);
   const [busyDoc, setBusyDoc] = useState<string | null>(null);
   // Descarta respuestas de una matrícula que ya no es la abierta.
   const activeId = useRef<number | null>(null);
@@ -123,6 +140,7 @@ export function EnrollmentDetail({
     setTab("resumen");
     setDialog(null);
     setConfirm(null);
+    setSettled(null);
     setDetail(null);
     load(enrollmentId);
   }, [isOpen, enrollmentId, load]);
@@ -146,30 +164,46 @@ export function EnrollmentDetail({
   const actions = detail?.allowed_actions ?? [];
   const can = (action: StaffAction) => actions.includes(action);
   const busy = pending !== null || busyDoc !== null;
-  const pendingDocs = detail ? detail.documents.filter((doc) => detail.pending_documents.includes(doc.key)) : [];
-  const hiddenPending = detail ? detail.pending_documents.length - pendingDocs.length : 0;
   const filesEditable = detail ? !FROZEN_STATUSES.has(detail.status) : false;
 
-  const runAction = async (action: StaffAction, call: () => Promise<EnrollmentDetailData>, success: string) => {
-    if (!detail) return;
+  const openDialog = (kind: DialogKind) => {
+    setSettled(null);
+    setDialog(kind);
+  };
+
+  /** `true` = la acción se hizo (una confirmación abierta se cierra sola). */
+  const runAction = async (
+    action: StaffAction,
+    call: () => Promise<EnrollmentDetailData>,
+    success: string,
+  ): Promise<boolean> => {
+    if (!detail) return false;
     setPending(action);
     try {
       const updated = await call();
       setDetail(updated);
+      setSettled(action);
       setDialog(null);
       onChanged();
       flash("success", success);
+      return true;
     } catch (error) {
       flash("error", errorMessage(error));
-      // 409: la matrícula cambió de estado en otro lado; se muestra como está ahora.
+      // 409: la matrícula cambió de estado en otro lado; se muestra como está ahora y el
+      // diálogo o la confirmación se cierran (la acción ya no aplica).
       if (error instanceof ApiError && error.status === 409) {
         setDialog(null);
+        setConfirm(null);
         refresh(detail.id);
       }
+      return false;
     } finally {
       setPending(null);
     }
   };
+
+  /** Estado "trabajando" de un diálogo de acción: mientras envía y mientras se cierra al terminar. */
+  const working = (action: StaffAction) => pending === action || settled === action;
 
   const runDocument = async (doc: EnrollmentDocument, call: () => Promise<unknown>, success: string) => {
     if (!detail) return false;
@@ -259,9 +293,9 @@ export function EnrollmentDetail({
                 onClick={handleClose}
                 aria-label="Cerrar"
                 title="Cerrar"
-                className="shrink-0 rounded-full p-2 text-base-content/40 transition-colors hover:bg-base-200 hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className={`${iconBtnClass} ${iconHover.neutral}`}
               >
-                <X className="h-5 w-5" aria-hidden="true" />
+                <X className={iconClass} aria-hidden="true" />
               </button>
             </div>
 
@@ -359,18 +393,18 @@ export function EnrollmentDetail({
           <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-base-300 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-2">
               {can("reject") &&
-                footerButton("reject", "Rechazar", "Rechazando…", XCircle, dangerBtnClass, () => setDialog("reject"))}
+                footerButton("reject", "Rechazar", "Rechazando…", XCircle, dangerBtnClass, () => openDialog("reject"))}
               {can("cancel") &&
-                footerButton("cancel", "Cancelar", "Cancelando…", Ban, dangerBtnClass, () => setDialog("cancel"))}
+                footerButton("cancel", "Cancelar", "Cancelando…", Ban, dangerBtnClass, () => openDialog("cancel"))}
               {can("inactivate") &&
                 footerButton("inactivate", "Inactivar", "Inactivando…", Archive, dangerBtnClass, () =>
-                  setDialog("inactivate"),
+                  openDialog("inactivate"),
                 )}
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
               {can("change_grade") &&
-                footerButton("change_grade", "Cambiar grado", "Cambiando…", ArrowRightLeft, ghostBtnClass, () =>
-                  setDialog("grade"),
+                footerButton("change_grade", "Cambiar grado", "Cambiando…", ArrowRightLeft, "btn btn-outline btn-primary gap-2", () =>
+                  openDialog("grade"),
                 )}
               {can("return") &&
                 footerButton(
@@ -379,14 +413,14 @@ export function EnrollmentDetail({
                   "Solicitando…",
                   Undo2,
                   "btn btn-outline btn-warning gap-2",
-                  () => setDialog("return"),
+                  () => openDialog("return"),
                 )}
               {can("reactivate") &&
                 footerButton("reactivate", "Reintegrar", "Reintegrando…", RotateCcw, primaryBtnClass, () =>
                   setConfirm({ kind: "reactivate" }),
                 )}
               {can("approve") &&
-                footerButton("approve", "Aprobar", "Aprobando…", Check, primaryBtnClass, () =>
+                footerButton("approve", "Aprobar", "Aprobando…", Check, approveBtnClass, () =>
                   setConfirm({ kind: "approve" }),
                 )}
             </div>
@@ -398,7 +432,7 @@ export function EnrollmentDetail({
         <>
           <ReturnDialog
             isOpen={dialog === "return"}
-            pending={pending === "return"}
+            pending={working("return")}
             documents={detail.documents}
             onClose={() => setDialog(null)}
             onSubmit={(comment, rejected) =>
@@ -412,20 +446,20 @@ export function EnrollmentDetail({
           <ReasonDialog
             kind="reject"
             isOpen={dialog === "reject"}
-            pending={pending === "reject"}
+            pending={working("reject")}
             onClose={() => setDialog(null)}
             onSubmit={(reason) => runAction("reject", () => enrollmentApi.reject(detail.id, reason), "Matrícula rechazada")}
           />
           <ReasonDialog
             kind="cancel"
             isOpen={dialog === "cancel"}
-            pending={pending === "cancel"}
+            pending={working("cancel")}
             onClose={() => setDialog(null)}
             onSubmit={(reason) => runAction("cancel", () => enrollmentApi.cancel(detail.id, reason), "Matrícula cancelada")}
           />
           <InactivateDialog
             isOpen={dialog === "inactivate"}
-            pending={pending === "inactivate"}
+            pending={working("inactivate")}
             onClose={() => setDialog(null)}
             onSubmit={(inactiveReason, reason) =>
               runAction(
@@ -439,6 +473,7 @@ export function EnrollmentDetail({
             isOpen={dialog === "grade"}
             enrollment={detail}
             grades={grades}
+            flash={flash}
             onClose={() => setDialog(null)}
             onChanged={(updated) => {
               setDetail(updated);
@@ -451,14 +486,19 @@ export function EnrollmentDetail({
       )}
 
       {/* Confirmaciones (fuera del panel, ver cabecera) */}
+      {/* Se montan solo mientras hacen falta: al terminar bien, `ConfirmDialog` llama a
+          `onClose` y desaparece en el mismo render que actualiza el detalle. */}
       {detail && confirm?.kind === "approve" && (
-        <Alert
+        <ConfirmDialog
           isOpen
+          tone="success"
+          title="Aprobar matrícula"
+          confirmText="Aprobar matrícula"
+          pendingText="Aprobando…"
           onClose={() => setConfirm(null)}
-          onAccept={() => {
-            setConfirm(null);
+          onConfirm={() => {
             const count = detail.pending_documents.length;
-            runAction(
+            return runAction(
               "approve",
               () => enrollmentApi.approve(detail.id),
               count
@@ -466,76 +506,57 @@ export function EnrollmentDetail({
                 : "Matrícula aprobada",
             );
           }}
-          title="Aprobar matrícula"
-          variant={detail.pending_documents.length ? "warning" : "success"}
-          acceptText="Aprobar matrícula"
-          cancelText="Cancelar"
         >
           <p>
-            La matrícula de <strong>{detail.student_name}</strong> para {detail.grade.label} {detail.academic_year}{" "}
-            quedará aprobada. La ficha, el acudiente y la foto pasan a la cuenta del estudiante y se envía un correo
-            de confirmación. Si tenía otra matrícula aprobada, esa queda inactiva.
+            Se aprobará la matrícula de <strong>{detail.student_name}</strong> para {detail.grade.label}{" "}
+            {detail.academic_year}.
           </p>
           {detail.pending_documents.length > 0 && (
-            <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
-              <p className="font-medium text-base-content">
-                Se aprobará con {detail.pending_documents.length}{" "}
-                {detail.pending_documents.length === 1 ? "documento pendiente" : "documentos pendientes"}:
-              </p>
-              <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-sm">
-                {pendingDocs.map((doc) => (
-                  <li key={doc.key}>{doc.label}</li>
-                ))}
-                {hiddenPending > 0 && <li>{hiddenPending} más que tu rol no puede ver</li>}
-              </ul>
-              <p className="mt-2 text-sm text-base-content/70">
-                El correo de aprobación los lista y el estudiante los puede subir desde su matrícula.
-              </p>
-            </div>
+            <p>
+              {detail.pending_documents.length === 1
+                ? "Queda 1 documento pendiente; el estudiante lo podrá subir después."
+                : `Quedan ${detail.pending_documents.length} documentos pendientes; el estudiante los podrá subir después.`}
+            </p>
           )}
-        </Alert>
+        </ConfirmDialog>
       )}
 
       {detail && confirm?.kind === "reactivate" && (
-        <Alert
+        <ConfirmDialog
           isOpen
-          onClose={() => setConfirm(null)}
-          onAccept={() => {
-            setConfirm(null);
-            runAction("reactivate", () => enrollmentApi.reactivate(detail.id), "Matrícula reintegrada");
-          }}
+          tone="primary"
           title="Reintegrar estudiante"
-          variant="info"
-          acceptText="Reintegrar"
-          cancelText="Cancelar"
+          confirmText="Reintegrar"
+          pendingText="Reintegrando…"
+          onClose={() => setConfirm(null)}
+          onConfirm={() => runAction("reactivate", () => enrollmentApi.reactivate(detail.id), "Matrícula reintegrada")}
         >
           <p>
             La matrícula {detail.academic_year} de <strong>{detail.student_name}</strong> vuelve a quedar aprobada.
           </p>
-        </Alert>
+        </ConfirmDialog>
       )}
 
       {detail && confirm?.kind === "delete" && (
-        <Alert
+        <ConfirmDeleteDialog
           isOpen
           onClose={() => setConfirm(null)}
-          onAccept={() => {
-            const { doc } = confirm;
-            setConfirm(null);
-            runDocument(doc, () => enrollmentApi.deleteDocument(detail.id, doc.key), "Archivo eliminado");
-          }}
+          onConfirm={() =>
+            runDocument(
+              confirm.doc,
+              () => enrollmentApi.deleteDocument(detail.id, confirm.doc.key),
+              `${confirm.doc.label}: archivo eliminado`,
+            )
+          }
           title="Eliminar archivo"
-          variant="error"
-          acceptText="Eliminar archivo"
-          cancelText="Cancelar"
-          acceptButtonVariant="destructive"
+          confirmText="Eliminar archivo"
         >
           <p>
             Se borrará el archivo de <strong>{confirm.doc.label}</strong>
-            {confirm.doc.original_name ? ` (${confirm.doc.original_name})` : ""}.{" "}
-            {confirm.doc.required ? "Como es obligatorio, quedará pendiente de subir. " : ""}No se puede deshacer.
+            {confirm.doc.original_name ? ` (${confirm.doc.original_name})` : ""}.
+            {confirm.doc.required ? " Como es obligatorio, quedará pendiente de subir." : ""}
           </p>
-        </Alert>
+        </ConfirmDeleteDialog>
       )}
     </>
   );

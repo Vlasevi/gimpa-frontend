@@ -35,8 +35,9 @@ import {
 import { useAuth } from "@/components/Login/loginLogic";
 import { EPS_LIST, BLOOD_ABO, BLOOD_RH } from "@/components/shared/formLists";
 
-import { FieldGrid, controlClass, labelClass, type SectionValues } from "./formFields";
+import { FieldGrid, labelClass, type SectionValues } from "./formFields";
 import { GeoResidenceFields, PersonFields, WorkFields } from "./guardianFields";
+import { Select } from "@/components/ui/Select";
 import { SubSection } from "@/components/ui/SubSection";
 import { SchemaSection } from "@/components/ui/fields/registry";
 import type { FieldDescriptor } from "@/components/ui/fields/types";
@@ -52,6 +53,14 @@ export interface StepProps {
 const GRADE_OPTIONS = [
   "Prejardín", "Jardín", "Transición", "Primero", "Segundo", "Tercero", "Cuarto",
   "Quinto", "Sexto", "Séptimo", "Octavo", "Noveno", "Décimo", "Undécimo", "Otro",
+];
+
+// Tipo de acudiente: los valores son los que ya se guardaban en `guardian_type`.
+const GUARDIAN_TYPE_OPTIONS = [
+  { value: "Padre", label: "El padre" },
+  { value: "Madre", label: "La madre" },
+  { value: "Otro", label: "Otra persona" },
+  { value: "Empresa", label: "Una empresa" },
 ];
 
 const CHANGE_REASONS = [
@@ -336,14 +345,13 @@ export function GuardiansStep({ control, register, setValue, getValues }: StepPr
         <FieldGrid>
           <div>
             <label htmlFor="guardian_type" className={labelClass}>Tipo de acudiente</label>
-            <select id="guardian_type" className={controlClass} value={guardianType}
-              onChange={(e) => onGuardianType(e.target.value)}>
-              <option value="">Selecciona…</option>
-              <option value="Padre">El padre</option>
-              <option value="Madre">La madre</option>
-              <option value="Otro">Otra persona</option>
-              <option value="Empresa">Una empresa</option>
-            </select>
+            <Select
+              id="guardian_type"
+              value={guardianType}
+              onChange={onGuardianType}
+              placeholder="Selecciona…"
+              options={GUARDIAN_TYPE_OPTIONS}
+            />
           </div>
 
           {isCopied && (

@@ -19,6 +19,7 @@ import {
   openDocument,
   type EnrollmentDocument,
 } from "@/components/matriculas/enrollmentApi";
+import { RequiredMark } from "@/components/ui/fields/fieldErrors";
 import { getDocumentStatusBadgeClass, getDocumentStatusLabel } from "@/utils/statusHelpers";
 import type { FlashFn } from "./types";
 
@@ -102,7 +103,8 @@ function DocumentRow({
         <div className="min-w-0">
           <p className="font-medium text-base-content">
             {doc.label}
-            {!doc.required && <span className="ml-2 text-xs font-normal text-base-content/50">(opcional)</span>}
+            {/* Obligatorio: solo el asterisco rojo (la lista ya se anuncia como obligatoria). */}
+            <RequiredMark required={doc.required} />
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/60">
             <span className={`badge badge-sm ${getDocumentStatusBadgeClass(doc.status)}`}>
@@ -211,7 +213,7 @@ export function DocumentChecklist({
             aria-label="Documentos obligatorios entregados"
           />
           <span className="shrink-0 text-sm text-base-content/70">
-            {done.length} de {required.length} obligatorios
+            {done.length} de {required.length} entregados
           </span>
         </div>
       )}

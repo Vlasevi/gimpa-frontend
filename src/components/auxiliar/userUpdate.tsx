@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { apiUrl, buildHeaders } from "@/utils/api";
+import { Select } from "@/components/ui/Select";
 
 const registerEndpoint = apiUrl("/api/accounts/users/register/");
 const usersListEndpoint = apiUrl("/api/accounts/users/");
+
+const RELATIONSHIP_OPTIONS = ["Padre", "Madre", "Abuelo/a", "Tío/a", "Tutor Legal", "Otro"].map(
+  (value) => ({ value, label: value }),
+);
 
 // ComboBox component (reutilizado de Step3StudentData)
 const ComboBox = ({
@@ -278,6 +283,12 @@ export default function UserUpdate({ onCancel, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // El `Select` no participa en la validación nativa del formulario (el select nativo con `required` sí).
+    if (!form.guardian_relationship) {
+      setSuccessMsg("Error: Selecciona la relación del acudiente.");
+      document.getElementById("guardian_relationship")?.focus();
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(registerEndpoint, {
@@ -429,22 +440,15 @@ export default function UserUpdate({ onCancel, onSuccess }) {
                 >
                   Relación <span className="text-red-500">*</span>
                 </label>
-                <select
-                  className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
+                <Select
                   id="guardian_relationship"
                   name="guardian_relationship"
                   required
                   value={form.guardian_relationship}
-                  onChange={handleChange}
-                >
-                  <option value="">Seleccione...</option>
-                  <option value="Padre">Padre</option>
-                  <option value="Madre">Madre</option>
-                  <option value="Abuelo/a">Abuelo/a</option>
-                  <option value="Tío/a">Tío/a</option>
-                  <option value="Tutor Legal">Tutor Legal</option>
-                  <option value="Otro">Otro</option>
-                </select>
+                  onChange={(v) => setForm((f) => ({ ...f, guardian_relationship: v }))}
+                  placeholder="Seleccione..."
+                  options={RELATIONSHIP_OPTIONS}
+                />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

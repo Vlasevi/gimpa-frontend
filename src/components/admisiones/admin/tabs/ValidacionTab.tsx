@@ -15,10 +15,10 @@ import { Loader2 } from "lucide-react";
 import { API_ENDPOINTS } from "@/utils/api";
 import {
   labelClass,
-  selectClass,
   textareaClass,
   adminPrimaryBtnClass,
 } from "@/components/ui/formStyles";
+import { Select } from "@/components/ui/Select";
 import type { PostFn } from "@/components/admisiones/admin/adminTypes";
 
 const DECISIONS = [
@@ -27,6 +27,11 @@ const DECISIONS = [
   { value: "LISTA_ESPERA", label: "Dejar en lista de espera" },
   { value: "CASO_ESPECIAL", label: "Enviar a comité (caso especial)" },
   { value: "RECHAZAR_SIN_CUPO", label: "Rechazar por falta de cupo" },
+];
+
+const NEXT_STEPS = [
+  { value: "pago", label: "Pago de inscripción" },
+  { value: "documentos", label: "Documentos" },
 ];
 
 export function ValidacionTab({
@@ -82,18 +87,12 @@ export function ValidacionTab({
             <label htmlFor="decision" className={labelClass}>
               Decisión
             </label>
-            <select
+            <Select
               id="decision"
-              className={selectClass}
               value={decision}
-              onChange={(e) => setDecision(e.target.value)}
-            >
-              {DECISIONS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
+              onChange={setDecision}
+              options={DECISIONS}
+            />
           </div>
 
           {decision === "CONTINUAR" && (
@@ -101,15 +100,12 @@ export function ValidacionTab({
               <label htmlFor="next-step" className={labelClass}>
                 Siguiente paso
               </label>
-              <select
+              <Select
                 id="next-step"
-                className={selectClass}
                 value={nextStep}
-                onChange={(e) => setNextStep(e.target.value)}
-              >
-                <option value="pago">Pago de inscripción</option>
-                <option value="documentos">Documentos</option>
-              </select>
+                onChange={setNextStep}
+                options={NEXT_STEPS}
+              />
             </div>
           )}
 

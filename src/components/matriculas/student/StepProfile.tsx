@@ -14,11 +14,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch, type Control } from "react-hook-form";
-import { Info, Loader2, RotateCcw } from "lucide-react";
+import { Info, RotateCcw } from "lucide-react";
 
 import { Alert } from "@/components/ui/Alert";
+import { BusyLabel } from "@/components/ui/BusyLabel";
 import { SubSection } from "@/components/ui/SubSection";
-import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import { SchemaSection } from "@/components/ui/fields/registry";
 import { PhotoField } from "@/components/ui/fields/PhotoField";
 import { FieldErrorsProvider } from "@/components/ui/fields/fieldErrors";
@@ -38,7 +39,6 @@ import {
 import {
   ID_TYPES,
   PROFILE_SECTIONS,
-  ageFrom,
   getPath,
   getText,
   labelOf,
@@ -51,10 +51,10 @@ import { titleClass } from "@/components/ui/textStyles";
 
 type PhotoKey = "student_photo" | "father_photo" | "mother_photo";
 const PHOTO_KEYS: PhotoKey[] = ["student_photo", "father_photo", "mother_photo"];
-const PHOTO_OF_SECTION: Partial<Record<SectionId, { key: PhotoKey; label: string }>> = {
-  student: { key: "student_photo", label: "Foto del estudiante (obligatoria)" },
-  father: { key: "father_photo", label: "Foto del padre (opcional)" },
-  mother: { key: "mother_photo", label: "Foto de la madre (opcional)" },
+const PHOTO_OF_SECTION: Partial<Record<SectionId, { key: PhotoKey; label: string; required?: boolean }>> = {
+  student: { key: "student_photo", label: "Foto del estudiante", required: true },
+  father: { key: "father_photo", label: "Foto del padre" },
+  mother: { key: "mother_photo", label: "Foto de la madre" },
 };
 const EMPTY_PHOTO: PhotoFieldValue = { file: null, removed: false };
 
@@ -90,17 +90,6 @@ function guardianSnapshot(values: StudentProfile) {
     studentIdType: labelOf(ID_TYPES, getPath(values, "student.id_type")),
     studentId: getText(values, "student.id_number"),
   };
-}
-
-function AgeLine({ control }: { control: Control<SectionValues> }) {
-  const birth = useWatch({ control, name: "student.birth.date" }) as string | null;
-  const age = ageFrom(birth);
-  if (age === null) return null;
-  return (
-    <p className="text-sm text-base-content/70 sm:col-span-2" aria-live="polite">
-      Edad hoy: <strong className="font-semibold">{age} {age === 1 ? "año" : "años"}</strong>
-    </p>
-  );
 }
 
 function DerivedNote({ control, sectionId }: { control: Control<SectionValues>; sectionId: SectionId }) {
@@ -346,6 +335,7 @@ export function StepProfile({
                       <PhotoField
                         dataKey={photo.key}
                         label={photo.label}
+                        required={photo.required}
                         value={photos[photo.key]}
                         preloadedUrl={photoUrls[photo.key]}
                         onChange={(next) => {
@@ -375,14 +365,13 @@ export function StepProfile({
                     register={register}
                     setValue={setValue}
                   />
-                  {section.id === "student" && <AgeLine control={control} />}
                 </div>
               </SubSection>
             );
           })}
 
           <div className="flex flex-col-reverse gap-3 border-t border-base-300 pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <button type="button" className={ghostBtnClass} onClick={onBack} disabled={saving}>
+            <button type="button" className={outlineBtnClass} onClick={onBack} disabled={saving}>
               Atrás
             </button>
             <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -392,8 +381,9 @@ export function StepProfile({
                 </span>
               )}
               <button type="submit" className={primaryBtnClass} disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                {saving ? "Guardando…" : "Guardar y continuar"}
+                <BusyLabel busy={saving} busyText="Guardando…">
+                  Guardar y continuar
+                </BusyLabel>
               </button>
             </div>
           </div>

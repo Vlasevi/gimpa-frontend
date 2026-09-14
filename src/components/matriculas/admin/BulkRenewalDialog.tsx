@@ -10,7 +10,8 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { enrollmentApi, type BulkRenewalResult } from "@/components/matriculas/enrollmentApi";
 import { Modal } from "@/components/ui/Modal";
 import { Alert } from "@/components/ui/Alert";
-import { ghostBtnClass, labelClass, primaryBtnClass, selectClass } from "@/components/ui/formStyles";
+import { ghostBtnClass, labelClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { Select } from "@/components/ui/Select";
 import { smallTitleClass } from "@/components/ui/textStyles";
 import { currentYear, errorMessage, type FlashFn } from "./shared";
 
@@ -25,6 +26,13 @@ interface BulkRenewalDialogProps {
 }
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+const yearOptions = (years: number[]) => years.map((year) => ({ value: String(year), label: String(year) }));
+
+/** Ref de montaje: enfoca el `Select` del bloque (lo que antes hacía `autoFocus`). */
+const focusSelectOnMount = (el: HTMLDivElement | null) => {
+  el?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
+};
 
 export function BulkRenewalDialog({ isOpen, onClose, onDone, flash, years }: BulkRenewalDialogProps) {
   const ids = useId();
@@ -118,45 +126,32 @@ export function BulkRenewalDialog({ isOpen, onClose, onDone, flash, years }: Bul
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-            <div>
+            <div ref={focusSelectOnMount}>
               <label htmlFor={`${ids}-from`} className={labelClass}>
                 Desde (matrículas aprobadas de)
               </label>
-              <select
+              <Select
                 id={`${ids}-from`}
-                className={selectClass}
-                value={fromYear}
+                value={String(fromYear)}
                 disabled={busy}
-                autoFocus
-                onChange={(e) => changeFrom(Number(e.target.value))}
-              >
-                {fromOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => changeFrom(Number(v))}
+                options={yearOptions(fromOptions)}
+              />
             </div>
             <div>
               <label htmlFor={`${ids}-to`} className={labelClass}>
                 Hacia (año que se crea)
               </label>
-              <select
+              <Select
                 id={`${ids}-to`}
-                className={selectClass}
-                value={toYear}
+                value={String(toYear)}
                 disabled={busy}
-                onChange={(e) => {
-                  setToYear(Number(e.target.value));
+                onChange={(v) => {
+                  setToYear(Number(v));
                   setPreview(null);
                 }}
-              >
-                {toOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                options={yearOptions(toOptions)}
+              />
             </div>
             <button type="button" className="btn btn-outline gap-2" disabled={busy} onClick={runPreview}>
               {loading === "preview" ? (

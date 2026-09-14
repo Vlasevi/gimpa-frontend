@@ -4,7 +4,7 @@
  * No bloquea el envío (decisión 13): lo pendiente se puede subir después.
  */
 
-import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import type { EnrollmentDocument, StudentEnrollment } from "@/components/matriculas/enrollmentApi";
 import { DocumentChecklist } from "./DocumentChecklist";
 import type { FlashFn } from "./types";
@@ -52,7 +52,7 @@ export function StepDocuments({
       />
 
       <div className="flex flex-col-reverse gap-3 border-t border-base-300 pt-5 sm:flex-row sm:justify-between">
-        <button type="button" className={ghostBtnClass} onClick={onBack}>
+        <button type="button" className={outlineBtnClass} onClick={onBack}>
           Atrás
         </button>
         <button type="button" className={primaryBtnClass} onClick={onNext}>

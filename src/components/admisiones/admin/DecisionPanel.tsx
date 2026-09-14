@@ -23,11 +23,11 @@ import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import type { SectionPermissions } from "@/components/Login/loginLogic";
 import {
   inputClass,
-  selectClass,
   textareaClass,
   labelClass,
   adminPrimaryBtnClass,
 } from "@/components/ui/formStyles";
+import { Select } from "@/components/ui/Select";
 import type { FlashFn } from "@/components/admisiones/admin/adminTypes";
 
 type QuestionType = "text" | "textarea" | "select" | "bool" | "scale";
@@ -75,6 +75,21 @@ const ROUTES = [
   { value: "DIAGNOSTICO", label: "Diagnóstico" },
   { value: "PREESCOLAR", label: "Preescolar" },
   { value: "OTRA", label: "Otra" },
+];
+
+// La ruta es opcional: "—" (sin ruta) sigue siendo una opción elegible para quitarla.
+const ROUTE_OPTIONS = [{ value: "", label: "—" }, ...ROUTES];
+
+// Preguntas opcionales del comité: "—" deja la respuesta vacía.
+const BOOL_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "si", label: "Sí" },
+  { value: "no", label: "No" },
+];
+
+const SCALE_OPTIONS = [
+  { value: "", label: "—" },
+  ...[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) })),
 ];
 
 const EMPTY_VALUES: DecisionFormValues = {
@@ -219,25 +234,37 @@ export function DecisionPanel({
       <div className="grid gap-3 rounded-xl border border-base-300 p-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Decisión *</label>
-          <select className={selectClass} disabled={!canDecide} {...register("decision")}>
-            <option value="">Elige…</option>
-            {DECISIONS.map((d) => (
-              <option key={d.value} value={d.value}>
-                {d.label}
-              </option>
-            ))}
-          </select>
+          <Controller
+            name="decision"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                disabled={!canDecide}
+                options={DECISIONS}
+                placeholder="Elige…"
+              />
+            )}
+          />
         </div>
         <div>
           <label className={labelClass}>Ruta aprobada</label>
-          <select className={selectClass} disabled={!canDecide} {...register("route")}>
-            <option value="">—</option>
-            {ROUTES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+          <Controller
+            name="route"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                disabled={!canDecide}
+                options={ROUTE_OPTIONS}
+                placeholder="—"
+              />
+            )}
+          />
         </div>
         {needsConditions && (
           <div className="sm:col-span-2">
@@ -304,44 +331,32 @@ function QuestionField({
           onChange={(e) => onChange(e.target.value)}
         />
       ) : question.type === "select" ? (
-        <select
-          className={selectClass}
-          value={(value as string) ?? ""}
+        <Select
+          value={value == null ? "" : String(value)}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value="">—</option>
-          {(question.options ?? []).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+          onChange={onChange}
+          options={[
+            { value: "", label: "—" },
+            ...(question.options ?? []).map((o) => ({ value: o, label: o })),
+          ]}
+          placeholder="—"
+        />
       ) : question.type === "bool" ? (
-        <select
-          className={selectClass}
+        <Select
           value={value === true ? "si" : value === false ? "no" : ""}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value === "" ? null : e.target.value === "si")}
-        >
-          <option value="">—</option>
-          <option value="si">Sí</option>
-          <option value="no">No</option>
-        </select>
+          onChange={(v) => onChange(v === "" ? null : v === "si")}
+          options={BOOL_OPTIONS}
+          placeholder="—"
+        />
       ) : question.type === "scale" ? (
-        <select
-          className={selectClass}
-          value={(value as string) ?? ""}
+        <Select
+          value={value == null ? "" : String(value)}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">—</option>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onChange(v ? Number(v) : null)}
+          options={SCALE_OPTIONS}
+          placeholder="—"
+        />
       ) : (
         <input
           className={inputClass}

@@ -5,17 +5,22 @@
  *   en base64, ~3 MB). La hoja lleva la foto del estudiante (hallazgo #38).
  * - Cada documento se marca como leído cuando el usuario llega al final en el visor, y
  *   "Firmar documentos" se habilita solo con los 3 leídos (plan 15.6, hallazgo #16).
- * - La firma y la huella de cada firmante se cargan una vez (en el panel o sobre el PDF)
- *   y se estampan en los 3 documentos. Al firmar, los 3 PDF se suben de inmediato
- *   (`POST …/signed/`): recargar ya no pierde lo firmado (plan 15.2).
+ * - La firma y la huella de cada firmante se cargan UNA vez, en el panel de firmantes, y
+ *   se colocan solas en los campos de los 3 documentos. Dentro del visor esos campos son
+ *   solo vista previa (sin botones para subir otra vez). Al firmar se estampan con pdf-lib
+ *   y los 3 PDF se suben de inmediato (`POST …/signed/`): recargar ya no pierde lo firmado
+ *   (plan 15.2).
+ * - Una URL `blob:` por imagen, creada al elegirla y revocada al cambiarla, quitarla o
+ *   salir del paso; el panel y los 3 visores comparten esa misma URL.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpenCheck, CheckCircle2, Eye, Fingerprint, Loader2, PenLine, Upload, X } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, Eye, Fingerprint, PenLine, Upload, X } from "lucide-react";
 
+import { BusyLabel } from "@/components/ui/BusyLabel";
 import { LoadingState } from "@/components/ui/LoadingState";
-import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
-import { PdfModal, embedImagesInPdf, type FieldOverlay } from "@/components/pdf/PdfSignViewer";
+import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { PdfModal, embedImagesInPdf, type EmbedImage, type FieldOverlay } from "@/components/pdf/PdfSignViewer";
 import {
   ApiError,
   enrollmentApi,
@@ -34,6 +39,8 @@ const DOCS: { kind: UnsignedKind; label: string; description: string }[] = [
 ];
 
 type ImageType = "signature" | "fingerprint";
+const IMAGE_TYPES: ImageType[] = ["signature", "fingerprint"];
+/** `preview` es la URL `blob:` del archivo, una sola por imagen. */
 type SignerImages = Partial<Record<ImageType, { file: File; preview: string }>>;
 
 /** Nombre del campo de firma/huella de un firmante en cada plantilla. */
@@ -50,14 +57,6 @@ function parseField(name: string): { signerKey: string; type: ImageType } | null
   if (hoja) return { signerKey: `guardian${hoja[2]}`, type: hoja[1] as ImageType };
   return null;
 }
-
-const fileToDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 
 function ImagePicker({
   label,
@@ -154,9 +153,11 @@ export function StepSign({
     if (signing) load();
   }, [signing, load]);
 
-  // Libera las vistas previas al salir.
+  // Última versión de las imágenes, para revocar sus URL al cambiarlas y al salir.
   const imagesRef = useRef(images);
-  imagesRef.current = images;
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
   useEffect(
     () => () => {
       Object.values(imagesRef.current).forEach((s) =>
@@ -166,19 +167,22 @@ export function StepSign({
     [],
   );
 
+  // La URL se crea aquí, una vez por archivo elegido (nunca dentro de un `setState` ni
+  // en cada render), y la anterior se revoca en el mismo momento.
   const setImage = useCallback((signerKey: string, type: ImageType, file: File | null) => {
     if (file && !["image/png", "image/jpeg"].includes(file.type)) {
       flash("error", "La firma y la huella deben ser imágenes PNG o JPG.");
       return;
     }
-    setImages((prev) => {
-      const current = prev[signerKey]?.[type];
-      if (current) URL.revokeObjectURL(current.preview);
-      return {
-        ...prev,
-        [signerKey]: { ...prev[signerKey], [type]: file ? { file, preview: URL.createObjectURL(file) } : undefined },
-      };
-    });
+    const current = imagesRef.current;
+    const previous = current[signerKey]?.[type];
+    const next = {
+      ...current,
+      [signerKey]: { ...current[signerKey], [type]: file ? { file, preview: URL.createObjectURL(file) } : undefined },
+    };
+    imagesRef.current = next;
+    setImages(next);
+    if (previous) URL.revokeObjectURL(previous.preview);
   }, [flash]);
 
   const signers = useMemo(() => layout?.signers ?? [], [layout]);
@@ -189,37 +193,45 @@ export function StepSign({
   const allRead = DOCS.every((d) => read.has(d.kind));
   const canSign = !!layout && allRead && missingImages === 0 && !submitting;
 
-  const overlaysFor = useMemo(
-    () => (kind: UnsignedKind): FieldOverlay[] =>
-      Object.entries(layout?.signatureFields[kind] ?? {}).flatMap(([name, rect]) => {
+  // Vista previa de la firma y la huella en cada campo de cada documento: sin
+  // `onSelect`/`onClear`, así el visor no ofrece subirlas otra vez. Un arreglo estable
+  // por documento: el visor no vuelve a pintar las páginas si solo cambia otra cosa.
+  const overlaysByKind = useMemo(() => {
+    const byKind = {} as Record<UnsignedKind, FieldOverlay[]>;
+    for (const doc of DOCS) {
+      byKind[doc.kind] = Object.entries(layout?.signatureFields[doc.kind] ?? {}).flatMap(([name, rect]) => {
         const parsed = parseField(name);
         if (!parsed || !signers.some((s) => s.key === parsed.signerKey)) return [];
-        return [
-          {
-            fieldName: name,
-            label: parsed.type === "signature" ? "Firma" : "Huella",
-            rect,
-            preview: images[parsed.signerKey]?.[parsed.type]?.preview ?? null,
-            onSelect: (file: File) => setImage(parsed.signerKey, parsed.type, file),
-            onClear: () => setImage(parsed.signerKey, parsed.type, null),
-          },
-        ];
-      }),
-    [layout, signers, images, setImage],
-  );
+        const preview = images[parsed.signerKey]?.[parsed.type]?.preview;
+        if (!preview) return [];
+        return [{ fieldName: name, label: parsed.type === "signature" ? "Firma" : "Huella", rect, preview }];
+      });
+    }
+    return byKind;
+  }, [layout, signers, images]);
 
   const sign = async () => {
     if (!layout) return;
     setSubmitting(true);
     try {
+      // Cada imagen se lee una sola vez y sus bytes sirven para los 3 documentos.
+      const bytesByFile = new Map<File, Uint8Array>();
+      const bytesOf = async (file: File) => {
+        let bytes = bytesByFile.get(file);
+        if (!bytes) {
+          bytes = new Uint8Array(await file.arrayBuffer());
+          bytesByFile.set(file, bytes);
+        }
+        return bytes;
+      };
       const signed: Record<string, Blob> = {};
       for (const doc of DOCS) {
-        const list: { fieldName: string; dataUrl: string }[] = [];
+        const list: EmbedImage[] = [];
         for (const signer of signers) {
           const number = signer.key.replace("guardian", "");
-          for (const type of ["signature", "fingerprint"] as ImageType[]) {
+          for (const type of IMAGE_TYPES) {
             const img = images[signer.key]?.[type];
-            if (img) list.push({ fieldName: fieldName(doc.kind, number, type), dataUrl: await fileToDataUrl(img.file) });
+            if (img) list.push({ fieldName: fieldName(doc.kind, number, type), bytes: await bytesOf(img.file) });
           }
         }
         const bytes = await embedImagesInPdf(pdfs[doc.kind]!, list, layout.signatureFields[doc.kind] ?? {});
@@ -271,7 +283,7 @@ export function StepSign({
           ))}
         </ul>
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-          <button type="button" className={ghostBtnClass} onClick={onBack}>
+          <button type="button" className={outlineBtnClass} onClick={onBack}>
             Atrás
           </button>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -303,6 +315,7 @@ export function StepSign({
   }
 
   const openDoc = DOCS.find((d) => d.kind === openKind);
+  const rejectedSigned = (enrollment.documents ?? []).filter((d) => d.kind === "signed" && d.status === "REJECTED");
 
   return (
     <section aria-labelledby="step-title" className="space-y-6">
@@ -311,23 +324,44 @@ export function StepSign({
           Lee y firma los documentos
         </h2>
         <p className="mt-1 text-sm text-base-content/70">
-          Abre cada documento y léelo hasta el final. Carga la firma y la huella de cada firmante: se
-          estamparán en los tres documentos al pulsar «Firmar documentos».
+          Carga una sola vez la firma y la huella de cada firmante: se colocan solas en los tres
+          documentos. Después abre cada documento y léelo hasta el final.
         </p>
       </div>
 
-      {(enrollment.documents ?? []).some((d) => d.kind === "signed" && d.status === "REJECTED") && (
+      {rejectedSigned.length > 0 && (
         <div role="alert" className="alert alert-warning alert-soft text-sm">
           <span>
             La institución pidió volver a firmar:{" "}
-            {(enrollment.documents ?? [])
-              .filter((d) => d.kind === "signed" && d.status === "REJECTED")
-              .map((d) => `${d.label}${d.reject_reason ? ` (${d.reject_reason})` : ""}`)
-              .join(", ")}
-            .
+            {rejectedSigned.map((d) => `${d.label}${d.reject_reason ? ` (${d.reject_reason})` : ""}`).join(", ")}.
           </span>
         </div>
       )}
+
+      <fieldset className="rounded-2xl border border-base-300 bg-base-200/40 p-4">
+        <legend className={`px-1 ${cardTitleClass}`}>Firmantes</legend>
+        <ul className="grid gap-4 md:grid-cols-2">
+          {signers.map((s) => (
+            <li key={s.key} className="space-y-3 rounded-xl bg-base-100 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-base-content">{s.label}</p>
+              <ImagePicker
+                label="Firma"
+                icon={PenLine}
+                value={images[s.key]?.signature}
+                onSelect={(f) => setImage(s.key, "signature", f)}
+                onClear={() => setImage(s.key, "signature", null)}
+              />
+              <ImagePicker
+                label="Huella"
+                icon={Fingerprint}
+                value={images[s.key]?.fingerprint}
+                onSelect={(f) => setImage(s.key, "fingerprint", f)}
+                onClear={() => setImage(s.key, "fingerprint", null)}
+              />
+            </li>
+          ))}
+        </ul>
+      </fieldset>
 
       <ol className="space-y-3" aria-label="Documentos por leer">
         {DOCS.map((d) => {
@@ -355,46 +389,22 @@ export function StepSign({
         })}
       </ol>
 
-      <fieldset className="rounded-2xl border border-base-300 bg-base-200/40 p-4">
-        <legend className={`px-1 ${cardTitleClass}`}>Firmantes</legend>
-        <ul className="grid gap-4 md:grid-cols-2">
-          {signers.map((s) => (
-            <li key={s.key} className="space-y-3 rounded-xl bg-base-100 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-base-content">{s.label}</p>
-              <ImagePicker
-                label="Firma"
-                icon={PenLine}
-                value={images[s.key]?.signature}
-                onSelect={(f) => setImage(s.key, "signature", f)}
-                onClear={() => setImage(s.key, "signature", null)}
-              />
-              <ImagePicker
-                label="Huella"
-                icon={Fingerprint}
-                value={images[s.key]?.fingerprint}
-                onSelect={(f) => setImage(s.key, "fingerprint", f)}
-                onClear={() => setImage(s.key, "fingerprint", null)}
-              />
-            </li>
-          ))}
-        </ul>
-      </fieldset>
-
       {!canSign && !submitting && (
         <p className="text-sm text-base-content/70" role="status">
-          {!allRead
-            ? `Falta leer ${DOCS.filter((d) => !read.has(d.kind)).map((d) => d.label.toLowerCase()).join(", ")}.`
-            : `Faltan ${missingImages} ${missingImages === 1 ? "imagen" : "imágenes"} de firma o huella.`}
+          {missingImages > 0
+            ? `Faltan ${missingImages} ${missingImages === 1 ? "imagen" : "imágenes"} de firma o huella.`
+            : `Falta leer ${DOCS.filter((d) => !read.has(d.kind)).map((d) => d.label.toLowerCase()).join(", ")}.`}
         </p>
       )}
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-        <button type="button" className={ghostBtnClass} onClick={onBack} disabled={submitting}>
+        <button type="button" className={outlineBtnClass} onClick={onBack} disabled={submitting}>
           Atrás
         </button>
         <button type="button" className={primaryBtnClass} onClick={sign} disabled={!canSign}>
-          {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {submitting ? "Firmando documentos…" : "Firmar documentos"}
+          <BusyLabel busy={submitting} busyText="Firmando documentos…">
+            Firmar documentos
+          </BusyLabel>
         </button>
       </div>
 
@@ -403,7 +413,7 @@ export function StepSign({
           pdfData={pdfs[openDoc.kind]!}
           title={openDoc.label}
           onClose={() => setOpenKind(null)}
-          overlays={overlaysFor(openDoc.kind)}
+          overlays={overlaysByKind[openDoc.kind]}
           onReadToEnd={() => setRead((prev) => new Set(prev).add(openDoc.kind))}
           footer={
             <p className="text-sm text-base-content/70" role="status">

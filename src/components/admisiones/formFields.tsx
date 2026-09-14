@@ -9,7 +9,7 @@
  * vuelta a `values`/`onChange`.
  *
  * Por eso los primitivos de aquí ya no reciben `values`/`onChange`: los nativos
- * (`Field`, `SelectField`, `TextAreaField`) reciben `register` de RHF y se spreadean
+ * (`Field`, `TextAreaField`) reciben `register` de RHF y se spreadean
  * directo sobre el `<input>`/`<select>`/`<textarea>`; los que tienen estado propio o no
  * exponen `ref` (`YesNoField`, `CheckboxGroupField`) reciben `control` y usan
  * `Controller`/`useController` por dentro, para no perder el contrato de valores que
@@ -20,7 +20,7 @@
 import { Controller, useWatch, type Control, type UseFormRegister } from "react-hook-form";
 
 // Tokens de estilo: fuente única en components/ui/formStyles.ts (Paso 1 del refactor).
-// Se importan (para uso interno de este archivo: Field/SelectField/etc. los usan
+// Se importan (para uso interno de este archivo: Field/TextAreaField/etc. los usan
 // directamente) Y se re-exportan (para no romper los imports existentes de
 // guardianFields.tsx, steps.tsx, ComboBox.tsx) — verificación del Paso 9.
 // OJO: `export { x } from "mod"` por sí solo NO declara `x` como variable local
@@ -75,32 +75,6 @@ export function Field({
         placeholder={placeholder}
         {...register(name)}
       />
-    </div>
-  );
-}
-
-export function SelectField({
-  name,
-  id,
-  label,
-  register,
-  options,
-  full,
-}: BaseProps & { options: readonly string[] }) {
-  const htmlId = id ?? name;
-  return (
-    <div className={full ? "sm:col-span-2" : undefined}>
-      <label htmlFor={htmlId} className={labelClass}>
-        {label}
-      </label>
-      <select id={htmlId} className={selectClass} {...register(name)}>
-        <option value="">Selecciona…</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

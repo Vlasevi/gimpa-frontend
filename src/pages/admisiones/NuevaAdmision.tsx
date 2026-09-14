@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { Loader2, ArrowLeft, AlertCircle } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { ID_DOC_TYPES, SEXES } from "@/components/admisiones/admissionTypes";
+import { Select } from "@/components/ui/Select";
 import {
   labelClass,
   inputClass,
-  selectClass,
   primaryBtnClass,
 } from "@/components/ui/formStyles";
 
@@ -60,7 +60,7 @@ export default function NuevaAdmision() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit, watch } = useForm<FormValues>({
+  const { register, control, handleSubmit, watch } = useForm<FormValues>({
     defaultValues: {
       first_name1: "",
       first_name2: "",
@@ -231,13 +231,19 @@ export default function NuevaAdmision() {
               <label htmlFor="idtype" className={labelClass}>
                 Tipo de documento *
               </label>
-              <select id="idtype" className={selectClass} {...register("id_type")}>
-                {ID_DOC_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="id_type"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    id="idtype"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    options={ID_DOC_TYPES}
+                  />
+                )}
+              />
             </div>
             <div>
               <label htmlFor="idnum" className={labelClass}>
@@ -277,14 +283,20 @@ export default function NuevaAdmision() {
               <label htmlFor="sex" className={labelClass}>
                 Sexo
               </label>
-              <select id="sex" className={selectClass} {...register("sex")}>
-                <option value="">Selecciona…</option>
-                {SEXES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="sex"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    id="sex"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder="Selecciona…"
+                    options={SEXES}
+                  />
+                )}
+              />
             </div>
           </div>
         </fieldset>
@@ -299,34 +311,40 @@ export default function NuevaAdmision() {
               <label htmlFor="grade" className={labelClass}>
                 Grado *
               </label>
-              <select
-                id="grade"
-                className={selectClass}
-                required
-                disabled={loadingGrades}
-                {...register("grade_applied")}
-              >
-                <option value="">
-                  {loadingGrades ? "Cargando grados…" : "Selecciona un grado"}
-                </option>
-                {grades.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {gradeLabel(g)}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="grade_applied"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    id="grade"
+                    required
+                    disabled={loadingGrades}
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder={loadingGrades ? "Cargando grados…" : "Selecciona un grado"}
+                    options={grades.map((g) => ({ value: String(g.id), label: gradeLabel(g) }))}
+                  />
+                )}
+              />
             </div>
             <div>
               <label htmlFor="year" className={labelClass}>
                 Año lectivo *
               </label>
-              <select id="year" className={selectClass} {...register("academic_year")}>
-                {YEAR_OPTIONS.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="academic_year"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    id="year"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    options={YEAR_OPTIONS.map((y) => ({ value: String(y), label: String(y) }))}
+                  />
+                )}
+              />
             </div>
           </div>
         </fieldset>

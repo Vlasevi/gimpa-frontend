@@ -353,7 +353,7 @@ export function GeoCascadeField({
           <SelectField
             name={k("stratum")}
             label={L.stratum}
-            register={register}
+            control={control}
             options={STRATA}
             disabled={disabled}
             required={required}

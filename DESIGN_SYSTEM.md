@@ -153,11 +153,19 @@ Los tres ingredientes del acabado "moderno". Mantenlos consistentes.
 Usa las constantes de `components/ui/formStyles.ts`, nunca un string propio:
 
 ```tsx
-import { primaryBtnClass, ghostBtnClass } from "@/components/ui/formStyles";
+import { primaryBtnClass, ghostBtnClass, outlineBtnClass } from "@/components/ui/formStyles";
 
 <button className={primaryBtnClass}>Guardar</button>  {/* "btn btn-primary gap-2 shadow-sm" */}
 <button className={ghostBtnClass}>Cancelar</button>   {/* "btn btn-ghost gap-2" */}
+<button className={outlineBtnClass}>Atrás</button>    {/* contorno suave, fondo al pasar */}
 ```
+
+- **"Atrás" / volver** en un asistente: `outlineBtnClass` (con contorno, nunca ghost).
+- **Acciones del pie de un modal** (rechazar, cancelar, solicitar corrección, cambiar
+  grado): `btn btn-outline btn-<intención>`; solo la acción principal es sólida. **Aprobar**
+  es verde (`btn btn-success`) con hover visible (se aclara y sube la sombra: el hover de
+  daisyUI apenas oscurece un 7 % y el tema no define `--depth`, así que en colores oscuros
+  no se nota).
 
 Para otras variantes, usa las clases de daisyUI directamente: `btn btn-outline`,
 `btn btn-error`, `btn-sm`…
@@ -199,31 +207,34 @@ solo en hover. Referencias: `matriculas/matriculasUI/EnrollmentRow`,
 `pages/Usuarios` y el botón "Ver expediente" de `pages/AdmisionesAdmin`.
 
 ```tsx
+import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
+
 {/* Ver detalles / acción neutra → primary en hover */}
-<button
-  className="p-2 text-base-content/40 hover:text-primary hover:bg-primary/10
-             rounded-full transition-all cursor-pointer"
-  title="Ver detalles"
-  onClick={…}
->
-  <Eye className="h-5 w-5" />
+<button type="button" className={`${iconBtnClass} ${iconHover.primary}`}
+        title="Ver" aria-label={`Ver la matrícula de ${nombre}`} onClick={…}>
+  <Eye className={iconClass} aria-hidden="true" />
 </button>
 
 {/* Eliminar / destructiva → error en hover */}
-<button
-  className="p-2 text-base-content/40 hover:text-error hover:bg-error/10
-             rounded-full transition-all cursor-pointer"
-  title="Eliminar"
-  onClick={…}
->
-  <Trash2 className="h-5 w-5" />
+<button type="button" className={`${iconBtnClass} ${iconHover.error}`}
+        title="Eliminar" aria-label={`Eliminar a ${nombre}`} onClick={…}>
+  <Trash2 className={iconClass} aria-hidden="true" />
 </button>
 ```
 
-Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
-(`text-base-content/40`), el color de la acción solo en `hover:text-*` +
-`hover:bg-*/10`, `transition-all`, `cursor-pointer` y **siempre `title`**.
-Íconos `lucide-react` a `h-5 w-5`.
+Claves (tokens en `src/components/ui/formStyles.ts`):
+
+- **Gris opaco, nunca con transparencia** (`text-base-content/40`, `/60`…). Con un color
+  con alpha cada tramo del SVG se pinta semitransparente y donde dos tramos se cruzan el
+  gris se suma: el trazo queda a manchas (oscuro en uniones y puntas, claro en el resto) y
+  se lee borroso. `iconBtnClass` usa `color-mix(base-content 70 %, base-100)`, que es
+  opaco y además llega al contraste 3:1 de un ícono. Vale para cualquier ícono de Lucide
+  que tenga que verse nítido.
+- Ícono a 20 px (`iconClass` = `h-5 w-5`) y botón de 36 px (`p-2`).
+- El color de la acción solo en hover (`iconHover.primary | success | accent | error |
+  neutral`), `rounded-full`, foco visible y **siempre `title` + `aria-label`**
+  (el `aria-label` dice sobre qué actúa: "Eliminar a Ana Pérez").
+- Aplica también a la X de cerrar de los modales (`iconHover.neutral`).
 
 ---
 
@@ -233,9 +244,15 @@ Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
   `lucide-react` con `animate-spin`, suelto junto al texto del botón, en gerundio
   ("Conectando…"). Deshabilita el control mientras tanto. **Nunca** uses el spinner
   nativo de daisyUI (`loading loading-spinner`) en este caso: mezclar los dos estilos
-  en botones vecinos es justo la inconsistencia que se quiere evitar.
-  _Estado real:_ quedan 28 spinners nativos dentro de botones, en 12 archivos
-  (Contratación, Matrículas, `auxiliar/*`, `UserFormModal`). Es deuda, ver §14.
+  en botones vecinos es justo la inconsistencia que se quiere evitar. **Nunca el spinner
+  solo**: siempre spinner + texto. Úsalo con **`BusyLabel`**
+  (`components/ui/BusyLabel.tsx`):
+  `<BusyLabel busy={saving} busyText="Guardando…">Guardar</BusyLabel>`. Lo usan
+  `Alert` (`pending`), `ConfirmDeleteDialog`, Contratación y los formularios de usuario.
+- **Resultado de una acción** (éxito o error del servidor): **siempre** el toast
+  compartido arriba a la derecha (`useToast` + `<Toast>`), **nunca** un mensaje dentro
+  del diálogo o del formulario. Un formulario dentro de un modal recibe `flash` de la
+  página que lo abre (así lo hacen `UserRegister` y `UserFormModal`).
 - **Carga de una SECCIÓN o PÁGINA completa** (tabla, panel de detalle, modal
   cargando datos previos, un paso completo de un wizard): **siempre**
   `<LoadingState />` (`components/ui/LoadingState.tsx`), **nunca** armado a mano.
@@ -262,8 +279,31 @@ Claves: `p-2 rounded-full` (área táctil circular), reposo apagado
   (logo pulsando). Solo se usa mientras se rehidrata la sesión (`App.tsx`,
   `ProtectedRoute` en `loginLogic.tsx`). No lo uses para secciones.
 - **Vacío / error:** dan dirección, no disculpas. Di qué pasó y cómo seguir.
-- **Confirmaciones destructivas:** usa el modal `Alert` (`components/ui/Alert`) con
-  `variant`/`acceptText`, **nunca `confirm()` nativo**. Referencia: `MatriculasAdmin`.
+- **Confirmar eliminar: `ConfirmDeleteDialog`** (`components/ui/ConfirmDeleteDialog`),
+  la misma en toda la plataforma, **nunca `confirm()` nativo ni un `Alert` armado a mano**.
+  Minimalista: título, una pregunta con lo que se elimina (el nombre en negrita) y, en
+  rojo, "Este cambio es irreversible." (`irreversible={false}` si se puede restaurar);
+  "Cancelar" con contorno suave y el botón rojo ("Eliminar usuario"). Mientras
+  `onConfirm` trabaja: spinner en el botón ("Eliminando…"), botones bloqueados y el diálogo
+  no se cierra. Si `onConfirm` termina bien se cierra solo; si lanza o devuelve `false`,
+  queda abierto para reintentar. El toast de éxito (arriba a la derecha) lo lanza quien
+  llama, con el nombre de lo eliminado:
+  ```tsx
+  <ConfirmDeleteDialog isOpen={!!toDelete} onClose={() => setToDelete(null)}
+    title="Eliminar usuario" confirmText="Eliminar usuario"
+    onConfirm={async () => { /* borrar; flash("success", …); return true | false */ }}>
+    <p>Se eliminará al usuario <strong>{nombre}</strong> con sus datos y archivos.</p>
+  </ConfirmDeleteDialog>
+  ```
+  Usos (todas las eliminaciones de la plataforma): usuarios, roles, matrículas, archivos
+  de una matrícula, solicitudes de admisión (eliminar y eliminar permanentemente),
+  contrataciones (documento, eliminar y eliminar permanentemente), plantillas de contrato y
+  la foto de perfil. No aplica a "Quitar" algo que aún no se guardó (un archivo elegido
+  antes de subirlo, la firma en el lienzo, la foto en un formulario).
+- **Otras confirmaciones** (aprobar, reintegrar, enviar la matrícula…): `ConfirmDialog`
+  con su `tone` (`success` para aprobar, `primary` para enviar o reintegrar), ver §12c.
+  `Alert` queda para avisos largos que hay que leer (consentimientos, conflictos de
+  guardado).
 - **Feedback de acción (éxito/error):** usa el toast compartido, **nunca `alert()`
   nativo**:
   ```tsx
@@ -426,7 +466,8 @@ propio `max-h/overflow`; deja que el cuerpo sea el que desplaza. Referencia:
 
 **Modal nuevo:** usa **`components/ui/Modal`**. Trae animación de entrada y salida,
 cierre con Escape y por backdrop (`closeOnBackdrop`), y bloqueo de scroll integrado.
-Para confirmaciones, usa `Alert`. Referencia: `ApplicationDetail`.
+Para confirmar una acción, usa `ConfirmDialog` (§12c); para un formulario, `FormDialog`
+(§12b). Referencia: `ApplicationDetail`.
 
 **Bloqueo del fondo:** con un modal abierto, **el `<body>` no debe hacer scroll**
 (para eso está el backdrop difuminado: aislar la interacción).
@@ -434,14 +475,66 @@ Para confirmaciones, usa `Alert`. Referencia: `ApplicationDetail`.
 ancho de la scrollbar, para que el fondo no "salte". Soporta modales anidados.
 
 - `Modal` y `Alert` **ya lo llaman por dentro**: no lo llames aparte si los usas.
-- Los modales hechos a mano sí deben llamarlo. Hoy lo hacen `UserFormModal`,
-  `DetailModal`/`Overlay` (Contratación), `PdfModal` (`PdfSignViewer`) y los modales
-  de `Roles`.
+- Los modales hechos a mano sí deben llamarlo. Hoy lo hacen `DetailModal`/`Overlay`
+  (Contratación), `PdfModal` (`PdfSignViewer`) y los modales de `Roles`.
 
 **Feedback dentro de un contenedor con `transform`:** un hijo `fixed` se posiciona
 respecto al contenedor transformado, no al viewport. Monta el toast o el `Alert` con
 `createPortal(..., document.body)`. En Matrículas ya no hace falta: el detalle de staff
 usa `ui/Modal` y los diálogos anidados van en su propio `Modal`.
+
+## 12b. Diálogo de formulario (crear o editar algo)
+
+**Todo diálogo que crea o edita algo usa este formato**, con los componentes de
+`components/ui/FormDialog.tsx`. El modelo es **"Registrar nuevo usuario"** (Usuarios);
+lo siguen "Registrar usuario" y "Nueva matrícula" (Matrículas) y "Cambiar grado" (detalle
+de la matrícula). No armes el marco, las etiquetas ni los botones a mano: así los tamaños y
+la tipografía no se separan.
+
+```
+┌───────────────────────────────────────────────────┐
+│ (ícono)  Registrar nuevo usuario                 X │  cabecera blanca, borde abajo
+│          Completa los datos del nuevo usuario      │  (Aleo 24 px + línea de 14 px)
+├───────────────────────────────────────────────────┤
+│  ┌ Datos del usuario * ───────────────────────┐    │  fondo gris (base-200)
+│  │ NOMBRE *            APELLIDO *              │    │  secciones: tarjetas blancas
+│  │ [👤 Ej: Juan     ]  [👤 Ej: Pérez       ]   │    │  con título azul subrayado
+│  └─────────────────────────────────────────────┘    │
+│  ───────────────────────────────────────────────    │
+│                            Cancelar   [Registrar]   │
+└───────────────────────────────────────────────────┘
+```
+
+| Pieza | Qué es | Medidas |
+|---|---|---|
+| `FormDialog` | Marco: cabecera (ícono en círculo, título, línea de ayuda o datos del registro, X) y cuerpo con scroll propio | `max-w-3xl` (`size="sm"`: `max-w-lg`, para un solo campo), hasta el 90 % del alto, fondo `base-200`. Título `font-display text-2xl` en `secondary`. `stacked` si se abre encima de otro modal |
+| `FormSection` | Tarjeta blanca con su título ("Datos del acudiente"); `required` le pone `*` | `p-5`, título `text-base font-bold text-primary` con borde abajo |
+| `FormGrid` | Dos columnas en escritorio, una en móvil | `gap-4` |
+| `FormInput` | Etiqueta + campo de texto, con ícono opcional a la izquierda (`User`, `Mail`, `Phone`…) y ayuda | Etiqueta **12 px en negrita** (`formLabelClass`), campo **14 px** (`formInputClass`), ayuda 12 px (`formHintClass`). `full` ocupa las dos columnas |
+| `FormSelect` | Lo mismo con el `Select` de la plataforma | Igual que `FormInput` |
+| `FormActions` | Borde arriba, "Cancelar" (ghost) y el botón principal con spinner y gerundio | `btn btn-primary`; "Registrando…", "Creando…" |
+
+Reglas:
+
+- **Obligatorios con `*` rojo**, nunca con la palabra "obligatorio".
+- **No se cierra con un clic en el fondo** (se perdería lo escrito); sí con la X, Escape o
+  "Cancelar".
+- **El resultado va en el toast** de la página (arriba a la derecha), nunca dentro del
+  diálogo: el formulario recibe `flash` de quien lo abre. Mientras envía, el botón muestra
+  el spinner y el gerundio; el diálogo se cierra al terminar bien.
+- Si hace falta un campo que no existe (fecha, casilla…), agrégalo a `FormDialog.tsx` con
+  las mismas medidas, no en el formulario.
+
+## 12c. Confirmar una acción
+
+**`ConfirmDialog`** (`components/ui/ConfirmDialog.tsx`): la confirmación de toda la
+plataforma. Minimalista: panel angosto, título, una frase (el nombre en negrita) y dos
+botones, "Cancelar" con contorno suave y la acción en el color de su intención
+(`tone`: `danger` rojo, `success` verde, `primary` azul). Opcional, una línea final en ese
+color (`note`). El foco arranca en "Cancelar". Mientras `onConfirm` trabaja: spinner y
+gerundio, botones bloqueados; termina bien → se cierra; falla (lanza o devuelve `false`) →
+queda abierto. El resultado, en el toast. `ConfirmDeleteDialog` es este mismo con
+`tone="danger"` y "Este cambio es irreversible." (ver §6).
 
 ---
 
@@ -457,14 +550,16 @@ amplía el compartido en vez de duplicarlo dentro de un módulo.
 | `formStyles.ts` | `labelClass`, `inputClass`, `selectClass`, `textareaClass`, `controlClass` (alias de `selectClass`), `primaryBtnClass`, `ghostBtnClass` | Clases de campo y botón (§5.1). Idénticas a lo que Matrículas renderiza inline | Admisiones (13 archivos), `ComboBox`, `OtpInput`, `fields/*`. Matrículas aún no lo importa |
 | `LoadingState` | `{label?, compact?, className?}` | Carga de sección o página (§6) | Usuarios, Roles, Matrículas, Contratación, `PdfSignViewer`, `UserFormModal` |
 | `Toast` | `{toast: ToastState \| null}` | Presentación del toast; el estado lo da `useToast` (§6). La región viva (`role="status"`) queda montada siempre para que los lectores de pantalla anuncien cada mensaje; los errores con `aria-live="assertive"` | `ApplicationDetail`, Matrículas (estudiante y staff), `Perfil` |
-| `Alert` | `variant` (warning/info/error/success), `acceptText`, `requireScrollToBottom`, … | Confirmaciones y avisos modales. Cierra con Escape y backdrop. Título y descripción con ids únicos, foco inicial dentro del diálogo (en el texto si hay que leerlo hasta el final) y de vuelta al control que lo abrió | `ApplicationDetail`, `SolicitudWizard`, `ContratacionAdmin`, `MatriculasAdmin`, Matrículas del estudiante, `Perfil`, `Usuarios` |
+| `Alert` | `variant` (warning/info/error/success), `acceptText`, `requireScrollToBottom`, `pending`/`pendingText` (spinner y botones bloqueados), … | Confirmaciones y avisos modales. Cierra con Escape y backdrop. Título y descripción con ids únicos, foco inicial dentro del diálogo (en el texto si hay que leerlo hasta el final) y de vuelta al control que lo abrió | `ApplicationDetail`, `SolicitudWizard`, `ContratacionAdmin`, `MatriculasAdmin`, Matrículas del estudiante, `Perfil`, `Usuarios` |
+| `ConfirmDeleteDialog` | `title`, `confirmText`, `onConfirm` (async; `false` = falló), `irreversible` | Confirmar cualquier eliminación (sobre `Alert`): spinner mientras borra, se cierra solo al terminar bien, queda abierto si falla | `Usuarios`, `Roles`, `MatriculasAdmin`, `EnrollmentDetail`, `ApplicationDetail`, `ContratacionAdmin`, `Perfil` |
 | `Modal` | `{isOpen, onClose, children, className?, closeOnBackdrop?, labelledBy?, ariaLabel?}` | Modal genérico animado (§12). **Pasa siempre `labelledBy`** (id del título visible) o `ariaLabel`. Lleva el foco al diálogo, lo mantiene adentro con Tab y lo devuelve al cerrar | `ApplicationDetail`, panel de staff de Matrículas |
 | `tabs` | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` (controlado o no) | Pestañas propias, sin Radix. Patrón de pestañas de la WAI: `aria-controls`/`aria-labelledby` automáticos, solo la activa en el orden de Tab, flechas ←/→ e Inicio/Fin | `ApplicationDetail`, `ContratacionAdmin`, Matrículas (detalle de staff, vista de matrícula aprobada) |
 | `FilterSelect` | `{value, onChange, options, placeholder?, className?, ariaLabel?}` | Filtros de listado (§11). Combobox de solo selección accesible: `role="combobox"` + `listbox`/`option`, ↑/↓/Inicio/Fin/Enter/Escape. **Pasa siempre `ariaLabel`** | `MatriculasAdmin`, `Usuarios`, `ContratacionAdmin`, `AdmisionesAdmin` |
+| `Select` | `{value, onChange, options, id?, placeholder?, invalid?, required?, disabled?, describedBy?, name?, variant?}` | **El select de toda la plataforma: nunca `<select>` nativo** (su lista es la del sistema operativo y no sigue el tema). Lista propia con el aspecto del `dropdown` de daisyUI y la opción elegida en `primary`. Mismo combobox accesible que `FilterSelect` + escribir una letra salta a la opción. En formularios con RHF va con `Controller` (así lo hace `SelectField` de `ui/fields`); `FilterSelect` es este mismo `Select` con `variant="filter"` | `SelectField` (fichas del estudiante y admisiones), gestión de usuarios, matrículas, admisiones, contratación |
 | `ComboBox` | `{value, onChange, options, label, placeholder?, disabled?, loading?, required?, name?, hint?}` | Lista buscable dentro de un formulario (§11). Con `name` muestra su error del `FieldErrorsProvider` y deja `data-field` para enfocarlo. La lista abierta usa `dropdown-open` para que sus opciones estén en el árbol de accesibilidad | `fields/*` (Admisiones y Matrículas) |
 | `SubSection` | `{title, subtitle?, open, onToggle, status?: "complete"\|"incomplete"\|"error", id?, children}` | Acordeón controlado por el padre, animado con `grid-rows`. `<h3>` envuelve al botón (`aria-expanded` + `aria-controls`); la sección plegada lleva **`inert`** (sus campos no reciben foco ni se leen) | `SolicitudWizard`, `admisiones/steps.tsx`, paso 3 de Matrículas |
 | `OtpInput` | `{value, onChange, length?=6, autoFocus?=true, onComplete?, error?, …}` | Código de verificación (componente `otp` de daisyUI). Solo acepta dígitos y restaura el foco | `Login`, verificación de Matrículas, `ContratacionEmpleado` |
-| `pdf/PdfSignViewer` | `PdfModal {pdfData, title, onClose, overlays?, onReadToEnd?, footer?}`, `PdfViewer`, `embedImagesInPdf` | Visor de PDF con zonas de firma. `PdfModal` es un diálogo modal accesible (título, zoom "Alejar/Acercar", "Cerrar documento", foco atrapado y devuelto). `onReadToEnd` avisa cuando el usuario llegó al final del documento (se usa para firmar solo lo leído) | Firma de Matrículas, Contratación |
+| `pdf/PdfSignViewer` | `PdfModal {pdfData, title, onClose, overlays?, onReadToEnd?, footer?}`, `PdfViewer`, `embedImagesInPdf` | Visor de PDF con zonas de firma. `PdfModal` es un diálogo modal accesible (título, zoom "Alejar/Acercar", "Cerrar documento", foco atrapado y devuelto). **Abre al 100 %** y se ajusta al ancho en pantallas angostas. `onReadToEnd` avisa cuando el usuario llegó al final del documento (se usa para firmar solo lo leído). En Matrículas las zonas de firma y huella son **solo vista previa**: la firma y la huella se piden una vez en el panel de firmantes y se estampan en los tres documentos (en Contratación siguen siendo clicables). Las URL `blob:` de las imágenes se crean una vez por imagen y se liberan al cambiarla o salir | Firma de Matrículas, Contratación |
 
 ### 13.2 `components/ui/fields/` — campos declarativos
 
@@ -488,7 +583,7 @@ const SCHEMA: FieldDescriptor[] = [
 | Pieza | Qué contiene |
 | --- | --- |
 | `types.ts` | `FieldType` (text, email, tel, number, date, textarea, select, combobox, yesno, checkbox, checkbox-group, geo-cascade, photo, file), el descriptor `FieldDescriptor` (con `hint?` y, en fechas/números, `min?`/`max?`; `max: "today"` = hoy en hora de Colombia), las condiciones `FieldCondition` (`equals`/`notEquals`/`in`, o `watch` + `predicate`) para `showWhen`/`disabledWhen`/`required` |
-| `registry.tsx` | `FIELD_REGISTRY` (tipo → componente), `SchemaField` y `SchemaSection`. `SchemaSection` observa con un solo `useWatch` únicamente los campos de los que dependen las condiciones. Acepta `disabledFields` (bloqueados desde afuera, p. ej. el nombre que viene de Microsoft) y `fieldHints` |
+| `registry.tsx` | `FIELD_REGISTRY` (tipo → componente), `SchemaField` y `SchemaSection`. `SchemaSection` observa con un solo `useWatch` únicamente los campos de los que dependen las condiciones. Acepta `disabledFields` (bloqueados desde afuera, p. ej. el nombre que viene de Microsoft) y `fieldHints`. Descriptores: `startsRow` hace que el campo empiece fila en la grilla de dos columnas (así una pregunta sí/no queda a la izquierda y el campo que revela, a su derecha: "¿Tiene celular propio?" → número); el tipo `computed` es un campo bloqueado calculado de otros ("Edad" desde la fecha de nacimiento), que no se guarda ni se envía. Los obligatorios se marcan solo con `*` rojo |
 | `fieldErrors.tsx` | `FieldErrorsProvider {errors}` + `useFieldError(name)`: el padre pasa el mapa `{ruta: mensaje}` que devuelve el backend y cada campo muestra el suyo, con `aria-invalid` y `aria-describedby`. También el asterisco `RequiredMark` |
 | `primitives.tsx` | `TextField`, `SelectField`, `TextAreaField`, `CheckboxField`, `YesNoField` (modo `"string"` → guarda `"Si"`/`"No"`, o `"boolean"`), `CheckboxGroupField`, `ComboBoxField`. Todos con `<label htmlFor>` asociado (ids válidos aunque el nombre tenga puntos: `student.birth.date` → `student-birth-date`), asterisco si son obligatorios, ayuda y error asociados |
 | `GeoCascadeField.tsx` | Cascada país → departamento → ciudad → barrio, con dirección y estrato (1–6 y Comercial). Fuente `static` (listas fijas) o `api` (`/api/geo/`). El `prefix` admite rutas con punto (`residence.`, `father.birth.`). Si una ficha guardada trae el departamento sin su id, lo resuelve por nombre para cargar las ciudades |

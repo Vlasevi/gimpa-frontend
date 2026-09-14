@@ -167,6 +167,8 @@ export interface PhotoFieldProps {
   value: PhotoFieldValue;
   onChange: (next: PhotoFieldValue) => void;
   preloadedUrl?: string; // base64 o URL absoluta de una foto ya guardada
+  /** Asterisco rojo junto a la etiqueta (sin texto "obligatoria"). */
+  required?: boolean;
 }
 
 // ---------------------------------------------------------- Tipos y descriptor
@@ -185,7 +187,8 @@ export type FieldType =
   | "checkbox-group"
   | "geo-cascade"
   | "photo"
-  | "file";
+  | "file"
+  | "computed";
 
 interface FieldDescriptorBase {
   /** Path de RHF; admite paths con punto ("repeated.grade"). No aplica a "geo-cascade"
@@ -196,6 +199,12 @@ interface FieldDescriptorBase {
   id?: string;
   /** Ocupa las 2 columnas del FieldGrid (sm:col-span-2). */
   full?: boolean;
+  /**
+   * Empieza una fila nueva del grid (`sm:col-start-1`), aunque la anterior haya quedado
+   * con la columna derecha libre. Con `full: false` en una pregunta Sí/No, el campo que
+   * revela (`showWhen`) cae a su derecha, en la misma fila; en móvil se apilan.
+   */
+  startsRow?: boolean;
   placeholder?: string;
   /** Documental por ahora — el plan prohíbe introducir validación real (zod, etc.) en
    * esta tanda; sirve para que el `<input required>` nativo se genere igual que hoy. */
@@ -241,4 +250,16 @@ export type FieldDescriptor =
       labels?: GeoCascadeFieldProps["labels"];
     })
   | (FieldDescriptorBase & { type: "photo"; dataKey: string; preloadedUrlKey?: string })
-  | (FieldDescriptorBase & { type: "file"; dataKey: string; accept?: string });
+  | (FieldDescriptorBase & { type: "file"; dataKey: string; accept?: string })
+  | (FieldDescriptorBase & {
+      /**
+       * Dato calculado a partir de otros campos (p. ej. la edad desde la fecha de
+       * nacimiento). Se pinta como un campo más del grid, bloqueado. No entra al
+       * formulario: no se guarda ni se envía (lo que se guarda es el dato de origen).
+       */
+      type: "computed";
+      /** Campos de los que depende (se observan con un `useWatch` puntual). */
+      watch: readonly string[];
+      /** Texto que se muestra; "" si todavía no se puede calcular. */
+      compute: (values: SectionValues) => string;
+    });

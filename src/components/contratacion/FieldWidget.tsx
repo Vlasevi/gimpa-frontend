@@ -2,6 +2,7 @@
 // Renderiza un campo del formulario de contratación según su widget.
 import { useState, useEffect, useRef } from "react";
 import type { FieldConfig } from "./contractConfig";
+import { Select } from "@/components/ui/Select";
 
 // Select con búsqueda (muestra ~5 ítems con scroll)
 const SearchSelect = ({
@@ -83,16 +84,13 @@ export const FieldWidget = ({
 
   if (w === "select") {
     return (
-      <select
-        className="select select-bordered w-full"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Seleccione...</option>
-        {(field.options || []).map((o) => (
-          <option key={o} value={o}>{o}</option>
-        ))}
-      </select>
+      <Select
+        ariaLabel={field.label}
+        value={value == null ? "" : String(value)}
+        onChange={onChange}
+        placeholder="Seleccione..."
+        options={(field.options || []).map((o) => ({ value: o, label: o }))}
+      />
     );
   }
 

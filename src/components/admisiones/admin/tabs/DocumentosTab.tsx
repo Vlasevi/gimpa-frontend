@@ -9,7 +9,7 @@ import { useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2, MinusCircle, XCircle } from "lucide-react";
 
 import { API_ENDPOINTS } from "@/utils/api";
-import { labelClass, textareaClass, adminGhostBtnClass } from "@/components/ui/formStyles";
+import { adminGhostBtnClass, iconBtnClass, iconClass, iconHover, labelClass, textareaClass } from "@/components/ui/formStyles";
 import type { DocumentRow, PostFn } from "@/components/admisiones/admin/adminTypes";
 
 export function DocumentosTab({
@@ -87,12 +87,13 @@ export function DocumentosTab({
                     onClick={() => reviewDocument(doc.doc_type, "approve")}
                     disabled={busy}
                     title="Aprobar"
-                    className="rounded-full p-2 text-base-content/40 transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                    aria-label={`Aprobar ${doc.label ?? doc.doc_type}`}
+                    className={`${iconBtnClass} ${iconHover.accent}`}
                   >
                     {pending === `doc-${doc.doc_type}-approve` ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-accent" />
+                      <Loader2 className={`${iconClass} animate-spin text-accent`} aria-hidden="true" />
                     ) : (
-                      <CheckCircle2 className="h-5 w-5" />
+                      <CheckCircle2 className={iconClass} aria-hidden="true" />
                     )}
                   </button>
                   <button
@@ -100,9 +101,10 @@ export function DocumentosTab({
                     onClick={() => setRejecting({ docType: doc.doc_type, reason: "" })}
                     disabled={busy}
                     title="Rechazar"
-                    className="rounded-full p-2 text-base-content/40 transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label={`Rechazar ${doc.label ?? doc.doc_type}`}
+                    className={`${iconBtnClass} ${iconHover.error}`}
                   >
-                    <XCircle className="h-5 w-5" />
+                    <XCircle className={iconClass} aria-hidden="true" />
                   </button>
                 </>
               )}
@@ -112,12 +114,13 @@ export function DocumentosTab({
                   onClick={() => reviewDocument(doc.doc_type, "not_applicable")}
                   disabled={busy}
                   title="Marcar como no aplica"
-                  className="rounded-full p-2 text-base-content/40 transition-colors hover:bg-base-200 hover:text-base-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                  aria-label={`Marcar ${doc.label ?? doc.doc_type} como no aplica`}
+                  className={`${iconBtnClass} ${iconHover.neutral}`}
                 >
                   {pending === `doc-${doc.doc_type}-not_applicable` ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className={`${iconClass} animate-spin`} aria-hidden="true" />
                   ) : (
-                    <MinusCircle className="h-5 w-5" />
+                    <MinusCircle className={iconClass} aria-hidden="true" />
                   )}
                 </button>
               )}

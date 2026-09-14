@@ -38,12 +38,12 @@ import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import type { SectionPermissions } from "@/components/Login/loginLogic";
 import {
   inputClass,
-  selectClass,
   textareaClass,
   labelClass,
   adminPrimaryBtnClass,
   adminGhostBtnClass,
 } from "@/components/ui/formStyles";
+import { Select } from "@/components/ui/Select";
 import type { FlashFn } from "@/components/admisiones/admin/adminTypes";
 
 type QuestionType = "text" | "textarea" | "select" | "bool" | "scale";
@@ -97,6 +97,26 @@ const CONCEPTS = [
   { value: "FAVORABLE_CON_OBSERVACIONES", label: "Favorable con observaciones" },
   { value: "REQUIERE_COMITE", label: "Requiere comité" },
   { value: "DESFAVORABLE", label: "Desfavorable" },
+];
+
+// "Sin concepto" es una opción elegible: el concepto es opcional.
+const CONCEPT_OPTIONS = [{ value: "", label: "Sin concepto" }, ...CONCEPTS];
+
+const MODALITIES = [
+  { value: "VIRTUAL", label: "Virtual (Teams)" },
+  { value: "PRESENCIAL", label: "Presencial" },
+];
+
+// Preguntas opcionales del registro: "—" deja la respuesta vacía.
+const BOOL_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "si", label: "Sí" },
+  { value: "no", label: "No" },
+];
+
+const SCALE_OPTIONS = [
+  { value: "", label: "—" },
+  ...[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) })),
 ];
 
 function toLocalInput(iso: string | null): string {
@@ -331,39 +351,33 @@ export function InterviewsPanel({
                 </div>
                 <div>
                   <label className={labelClass}>Modalidad</label>
-                  <select
-                    className={selectClass}
+                  <Select
                     value={form?.modality ?? "VIRTUAL"}
-                    onChange={(e) =>
+                    onChange={(modality) =>
                       setSched((p) => ({
                         ...p,
-                        [iv.kind]: { ...p[iv.kind], modality: e.target.value },
+                        [iv.kind]: { ...p[iv.kind], modality },
                       }))
                     }
-                  >
-                    <option value="VIRTUAL">Virtual (Teams)</option>
-                    <option value="PRESENCIAL">Presencial</option>
-                  </select>
+                    options={MODALITIES}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Asignar a</label>
-                  <select
-                    className={selectClass}
+                  <Select
                     value={form?.assigned_to ?? ""}
-                    onChange={(e) =>
+                    onChange={(assigned_to) =>
                       setSched((p) => ({
                         ...p,
-                        [iv.kind]: { ...p[iv.kind], assigned_to: e.target.value },
+                        [iv.kind]: { ...p[iv.kind], assigned_to },
                       }))
                     }
-                  >
-                    <option value="">Elige un usuario…</option>
-                    {staff.map((u) => (
-                      <option key={u.id} value={String(u.id)}>
-                        {u.name} · {u.role}
-                      </option>
-                    ))}
-                  </select>
+                    options={staff.map((u) => ({
+                      value: String(u.id),
+                      label: `${u.name} · ${u.role}`,
+                    }))}
+                    placeholder="Elige un usuario…"
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Enlace de Teams o lugar</label>
@@ -446,14 +460,19 @@ export function InterviewsPanel({
                 ))}
                 <div>
                   <label className={labelClass}>Concepto</label>
-                  <select className={selectClass} {...register(`${iv.kind}.concept`)}>
-                    <option value="">Sin concepto</option>
-                    {CONCEPTS.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
+                  <Controller
+                    name={`${iv.kind}.concept`}
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        options={CONCEPT_OPTIONS}
+                        placeholder="Sin concepto"
+                      />
+                    )}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Observación general</label>
@@ -514,41 +533,29 @@ function QuestionField({
           onChange={(e) => onChange(e.target.value)}
         />
       ) : question.type === "select" ? (
-        <select
-          className={selectClass}
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value="">—</option>
-          {(question.options ?? []).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={value == null ? "" : String(value)}
+          onChange={onChange}
+          options={[
+            { value: "", label: "—" },
+            ...(question.options ?? []).map((o) => ({ value: o, label: o })),
+          ]}
+          placeholder="—"
+        />
       ) : question.type === "bool" ? (
-        <select
-          className={selectClass}
+        <Select
           value={value === true ? "si" : value === false ? "no" : ""}
-          onChange={(e) => onChange(e.target.value === "" ? null : e.target.value === "si")}
-        >
-          <option value="">—</option>
-          <option value="si">Sí</option>
-          <option value="no">No</option>
-        </select>
+          onChange={(v) => onChange(v === "" ? null : v === "si")}
+          options={BOOL_OPTIONS}
+          placeholder="—"
+        />
       ) : question.type === "scale" ? (
-        <select
-          className={selectClass}
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">—</option>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+        <Select
+          value={value == null ? "" : String(value)}
+          onChange={(v) => onChange(v ? Number(v) : null)}
+          options={SCALE_OPTIONS}
+          placeholder="—"
+        />
       ) : (
         <input
           className={inputClass}

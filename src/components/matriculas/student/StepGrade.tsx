@@ -5,7 +5,7 @@
 
 import { GraduationCap } from "lucide-react";
 
-import { ghostBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
+import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import type { StudentEnrollment } from "@/components/matriculas/enrollmentApi";
 import { ORIGIN_LABELS } from "@/utils/statusHelpers";
 import { titleClass } from "@/components/ui/textStyles";
@@ -54,7 +54,7 @@ export function StepGrade({
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
         {onBack ? (
-          <button type="button" className={ghostBtnClass} onClick={onBack}>
+          <button type="button" className={outlineBtnClass} onClick={onBack}>
             Atrás
           </button>
         ) : (

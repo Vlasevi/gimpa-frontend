@@ -78,22 +78,19 @@ export function EnrollmentStatusView({
   const documents = enrollment.documents ?? [];
 
   if (status === "SUBMITTED") {
-    const pending = documents.filter((d) => d.kind === "family" && d.required && d.status === "MISSING");
+    // Una línea: cuándo se envió y qué sigue. Lo que falte entregar ya se ve en la lista.
     return (
       <div className="space-y-6">
         <StatusCard tone="info" icon={Clock3} title="En revisión">
-          <p>{message}</p>
-          {enrollment.submitted_at && <p className="text-base-content/60">Enviada el {formatDate(enrollment.submitted_at)}.</p>}
-          {pending.length > 0 && (
-            <p>
-              Quedan {pending.length} documentos por entregar. Podrás subirlos cuando la institución
-              apruebe la matrícula.
-            </p>
-          )}
+          <p>
+            {enrollment.submitted_at
+              ? `Enviada el ${formatDate(enrollment.submitted_at)}. Te avisaremos por correo cuando la revisen.`
+              : message}
+          </p>
         </StatusCard>
         <section aria-labelledby="docs-title" className="space-y-3">
           <h2 id="docs-title" className={smallTitleClass}>
-            Documentos entregados
+            Documentos
           </h2>
           <DocumentChecklist
             enrollmentId={enrollment.id}

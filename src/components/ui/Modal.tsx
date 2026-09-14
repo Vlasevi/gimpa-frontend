@@ -40,6 +40,8 @@ export interface ModalProps {
   labelledBy?: string;
   /** Nombre accesible si el modal no tiene un título visible. */
   ariaLabel?: string;
+  /** Id del texto que describe el modal (`aria-describedby`). */
+  describedBy?: string;
 }
 
 export function Modal({
@@ -50,6 +52,7 @@ export function Modal({
   closeOnBackdrop = true,
   labelledBy,
   ariaLabel,
+  describedBy,
 }: ModalProps) {
   const [isVisible, setIsVisible] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -91,10 +94,17 @@ export function Modal({
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
-    } else {
-      const timer = setTimeout(() => setIsVisible(false), 300);
-      return () => clearTimeout(timer);
+      return;
     }
+    // Con "reducir movimiento" no hay animación de salida (`motion-reduce:animate-none`):
+    // esperar los 300 ms dejaba el modal ya cerrado quieto y opaco en pantalla (con su
+    // contenido de vuelta al estado inicial), como si se volviera a abrir antes de irse.
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setIsVisible(false);
+      return;
+    }
+    const timer = setTimeout(() => setIsVisible(false), 300);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   // Cerrar con Escape (además del cierre por backdrop) — mismo patrón que
@@ -128,20 +138,27 @@ export function Modal({
         onClick={closeOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        aria-label={labelledBy ? undefined : ariaLabel}
-        tabIndex={-1}
-        onKeyDown={trapFocus}
-        className={`${cn(
-          "fixed left-1/2 top-1/2 z-50 flex w-full -translate-x-1/2 -translate-y-1/2 flex-col gap-4 border border-base-300 shadow-lg focus:outline-none sm:rounded-lg",
-          className,
-        )} ${modalAnimation}`}
-      >
-        {children}
+      {/* Centrado con flex, no con `top-1/2` + `-translate-1/2`: con un alto impar (del
+          panel o de la ventana) el translate deja el panel en medio píxel y Chrome dibuja
+          todo el texto borroso. La posición por layout se ajusta al píxel. El contenedor
+          no recibe clics (`pointer-events-none`) para que el backdrop siga cerrando. */}
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center sm:p-4">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          aria-label={labelledBy ? undefined : ariaLabel}
+          aria-describedby={describedBy}
+          tabIndex={-1}
+          onKeyDown={trapFocus}
+          className={`${cn(
+            "pointer-events-auto relative flex w-full flex-col gap-4 border border-base-300 shadow-lg focus:outline-none sm:rounded-lg",
+            className,
+          )} ${modalAnimation}`}
+        >
+          {children}
+        </div>
       </div>
     </>
   );

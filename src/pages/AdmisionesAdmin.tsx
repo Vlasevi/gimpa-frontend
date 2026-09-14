@@ -7,6 +7,7 @@ import { FilterSelect } from "@/components/ui/FilterSelect";
 import { StatusBadge } from "@/components/admisiones/StatusBadge";
 import { ApplicationDetail } from "@/components/admisiones/admin/ApplicationDetail";
 import type { AdmissionApplicationRow } from "@/components/admisiones/admissionTypes";
+import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
 
 /**
  * Estados por los que el personal filtra a diario. No es el catálogo completo (29):
@@ -118,7 +119,7 @@ export default function AdmisionesAdmin() {
           options={YEAR_FILTERS}
         />
         <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-base-content/40" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[color:color-mix(in_oklab,var(--color-base-content)_55%,var(--color-base-100))]" />
           <input
             type="search"
             value={search}
@@ -219,9 +220,10 @@ export default function AdmisionesAdmin() {
                           setDetailOpen(true);
                         }}
                         title="Ver expediente"
-                        className="rounded-full p-2 text-base-content/40 transition-all hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        aria-label={`Ver expediente ${row.code}`}
+                        className={`${iconBtnClass} ${iconHover.primary}`}
                       >
-                        <Eye className="h-5 w-5" />
+                        <Eye className={iconClass} aria-hidden="true" />
                       </button>
                     </td>
                   </tr>
