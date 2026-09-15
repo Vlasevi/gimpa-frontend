@@ -59,7 +59,7 @@ const LABELS: Record<string, string> = {
   // Académico
   previous_school: "Colegio anterior", last_grade_completed: "Último grado",
   last_grade_other: "Último grado (otro)", last_year: "Año cursado",
-  change_reason: "Motivo del cambio", change_reason_other: "Motivo (otro)",
+  change_reason: "Motivo principal del cambio", change_reason_other: "Otro motivo",
   repeated: "Repitió grado", difficulties: "Dificultades académicas",
   hasRepeated: "¿Repitió?", grade: "Grado", reason: "Motivo",
   hasDificulties: "¿Tiene dificultades?", dificulties: "Áreas", other: "Otra",

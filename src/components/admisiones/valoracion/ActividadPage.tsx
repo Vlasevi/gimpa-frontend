@@ -32,6 +32,7 @@ import {
   toServerValues,
 } from "@/components/admisiones/valoracion/blocks";
 import {
+  ACTIVITY_LABELS,
   formatWhen,
   instrumentLabel,
   type ActivityDetail,
@@ -208,9 +209,9 @@ function SourcesPanel({ detail }: { detail: ActivityDetail }) {
       <h2 className={titleClass}>Fuentes para integrar</h2>
       <div className="flex flex-wrap gap-2">
         {[
-          ["entrevista-familiar", "Entrevista familiar"],
-          ["entrevista-aspirante", "Entrevista al aspirante"],
-          ["examen", "Examen académico"],
+          ["entrevista-familiar", ACTIVITY_LABELS.ENTREVISTA_FAMILIAR],
+          ["entrevista-aspirante", ACTIVITY_LABELS.ENTREVISTA_ASPIRANTE],
+          ["examen", ACTIVITY_LABELS.EXAMEN],
         ].map(([slug, label]) => (
           <a key={slug} href={`${base}/${slug}`} target="_blank" rel="noreferrer" className={`${outlineBtnClass} btn-sm`}>
             <ExternalLink className="h-4 w-4" />

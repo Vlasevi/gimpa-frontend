@@ -140,6 +140,7 @@ function SelectTypeField(props: SchemaFieldProps) {
       label={d.label}
       control={props.control}
       options={d.options}
+      placeholder={d.placeholder}
       full={d.full}
       startsRow={d.startsRow}
       disabled={props.disabled}

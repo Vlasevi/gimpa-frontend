@@ -299,7 +299,7 @@ export default function NuevaAdmision() {
               </div>
               <div>
                 <label htmlFor="sex" className={labelClass}>
-                  Sexo
+                  Género
                 </label>
                 <Controller
                   name="sex"

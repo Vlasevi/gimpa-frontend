@@ -65,9 +65,26 @@ const GUARDIAN_TYPE_OPTIONS = [
   { value: "Empresa", label: "Una empresa" },
 ];
 
+// Año del último grado cursado: de 3 años antes a 3 después del actual (se calcula al
+// cargar, no se escribe a mano).
+const THIS_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 7 }, (_, i) => String(THIS_YEAR - 3 + i));
+
+// Motivo principal del cambio de colegio (texto acordado con el colegio).
+const OTHER_CHANGE_REASON = "Otro motivo.";
 const CHANGE_REASONS = [
-  "Traslado de ciudad o domicilio", "Motivos académicos", "Convivencia",
-  "Económico", "Familiar", "Inclusión o apoyo", "Otro",
+  "Interés en una propuesta pedagógica diferente.",
+  "Búsqueda de mayor acompañamiento académico.",
+  "Búsqueda de mayor profundización o exigencia académica.",
+  "Interés en otro enfoque de convivencia y formación.",
+  "Búsqueda de un entorno que favorezca la adaptación escolar.",
+  "Cambio de residencia o cercanía al hogar.",
+  "Necesidad de una jornada u horario diferente.",
+  "Organización económica familiar.",
+  "Continuidad de estudios en el grado requerido.",
+  "Motivos personales o familiares.",
+  OTHER_CHANGE_REASON,
+  "Prefiero no responder.",
 ];
 
 const DIFFICULTY_AREAS = [
@@ -115,11 +132,15 @@ export function AcademicHistoryStep({ control, register, setValue }: StepProps) 
       showWhen: { field: "last_grade_completed", equals: "Otro" },
     },
 
-    { type: "number", name: "last_year", label: "Año en que lo cursó", placeholder: "2025" },
+    { type: "select", name: "last_year", label: "Año en que lo cursó", options: YEAR_OPTIONS },
     {
       type: "select",
       name: "change_reason",
-      label: "Motivo del cambio de colegio",
+      label: "¿Cuál es el motivo principal por el que solicita el cambio de colegio?",
+      placeholder: "Seleccione una opción",
+      hint:
+        "Esta información se solicita para conocer las expectativas de la familia y orientar " +
+        "el acompañamiento educativo del estudiante.",
       options: CHANGE_REASONS,
       full: true,
     },
@@ -128,7 +149,7 @@ export function AcademicHistoryStep({ control, register, setValue }: StepProps) 
       name: "change_reason_other",
       label: "¿Cuál motivo?",
       full: true,
-      showWhen: { field: "change_reason", equals: "Otro" },
+      showWhen: { field: "change_reason", equals: OTHER_CHANGE_REASON },
     },
 
     // Repitió año → { hasRepeated, grade, reason }

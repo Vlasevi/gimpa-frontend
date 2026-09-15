@@ -240,7 +240,7 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
       { type: "text", name: "student.first_name2", label: "Segundo nombre" },
       { type: "text", name: "student.last_name1", label: "Primer apellido", required: true },
       { type: "text", name: "student.last_name2", label: "Segundo apellido" },
-      { type: "select", name: "student.sex", label: "Sexo", options: SEXES, required: true },
+      { type: "select", name: "student.sex", label: "Género", options: SEXES, required: true },
       { type: "date", name: "student.birth.date", label: "Fecha de nacimiento", required: true, max: "today" },
       // Calculada desde la fecha de nacimiento: un campo más del grid, bloqueado (no se guarda).
       {

@@ -98,10 +98,9 @@ export default function SolicitudWizard({ id }: { id: number }) {
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
-  // Acordeón: varias secciones pueden estar abiertas a la vez (misma sensación que el
-  // llenado de Matrículas), a diferencia del acordeón interno de `GuardiansStep`, que
-  // sigue siendo exclusivo (una sola abierta). Set de `key`s abiertas.
-  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  // Acordeón exclusivo: abrir una sección cierra la que estaba abierta (igual que el
+  // acordeón interno de `GuardiansStep`). `null` = todas plegadas.
+  const [openSection, setOpenSection] = useState<string | null>(null);
   // Qué sección está guardándose ahora mismo (una a la vez: cada "Guardar sección" es
   // un PATCH independiente, nunca un guardado global).
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -313,14 +312,15 @@ export default function SolicitudWizard({ id }: { id: number }) {
         });
         setRestoredSections(restored);
 
-        // Reanudación automática: deja abierta la primera sección sin diligenciar (o
-        // la primera de todas si ya están completas), más las que traen un borrador
-        // recuperado o en conflicto.
+        // Reanudación automática (una sola abierta): la primera que el colegio pidió
+        // corregir; si no, la primera con un borrador recuperado o en conflicto; si no, la
+        // primera sin diligenciar (o la primera de todas si ya están completas).
         const firstPending = STEPS.findIndex(
           (s) => !data.data?.[s.key] || Object.keys(data.data[s.key]).length === 0,
         );
         const initialKey = STEPS[firstPending === -1 ? 0 : firstPending].key;
-        setOpenSections(new Set([initialKey, ...toOpen, ...(data.open_correction?.sections ?? [])]));
+        const flaggedKey = STEPS.find((s) => data.open_correction?.sections.includes(s.key))?.key;
+        setOpenSection(flaggedKey ?? toOpen[0] ?? initialKey);
       })
       .catch(() => {
         if (active) setGlobalError("No pudimos conectar con el servidor.");
@@ -386,12 +386,7 @@ export default function SolicitudWizard({ id }: { id: number }) {
     // Escribe ya el borrador pendiente de esa sección (sin esperar el debounce) al
     // plegarla/desplegarla.
     STEPS.find((s) => s.key === key)?.draft.flush();
-    setOpenSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setOpenSection((current) => (current === key ? null : key));
   };
 
   /** Guarda una sección puntual (botón manual). Devuelve true si salió bien. */
@@ -680,7 +675,7 @@ export default function SolicitudWizard({ id }: { id: number }) {
                   ? "Por corregir: el colegio te pidió revisar esta sección (detalle en tu correo)."
                   : s.subtitle
               }
-              open={openSections.has(s.key)}
+              open={openSection === s.key}
               onToggle={() => toggleSection(s.key)}
               status={sectionStatus(s)}
             >

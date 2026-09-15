@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, X, AlertCircle, Trash2, RotateCcw } from "lucide-react";
+import { Loader2, X, AlertCircle, Trash2, RotateCcw, Undo2 } from "lucide-react";
 
 import { apiFetch, apiUrl, API_ENDPOINTS } from "@/utils/api";
 import { usePermissions } from "@/components/Login/loginLogic";
@@ -32,6 +32,11 @@ import { ResumenTab } from "@/components/admisiones/admin/tabs/ResumenTab";
 import { SolicitudTab } from "@/components/admisiones/admin/tabs/SolicitudTab";
 import { AvanzarTab } from "@/components/admisiones/admin/tabs/AvanzarTab";
 import { AdvanceDialog } from "@/components/admisiones/admin/AdvanceDialog";
+import {
+  CorrectionDialog,
+  type CorrectionKind,
+  type CorrectionOptions,
+} from "@/components/admisiones/admin/CorrectionDialog";
 import { PagoTab } from "@/components/admisiones/admin/tabs/PagoTab";
 import { DocumentosTab } from "@/components/admisiones/admin/tabs/DocumentosTab";
 import { ValoracionTab } from "@/components/admisiones/admin/ValoracionTab";
@@ -96,13 +101,19 @@ export function ApplicationDetail({
   const [footerSlot, setFooterSlot] = useState<HTMLDivElement | null>(null);
   const [footerInUse, setFooterInUse] = useState(false);
 
+  // "Solicitar corrección" vive en la pestaña que se revisa (Solicitud → datos,
+  // Documentos → documentos), con su botón en el pie. `correction` = qué se puede pedir.
+  const [correction, setCorrection] = useState<CorrectionOptions | null>(null);
+  const [correcting, setCorrecting] = useState<CorrectionKind | null>(null);
+
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [appRes, payRes, docRes] = await Promise.all([
+      const [appRes, payRes, docRes, corrRes] = await Promise.all([
         apiFetch(API_ENDPOINTS.admissionsApplication(id)),
         apiFetch(API_ENDPOINTS.admissionsPayment(id)),
         apiFetch(API_ENDPOINTS.admissionsDocuments(id)),
+        perms.canValidate ? apiFetch(API_ENDPOINTS.admissionsCorrection(id)) : Promise.resolve(null),
       ]);
       if (appRes.ok) {
         const app: AdmissionApplication = await appRes.json();
@@ -115,6 +126,7 @@ export function ApplicationDetail({
       }
       if (payRes.ok) setPayment(await payRes.json());
       if (docRes.ok) setDocuments((await docRes.json()).documents ?? []);
+      setCorrection(corrRes?.ok ? await corrRes.json() : null);
     } catch {
       setError("No pudimos cargar el expediente.");
     } finally {
@@ -132,6 +144,7 @@ export function ApplicationDetail({
     setTab("resumen");
     setConfirm(null);
     setAskNextStep(false);
+    setCorrecting(null);
     prevStatus.current = null;
     setLoading(true);
     load();
@@ -215,6 +228,14 @@ export function ApplicationDetail({
     // Al final, a la derecha y en otro color (ver `advanceTabClass`).
     ...(perms.canValidate ? [{ key: "avanzar" as Tab, label: "Avanzar" }] : []),
   ];
+
+  const correctionKind: CorrectionKind | null =
+    tab === "solicitud" ? "sections" : tab === "documentos" ? "documents" : null;
+  const correctionItems =
+    correctionKind && correction?.available && application && !application.is_deleted
+      ? correction[correctionKind]
+      : [];
+  const showCorrection = !loading && correctionItems.length > 0;
 
   return (
     <>
@@ -369,7 +390,7 @@ export function ApplicationDetail({
             la pestaña abierta (ver `footerSlot`). */}
         <div
           className={
-            (perms.canDelete && !loading && application) || footerInUse
+            (perms.canDelete && !loading && application) || footerInUse || showCorrection
               ? "flex shrink-0 flex-wrap items-center gap-3 border-t border-base-300 px-6 py-4"
               : "hidden"
           }
@@ -426,7 +447,20 @@ export function ApplicationDetail({
               )}
             </div>
           )}
-          <div ref={setFooterSlot} className="ml-auto flex flex-wrap items-center gap-3" />
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            {showCorrection && (
+              <button
+                type="button"
+                onClick={() => setCorrecting(correctionKind)}
+                disabled={busy}
+                className="btn btn-outline btn-warning gap-2"
+              >
+                <Undo2 className="h-4 w-4" aria-hidden="true" />
+                Solicitar corrección
+              </button>
+            )}
+            <div ref={setFooterSlot} className="flex flex-wrap items-center gap-3" />
+          </div>
         </div>
       </Modal>
 
@@ -443,6 +477,23 @@ export function ApplicationDetail({
         }}
         flash={flash}
       />
+
+      {/* Solicitar corrección (fuera de <Modal>, igual que el toast). */}
+      {correcting && correction && (
+        <CorrectionDialog
+          id={id}
+          kind={correcting}
+          options={correction[correcting]}
+          isOpen
+          onClose={() => setCorrecting(null)}
+          onDone={() => {
+            setCorrecting(null);
+            load();
+            onChanged();
+          }}
+          flash={flash}
+        />
+      )}
 
       {/* Confirmación de borrado (soft/hard) — fuera de <Modal> por la misma razón que
           el toast de arriba (containing block del `transform` del panel). */}

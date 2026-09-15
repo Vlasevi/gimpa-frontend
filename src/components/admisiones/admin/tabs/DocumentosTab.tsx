@@ -133,7 +133,7 @@ export function DocumentosTab({
           {rejecting?.docType === doc.doc_type && (
             <div className="mt-3 rounded-xl border border-error/25 bg-error/5 p-3">
               <label htmlFor={`reject-${doc.doc_type}`} className={labelClass}>
-                ¿Por qué se rechaza? El acudiente lo va a leer.
+                ¿Por qué se rechaza? Le llega al acudiente por correo.
               </label>
               <textarea
                 id={`reject-${doc.doc_type}`}

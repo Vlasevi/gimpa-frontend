@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, AlertCircle, CheckCircle2, Clock, Eye, Receipt } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2, Clock, Eye, FileText, Upload } from "lucide-react";
 
 import { apiUrl, apiFetch, API_ENDPOINTS } from "@/utils/api";
 import {
@@ -188,7 +188,7 @@ export function GuardianPaymentCard({
           {payment.receipt_url && (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-base-300 px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
-                <Receipt className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                <FileText className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                 <p className={itemTitleClass}>Comprobante de pago</p>
               </div>
               <a
@@ -243,7 +243,7 @@ export function GuardianPaymentCard({
                   </>
                 ) : (
                   <>
-                    <Receipt className="h-4 w-4" />
+                    <Upload className="h-4 w-4" aria-hidden="true" />
                     {payment.status === "RECHAZADO" ? "Enviar nuevo comprobante" : "Enviar comprobante"}
                   </>
                 )}

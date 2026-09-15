@@ -22,6 +22,7 @@ import { timeOptionsWith } from "@/components/ui/timeOptions";
 import { cardTitleClass, itemTitleClass, metaTextClass } from "@/components/ui/textStyles";
 import type { FlashFn } from "@/components/admisiones/admin/adminTypes";
 import {
+  ACTIVITY_LABELS,
   formatWhen,
   type ActivityKind,
   type ActivityRow,
@@ -34,13 +35,6 @@ interface Perms {
 }
 
 const SCHEDULED: ActivityKind[] = ["ENTREVISTA_FAMILIAR", "ENTREVISTA_ASPIRANTE", "EXAMEN"];
-const ACTIVITY_LABELS: Record<ActivityKind, string> = {
-  ENTREVISTA_FAMILIAR: "Entrevista familiar",
-  ENTREVISTA_ASPIRANTE: "Entrevista al aspirante",
-  EXAMEN: "Examen académico",
-  CONSOLIDADO: "Consolidado interdisciplinario",
-  CONCEPTO: "Concepto del Comité",
-};
 const MODALITY_OPTIONS = [
   { value: "VIRTUAL", label: "Virtual (Teams)" },
   { value: "PRESENCIAL", label: "Presencial" },

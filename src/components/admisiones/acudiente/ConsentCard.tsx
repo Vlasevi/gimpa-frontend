@@ -17,12 +17,25 @@ export interface Consent {
   signed_by: string;
 }
 
+/** Texto de la versión `CONSENT_VERSION` del backend (`admissions/config.py`): si cambia
+ * el texto, sube esa versión, así cada solicitud sabe qué texto se aceptó. */
 const STATEMENTS: { key: "accepts_truthfulness" | "accepts_data_policy"; text: string }[] = [
   { key: "accepts_truthfulness", text: "Declaro que la información suministrada es veraz y completa." },
   {
     key: "accepts_data_policy",
-    text: "Autorizo el tratamiento de datos personales conforme a la política de la institución.",
+    text:
+      "Como representante legal del aspirante, autorizo al Gimnasio El Paraíso (GIMPA) a tratar mis " +
+      "datos personales y los del aspirante, incluidos los datos sensibles de salud, con la finalidad " +
+      "de adelantar el proceso de admisión, conforme a la Ley 1581 de 2012, el Decreto 1377 de 2013 " +
+      "(compilado en el Decreto 1074 de 2015) y la política de tratamiento de datos de la institución.",
   },
+];
+
+/** Lo que la ley pide informar al titular antes de autorizar (art. 12, Ley 1581 de 2012). */
+const NOTICE = [
+  "Responder las preguntas sobre datos sensibles (salud, diagnósticos, terapias) es facultativo (arts. 5 y 6, Ley 1581 de 2012).",
+  "Los datos del aspirante, por ser menor de edad, se tratan respetando su interés superior y sus derechos fundamentales (art. 7, Ley 1581 de 2012).",
+  "Puedes conocer, actualizar, rectificar y suprimir tus datos, y revocar esta autorización (art. 8, Ley 1581 de 2012).",
 ];
 
 export function ConsentCard({
@@ -79,10 +92,17 @@ export function ConsentCard({
         <div>
           <h2 className={titleClass}>Antes de empezar</h2>
           <p className="mt-1 text-base-content/70">
-            Para abrir la solicitud necesitamos tu autorización.
+            Para abrir la solicitud necesitamos tu autorización para el tratamiento de datos
+            personales (Ley 1581 de 2012).
           </p>
         </div>
       </div>
+
+      <ul className="list-disc space-y-1 pl-5 text-sm text-base-content/70">
+        {NOTICE.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
 
       <div className="space-y-3">
         {STATEMENTS.map((s) => (

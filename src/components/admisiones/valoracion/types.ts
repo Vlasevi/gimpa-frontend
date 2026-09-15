@@ -16,6 +16,15 @@ export type ActivityKind =
   | "CONSOLIDADO"
   | "CONCEPTO";
 
+/** Nombres de las actividades (espejo de `ActivityKind` en el backend). */
+export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
+  ENTREVISTA_FAMILIAR: "Entrevista psicológica familiar",
+  ENTREVISTA_ASPIRANTE: "Entrevista psicológica al aspirante",
+  EXAMEN: "Examen académico de admisión",
+  CONSOLIDADO: "Informe consolidado interdisciplinario",
+  CONCEPTO: "Concepto del Comité de Admisiones",
+};
+
 export interface FieldSpec {
   name: string;
   type: "text" | "textarea" | "date" | "time" | "select" | "yesno" | "checkbox-group";

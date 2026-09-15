@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
-@plugin "daisyui";
+/* Sin los temas incluidos de daisyUI: solo existe "gimpa" (abajo). Con los de fábrica,
+   el tema oscuro se aplicaba al <html> cuando el sistema está en modo oscuro y el fondo
+   de la página se veía azul marino al hacer scroll más allá del contenido. */
+@plugin "daisyui" {
+  themes: false;
+}
 @plugin "tailwindcss-animate";
 
 @plugin "daisyui/theme" {
