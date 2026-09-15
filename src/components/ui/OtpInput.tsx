@@ -69,7 +69,7 @@ export interface OtpInputProps {
   /**
    * Mensaje de error (ej. "Código incorrecto"). Referencia de diseño pegada por el
    * usuario: casillas y dígitos en rojo (`otp-error`/`text-error` en vez de
-   * `otp-primary`/`text-primary`) + el mensaje alineado a la izquierda justo debajo de
+   * `otp-primary`/`text-primary`) + el mensaje centrado justo debajo de
    * las casillas — no en un `alert` aparte arriba del formulario, que es donde vivía antes en los 3
    * consumidores con `alert alert-error`. Los consumidores deciden cuándo pasar esto
    * (típicamente su propio estado `error`, limpiado al reintentar) y siguen dueños del
@@ -109,7 +109,7 @@ export function OtpInput({
   }, [disabled]);
 
   return (
-    <div className="form-control w-full">
+    <div className="w-full">
       {label && (
         <label htmlFor={inputId} className={hideLabel ? "sr-only" : labelClass}>
           {label}
@@ -120,36 +120,42 @@ export function OtpInput({
           padding del formulario. `otp-sm` (~216px) entra con margen de sobra ahí;
           `sm:otp-lg` recupera el tamaño grande desde 640px (tablets/desktop), sin
           cambiar nada en pantallas que ya se veían bien. */}
-      <label className={`otp otp-sm sm:otp-lg mx-auto ${hasError ? "otp-error" : "otp-primary"}`}>
-        {Array.from({ length }).map((_, i) => (
-          <span key={i} />
-        ))}
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="text"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern={`[0-9]{${length}}`}
-          maxLength={length}
-          required={required}
-          disabled={disabled}
-          autoFocus={autoFocus}
-          value={value}
-          aria-invalid={hasError || undefined}
-          // Color de los dígitos: la CSS de daisyUI (`--input-color`, movido por
-          // `otp-error`) solo tiñe el borde/outline de las casillas, nunca el texto del
-          // `<input>` real — sin esto los dígitos se ven negros (`base-content`) pese a
-          // `otp-primary`/`otp-error`.
-          className={`font-bold ${hasError ? "text-error" : "text-primary"}`}
-          onChange={(e) => {
-            const next = e.target.value.replace(/\D/g, "").slice(0, length);
-            onChange(next);
-            if (next.length === length) onComplete?.(next);
-          }}
-        />
-      </label>
-      {error && <p className="mt-2 text-left text-sm text-error">{error}</p>}
+      {/* Centrado con un contenedor flex: daisyUI le da `display: inline-flex` al `.otp`,
+          y `mx-auto` no centra un elemento en línea (las casillas quedaban a la izquierda). */}
+      <div className="flex justify-center">
+        <label
+          className={`otp otp-sm sm:otp-lg ${hasError ? "otp-error" : "otp-primary"}`}
+        >
+          {Array.from({ length }).map((_, i) => (
+            <span key={i} />
+          ))}
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern={`[0-9]{${length}}`}
+            maxLength={length}
+            required={required}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            value={value}
+            aria-invalid={hasError || undefined}
+            // Color de los dígitos: la CSS de daisyUI (`--input-color`, movido por
+            // `otp-error`) solo tiñe el borde/outline de las casillas, nunca el texto del
+            // `<input>` real — sin esto los dígitos se ven negros (`base-content`) pese a
+            // `otp-primary`/`otp-error`.
+            className={`font-bold ${hasError ? "text-error" : "text-primary"}`}
+            onChange={(e) => {
+              const next = e.target.value.replace(/\D/g, "").slice(0, length);
+              onChange(next);
+              if (next.length === length) onComplete?.(next);
+            }}
+          />
+        </label>
+      </div>
+      {error && <p className="mt-2 text-center text-sm text-error">{error}</p>}
     </div>
   );
 }

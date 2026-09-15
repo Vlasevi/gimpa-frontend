@@ -5,11 +5,9 @@
  * contenedor quedó delgado — arma el modal (3 franjas: header/cuerpo-con-scroll/footer),
  * resuelve permisos para decidir qué pestañas mostrar, y pasa props/callbacks a cada
  * pestaña extraída en `components/admisiones/admin/tabs/` (Solicitud, Validación, Pago,
- * Documentos) o ya existente como archivo propio (`InterviewsPanel` = Evaluación,
- * `DecisionPanel` = Decisión). El gateo por capability de cada pestaña
- * (`canValidate`/`canManagePayments`/`canReviewDocuments`/`canManageCommittee`/
- * `canDecide`) es EXACTAMENTE el mismo que antes de este paso, solo con
- * `@/components/ui/tabs` en vez de botones hechos a mano.
+ * Documentos) o con archivo propio (`ValoracionTab` = asignación, actividades de la
+ * valoración GIMPA AVANZA y decisión de la rectora). Las pestañas se muestran por
+ * capability (`canValidate`/`canManagePayments`/`canReviewDocuments`).
  *
  * Migra a `components/ui/Modal.tsx` (generalización de `AnimatedModal` de
  * `MatriculasAdmin.tsx`, ver ese archivo) para ganar la animación de entrada/salida y el
@@ -17,7 +15,7 @@
  * de `Modal`, no duplicado aquí).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, X, AlertCircle, Trash2, RotateCcw } from "lucide-react";
 
 import { apiFetch, apiUrl, API_ENDPOINTS } from "@/utils/api";
@@ -27,33 +25,43 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { Toast } from "@/components/ui/Toast";
 import { useToast } from "@/hooks/use-toast";
-import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
+import { iconBtnClass, iconClass, iconHover, tabTriggerClass } from "@/components/ui/formStyles";
 import { StatusBadge } from "@/components/admisiones/StatusBadge";
+import { titleClass } from "@/components/ui/textStyles";
+import { ResumenTab } from "@/components/admisiones/admin/tabs/ResumenTab";
 import { SolicitudTab } from "@/components/admisiones/admin/tabs/SolicitudTab";
-import { ValidacionTab } from "@/components/admisiones/admin/tabs/ValidacionTab";
+import { AvanzarTab } from "@/components/admisiones/admin/tabs/AvanzarTab";
+import { AdvanceDialog } from "@/components/admisiones/admin/AdvanceDialog";
 import { PagoTab } from "@/components/admisiones/admin/tabs/PagoTab";
 import { DocumentosTab } from "@/components/admisiones/admin/tabs/DocumentosTab";
-import { InterviewsPanel } from "@/components/admisiones/admin/InterviewsPanel";
-import { DecisionPanel } from "@/components/admisiones/admin/DecisionPanel";
+import { ValoracionTab } from "@/components/admisiones/admin/ValoracionTab";
 import type { PaymentInfo, DocumentRow } from "@/components/admisiones/admin/adminTypes";
 import type { AdmissionApplication } from "@/components/admisiones/admissionTypes";
 
-type Tab = "solicitud" | "validacion" | "pago" | "documentos" | "evaluacion" | "decision";
+type Tab = "resumen" | "solicitud" | "pago" | "documentos" | "valoracion" | "avanzar";
+
+/** Estados a los que se llega al validar el pago o el último documento: ahí se pregunta a
+ * qué paso enviar al aspirante (nada avanza solo, ver `advance_service`). */
+const ASK_NEXT_STEP = new Set(["PAGO_VALIDADO", "EXENTO_PAGO", "DOCUMENTOS_COMPLETOS"]);
+
+/** La pestaña "Avanzar" se distingue del resto: es donde la rectora mueve el proceso. */
+const advanceTabClass =
+  "ml-auto shrink-0 rounded-lg border border-accent/40 px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-accent data-[state=active]:text-accent-content data-[state=inactive]:bg-accent/10 data-[state=inactive]:text-accent data-[state=inactive]:hover:bg-accent/20";
 
 export function ApplicationDetail({
-  code,
+  id,
   isOpen,
   onClose,
   onChanged,
 }: {
-  code: string;
+  id: number;
   isOpen: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
   const perms = usePermissions("admissions");
 
-  const [tab, setTab] = useState<Tab>("solicitud");
+  const [tab, setTab] = useState<Tab>("resumen");
   const [application, setApplication] = useState<AdmissionApplication | null>(null);
   const [payment, setPayment] = useState<PaymentInfo | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
@@ -76,15 +84,35 @@ export function ApplicationDetail({
   const { toast, flash } = useToast();
   const [pending, setPending] = useState<string | null>(null);
 
+  // Diálogo "¿A qué paso lo envías?": se abre cuando una acción dentro del expediente
+  // (validar el pago o el último documento) deja la solicitud en un estado de `ASK_NEXT_STEP`.
+  // `prevStatus` es `null` al abrir el expediente, así que abrirlo no dispara el diálogo.
+  const [askNextStep, setAskNextStep] = useState(false);
+  const prevStatus = useRef<string | null>(null);
+
+  // Pie del expediente: una pestaña puede poner ahí sus acciones (p. ej. "Guardar
+  // asignación" de Valoración) con un portal a `footerSlot`, en vez de un recuadro propio
+  // dentro del modal. `footerInUse` muestra el pie aunque no haya botones de eliminar.
+  const [footerSlot, setFooterSlot] = useState<HTMLDivElement | null>(null);
+  const [footerInUse, setFooterInUse] = useState(false);
+
   const load = useCallback(async () => {
     setError(null);
     try {
       const [appRes, payRes, docRes] = await Promise.all([
-        apiFetch(API_ENDPOINTS.admissionsApplicationByCode(code)),
-        apiFetch(API_ENDPOINTS.admissionsPayment(code)),
-        apiFetch(API_ENDPOINTS.admissionsDocuments(code)),
+        apiFetch(API_ENDPOINTS.admissionsApplication(id)),
+        apiFetch(API_ENDPOINTS.admissionsPayment(id)),
+        apiFetch(API_ENDPOINTS.admissionsDocuments(id)),
       ]);
-      if (appRes.ok) setApplication(await appRes.json());
+      if (appRes.ok) {
+        const app: AdmissionApplication = await appRes.json();
+        if (prevStatus.current && prevStatus.current !== app.status && ASK_NEXT_STEP.has(app.status)
+            && perms.canValidate) {
+          setAskNextStep(true);
+        }
+        prevStatus.current = app.status;
+        setApplication(app);
+      }
       if (payRes.ok) setPayment(await payRes.json());
       if (docRes.ok) setDocuments((await docRes.json()).documents ?? []);
     } catch {
@@ -92,17 +120,19 @@ export function ApplicationDetail({
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [id, perms.canValidate]);
 
   // El expediente se mantiene montado a través de aperturas/cierres (ver
-  // pages/AdmisionesAdmin.tsx, así la animación de salida del Modal tiene tiempo de
+  // components/admisiones/AdmisionesAdmin.tsx, así la animación de salida del Modal tiene tiempo de
   // reproducirse) — así que recarga desde cero cada vez que vuelve a abrirse (no solo al
-  // montar), y reinicia a la pestaña "Solicitud" para que no quede en la última pestaña
+  // montar), y reinicia a la pestaña "Resumen" para que no quede en la última pestaña
   // vista del expediente anterior.
   useEffect(() => {
     if (!isOpen) return;
-    setTab("solicitud");
+    setTab("resumen");
     setConfirm(null);
+    setAskNextStep(false);
+    prevStatus.current = null;
     setLoading(true);
     load();
   }, [isOpen, load]);
@@ -148,7 +178,7 @@ export function ApplicationDetail({
     setError(null);
     try {
       const url = apiUrl(
-        `${API_ENDPOINTS.admissionsApplicationByCode(code)}${hard ? "?hard=true" : ""}`,
+        `${API_ENDPOINTS.admissionsApplication(id)}${hard ? "?hard=true" : ""}`,
       );
       const res = await fetch(url, { method: "DELETE" });
       if (res.ok) {
@@ -169,24 +199,21 @@ export function ApplicationDetail({
   };
 
   const doRestore = () =>
-    post(API_ENDPOINTS.admissionsApplicationRestore(code), {}, {
+    post(API_ENDPOINTS.admissionsApplicationRestore(id), {}, {
       pendingKey: "restore",
       successMsg: "Expediente restaurado.",
     });
 
-  // Las pestañas se muestran por permiso: un usuario asignado a una entrevista (sin
-  // permisos de validación/pago) solo ve Solicitud, Documentos y Evaluación. Idéntico al
-  // gateo anterior a este paso, solo que ahora alimenta @/components/ui/tabs.
+  // Las pestañas se muestran por permiso: la psicóloga o el docente asignados (sin
+  // permisos de validación/pago) solo ven Solicitud, Documentos y Valoración.
   const TABS: { key: Tab; label: string }[] = [
+    { key: "resumen", label: "Resumen" },
     { key: "solicitud", label: "Solicitud" },
-    ...(perms.canValidate ? [{ key: "validacion" as Tab, label: "Validación" }] : []),
     ...(perms.canManagePayments ? [{ key: "pago" as Tab, label: "Pago" }] : []),
     { key: "documentos", label: `Documentos (${documents.length})` },
-    { key: "evaluacion", label: "Evaluación" },
-    // La decisión solo la ve/gestiona el comité (rector/admin).
-    ...(perms.canManageCommittee || perms.canDecide
-      ? [{ key: "decision" as Tab, label: "Decisión" }]
-      : []),
+    { key: "valoracion", label: "Valoración" },
+    // Al final, a la derecha y en otro color (ver `advanceTabClass`).
+    ...(perms.canValidate ? [{ key: "avanzar" as Tab, label: "Avanzar" }] : []),
   ];
 
   return (
@@ -203,20 +230,27 @@ export function ApplicationDetail({
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border-base-300 bg-base-100 p-0 gap-0 shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border-base-300 bg-base-100 p-0 gap-0 shadow-xl"
       >
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
+        {/* `flex min-h-0 flex-1 flex-col`: sin esto el contenedor de pestañas crece con
+            su contenido, el cuerpo nunca activa su scroll y el modal corta lo que sobra
+            (mismo patrón que EnrollmentDetail de Matrículas). */}
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as Tab)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           {/* Header */}
           <div className="shrink-0 border-b border-base-300 px-6 py-5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h2 className="font-display text-xl font-bold text-secondary">
+                <h2 className={`leading-tight ${titleClass}`}>
                   {application?.applicant.full_name ?? "Expediente"}
                 </h2>
-                <p className="mt-0.5 text-sm text-base-content/60">
+                <p className="mt-1 text-sm text-base-content/70">
                   {application
-                    ? `${application.grade_name} · ${application.academic_year} · ${application.code}`
-                    : code}
+                    ? `${application.grade_name} · ${application.academic_year}`
+                    : "Cargando…"}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -236,12 +270,12 @@ export function ApplicationDetail({
             </div>
 
             {/* Pestañas */}
-            <TabsList className="mt-4 flex gap-1">
+            <TabsList className="mt-4 flex gap-1 overflow-x-auto">
               {TABS.map((t) => (
                 <TabsTrigger
                   key={t.key}
                   value={t.key}
-                  className="rounded-lg px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=inactive]:text-base-content/60 data-[state=inactive]:hover:bg-base-200"
+                  className={t.key === "avanzar" ? advanceTabClass : tabTriggerClass}
                 >
                   {t.label}
                 </TabsTrigger>
@@ -268,24 +302,17 @@ export function ApplicationDetail({
                   </div>
                 )}
 
+                <TabsContent value="resumen">
+                  {application && <ResumenTab application={application} />}
+                </TabsContent>
+
                 <TabsContent value="solicitud">
                   {application && <SolicitudTab data={application.data} />}
                 </TabsContent>
 
-                <TabsContent value="validacion">
-                  <ValidacionTab
-                    code={code}
-                    canValidate={Boolean(perms.canValidate)}
-                    correctionComment={application?.correction_comment ?? null}
-                    busy={busy}
-                    pending={pending}
-                    post={post}
-                  />
-                </TabsContent>
-
                 <TabsContent value="pago">
                   <PagoTab
-                    code={code}
+                    id={id}
                     payment={payment}
                     canManagePayments={Boolean(perms.canManagePayments)}
                     busy={busy}
@@ -296,7 +323,7 @@ export function ApplicationDetail({
 
                 <TabsContent value="documentos">
                   <DocumentosTab
-                    code={code}
+                    id={id}
                     documents={documents}
                     canReviewDocuments={Boolean(perms.canReviewDocuments)}
                     busy={busy}
@@ -305,72 +332,117 @@ export function ApplicationDetail({
                   />
                 </TabsContent>
 
-                <TabsContent value="evaluacion">
-                  <InterviewsPanel code={code} perms={perms} flash={flash} onChanged={onChanged} />
+                <TabsContent value="avanzar">
+                  {application && (
+                    <AvanzarTab
+                      id={id}
+                      status={application.status}
+                      canDecide={Boolean(perms.canDecide)}
+                      flash={flash}
+                      onChanged={() => {
+                        load();
+                        onChanged();
+                      }}
+                    />
+                  )}
                 </TabsContent>
 
-                <TabsContent value="decision">
-                  <DecisionPanel code={code} perms={perms} flash={flash} onChanged={onChanged} />
+                <TabsContent value="valoracion">
+                  <ValoracionTab
+                    id={id}
+                    perms={perms}
+                    flash={flash}
+                    footerSlot={footerSlot}
+                    onFooterInUse={setFooterInUse}
+                    onChanged={() => {
+                      load();
+                      onChanged();
+                    }}
+                  />
                 </TabsContent>
               </>
             )}
           </div>
         </Tabs>
 
-        {/* Pie: eliminar / restaurar (solo con permiso) */}
-        {perms.canDelete && !loading && application && (
-          <div className="shrink-0 border-t border-base-300 px-6 py-4">
-            {application.is_deleted ? (
-              <button
-                type="button"
-                onClick={doRestore}
-                disabled={busy}
-                className="btn btn-outline btn-accent gap-2"
-              >
-                <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                Restaurar
-              </button>
-            ) : (
-              <div className="flex flex-wrap gap-2">
+        {/* Pie: eliminar / restaurar (con permiso) y, a la derecha, las acciones que ponga
+            la pestaña abierta (ver `footerSlot`). */}
+        <div
+          className={
+            (perms.canDelete && !loading && application) || footerInUse
+              ? "flex shrink-0 flex-wrap items-center gap-3 border-t border-base-300 px-6 py-4"
+              : "hidden"
+          }
+        >
+          {perms.canDelete && !loading && application && (
+            <div>
+              {application.is_deleted ? (
                 <button
                   type="button"
+                  onClick={doRestore}
                   disabled={busy}
-                  onClick={() =>
-                    setConfirm({
-                      title: "Eliminar solicitud",
-                      message: `La solicitud de ${application.applicant.full_name} (${application.code}) se ocultará de los listados. Se puede restaurar más adelante.`,
-                      confirmText: "Eliminar solicitud",
-                      irreversible: false,
-                      onConfirm: () => doDelete(false),
-                    })
-                  }
-                  className="btn btn-outline btn-error gap-2"
+                  className="btn btn-outline btn-accent gap-2"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  Restaurar
                 </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    setConfirm({
-                      title: "Eliminar permanentemente",
-                      message: `Se borrará la solicitud de ${application.applicant.full_name} (${application.code}), con sus pagos, documentos y archivos.`,
-                      confirmText: "Eliminar permanentemente",
-                      irreversible: true,
-                      onConfirm: () => doDelete(true),
-                    })
-                  }
-                  className="btn btn-outline btn-error gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar permanentemente
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setConfirm({
+                        title: "Eliminar solicitud",
+                        message: `La solicitud de ${application.applicant.full_name} se ocultará de los listados. Se puede restaurar más adelante.`,
+                        confirmText: "Eliminar solicitud",
+                        irreversible: false,
+                        onConfirm: () => doDelete(false),
+                      })
+                    }
+                    className="btn btn-outline btn-error gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      setConfirm({
+                        title: "Eliminar permanentemente",
+                        message: `Se borrará la solicitud de ${application.applicant.full_name}, con sus pagos, documentos y archivos.`,
+                        confirmText: "Eliminar permanentemente",
+                        irreversible: true,
+                        onConfirm: () => doDelete(true),
+                      })
+                    }
+                    className="btn btn-outline btn-error gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar permanentemente
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          <div ref={setFooterSlot} className="ml-auto flex flex-wrap items-center gap-3" />
+        </div>
       </Modal>
+
+      {/* ¿A qué paso se envía al aspirante? (tras validar el pago o el último documento).
+          Fuera de <Modal> por la misma razón que el toast. */}
+      <AdvanceDialog
+        id={id}
+        isOpen={askNextStep}
+        onClose={() => setAskNextStep(false)}
+        onDone={() => {
+          setAskNextStep(false);
+          load();
+          onChanged();
+        }}
+        flash={flash}
+      />
 
       {/* Confirmación de borrado (soft/hard) — fuera de <Modal> por la misma razón que
           el toast de arriba (containing block del `transform` del panel). */}

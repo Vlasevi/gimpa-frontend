@@ -37,12 +37,11 @@ export interface SectionPermissions {
   canValidate?: boolean;
   canManagePayments?: boolean;
   canReviewDocuments?: boolean;
-  // Agenda y evaluación de admisiones (fase 3)
+  // Valoración GIMPA AVANZA de admisiones
   canScheduleInterviews?: boolean;
-  canConductFamilyInterview?: boolean;
-  canConductAcademicDiagnosis?: boolean;
-  canConductPsychopedReview?: boolean;
-  // Comité y decisión de admisiones (fase 4)
+  canConductInterviews?: boolean;
+  canApplyExams?: boolean;
+  // Decisión de admisiones
   canManageCommittee?: boolean;
   canDecide?: boolean;
 }

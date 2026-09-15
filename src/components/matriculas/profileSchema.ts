@@ -18,7 +18,10 @@
  */
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
-import { BARRIOS_BARRANQUILLA, COUNTRIES, EPS_LIST } from "@/components/shared/formLists";
+import { BARRIOS_BARRANQUILLA, COUNTRIES, EPS_LIST, RELIGIONS } from "@/components/shared/formLists";
+
+// La lista vive en `shared/formLists` (también la usa Admisiones); se reexporta por compatibilidad.
+export { RELIGIONS };
 import type { FieldCondition, FieldDescriptor, GeoCascadeSource } from "@/components/ui/fields/types";
 
 // ------------------------------------------------------------------- Catálogos
@@ -36,14 +39,6 @@ export const ID_TYPES: Option[] = [
 export const SEXES: Option[] = [
   { value: "M", label: "Masculino" },
   { value: "F", label: "Femenino" },
-];
-export const RELIGIONS: Option[] = [
-  { value: "CATOLICA", label: "Católica" },
-  { value: "CRISTIANA", label: "Cristiana" },
-  { value: "JUDIA", label: "Judía" },
-  { value: "MUSULMANA", label: "Musulmana" },
-  { value: "ATEA", label: "Atea" },
-  { value: "OTRA", label: "Otra" },
 ];
 export const MARITAL_STATUSES: Option[] = [
   { value: "CASADOS", label: "Casados" },
@@ -421,11 +416,11 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
   },
   {
     id: "guardian",
-    title: "Acudiente",
+    title: "Acudiente / Responsable financiero",
     hint: "Quién responde por el estudiante y firma los documentos",
     prefixes: ["guardian."],
     fields: [
-      { type: "select", name: "guardian.type", label: "¿Quién es el acudiente?", options: GUARDIAN_TYPES, required: true, full: true },
+      { type: "select", name: "guardian.type", label: "¿Quién es el acudiente / responsable financiero?", options: GUARDIAN_TYPES, required: true, full: true },
       // Empresa
       { type: "text", name: "guardian.legal_name", label: "Razón social", showWhen: guardianIs("COMPANY"), required: true },
       { type: "text", name: "guardian.id_number", label: "NIT", showWhen: guardianIs("COMPANY"), required: true, placeholder: "900123456-7" },
@@ -446,7 +441,7 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
         prefix: "guardian.residence.",
         hasBarrio: true,
         source: GEO_SOURCE,
-        label: "Residencia del acudiente",
+        label: "Residencia del acudiente / responsable financiero",
         showWhen: guardianIs("OTHER", "COMPANY"),
       },
       { type: "text", name: "guardian.work.profession", label: "Profesión u oficio", showWhen: guardianIs("OTHER") },

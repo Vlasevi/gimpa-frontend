@@ -93,43 +93,50 @@ export const API_ENDPOINTS = {
   admissionsPasswordReset: "/api/admissions/auth/password-reset/",
   admissionsPasswordResetConfirm: "/api/admissions/auth/password-reset/confirm/",
 
-  // Admissions — expedientes
-  admissionsApplications: "/api/admissions/applications/",
-  admissionsApplicationByCode: (code: string) =>
-    `/api/admissions/applications/${code}/`,
-  admissionsApplicationSubmit: (code: string) =>
-    `/api/admissions/applications/${code}/submit/`,
-  admissionsApplicationTransition: (code: string) =>
-    `/api/admissions/applications/${code}/transition/`,
-  admissionsApplicationRestore: (code: string) =>
-    `/api/admissions/applications/${code}/restore/`,
+  // Admissions — expedientes (por id, como /api/enrollments/<id>/)
+  admissionsApplications: "/api/admissions/",
+  admissionsApplication: (id: number) =>
+    `/api/admissions/${id}/`,
+  admissionsApplicationSubmit: (id: number) =>
+    `/api/admissions/${id}/submit/`,
+  admissionsApplicationTransition: (id: number) =>
+    `/api/admissions/${id}/transition/`,
+  admissionsApplicationRestore: (id: number) =>
+    `/api/admissions/${id}/restore/`,
 
   // Geo (catálogo Colombia — dropdowns en cascada)
   geoDepartments: "/api/geo/departments/",
   geoCities: "/api/geo/cities/",
 
   // Admissions — operación interna (fase 2)
-  admissionsValidation: (code: string) =>
-    `/api/admissions/applications/${code}/validation/`,
-  admissionsPayment: (code: string) =>
-    `/api/admissions/applications/${code}/payment/`,
-  admissionsPaymentReport: (code: string) =>
-    `/api/admissions/applications/${code}/payment/report/`,
-  admissionsPaymentReview: (code: string) =>
-    `/api/admissions/applications/${code}/payment/review/`,
-  admissionsDocuments: (code: string) =>
-    `/api/admissions/applications/${code}/documents/`,
-  admissionsDocumentReview: (code: string) =>
-    `/api/admissions/applications/${code}/documents/review/`,
+  // Enviar el expediente a otro paso (pestaña "Avanzar" y diálogo tras validar)
+  admissionsAdvance: (id: number) => `/api/admissions/${id}/advance/`,
+  // Solicitar corrección de datos y/o documentos (el comentario va solo al correo)
+  admissionsCorrection: (id: number) => `/api/admissions/${id}/correction/`,
+  admissionsPayment: (id: number) =>
+    `/api/admissions/${id}/payment/`,
+  admissionsPaymentReport: (id: number) =>
+    `/api/admissions/${id}/payment/report/`,
+  admissionsPaymentReview: (id: number) =>
+    `/api/admissions/${id}/payment/review/`,
+  admissionsDocuments: (id: number) =>
+    `/api/admissions/${id}/documents/`,
+  admissionsDocumentReview: (id: number) =>
+    `/api/admissions/${id}/documents/review/`,
 
-  // Admissions — agenda y evaluación (fase 3)
+  // Admissions — valoración GIMPA AVANZA
   admissionsAssignableUsers: "/api/admissions/assignable-users/",
-  admissionsInterviews: (code: string) =>
-    `/api/admissions/applications/${code}/interviews/`,
-  admissionsInterviewRegister: (code: string) =>
-    `/api/admissions/applications/${code}/interviews/register/`,
+  admissionsAppointments: (id: number) => `/api/admissions/${id}/appointments/`,
+  admissionsEvaluation: (id: number) => `/api/admissions/${id}/evaluation/`,
+  admissionsEvaluationReopen: (id: number) => `/api/admissions/${id}/evaluation/reopen/`,
+  admissionsActivity: (id: number, slug: string) => `/api/admissions/${id}/evaluation/${slug}/`,
+  admissionsActivityComplete: (id: number, slug: string) =>
+    `/api/admissions/${id}/evaluation/${slug}/complete/`,
+  admissionsExamAttachment: (id: number) => `/api/admissions/${id}/evaluation/examen/attachment/`,
+  admissionsExamKey: (id: number) => `/api/admissions/${id}/evaluation/examen/key/`,
+  admissionsMaterial: (id: number, key: string) =>
+    `/api/admissions/${id}/evaluation/material/${key}/`,
 
-  // Admissions — comité / decisión final (fase 4)
-  admissionsDecision: (code: string) =>
-    `/api/admissions/applications/${code}/decision/`,
+  // Admissions — decisión de la rectora
+  admissionsDecision: (id: number) => `/api/admissions/${id}/decision/`,
 } as const;

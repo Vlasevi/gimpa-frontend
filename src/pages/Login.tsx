@@ -412,6 +412,9 @@ export default function Login() {
     try {
       await postJson(API_ENDPOINTS.admissionsResendOtp, { email: pendingEmail });
       setCooldown(RESEND_COOLDOWN_SECONDS);
+      // Código nuevo: casillas vacías y el cursor en la primera.
+      setCode("");
+      document.getElementById("otp")?.focus();
       setNotice({ text: "Te enviamos un código nuevo.", tone: "success" });
     } catch {
       fail("No pudimos reenviar el código.");

@@ -5,10 +5,24 @@
  */
 
 import { useState } from "react";
-import { CheckCircle2, ExternalLink, Loader2, MinusCircle, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, MinusCircle, XCircle } from "lucide-react";
 
 import { API_ENDPOINTS } from "@/utils/api";
-import { textareaClass, adminGhostBtnClass } from "@/components/ui/formStyles";
+import {
+  textareaClass,
+  adminGhostBtnClass,
+  iconBtnClass,
+  iconClass,
+  iconHover,
+} from "@/components/ui/formStyles";
+import { formatCop } from "@/components/admisiones/admissionTypes";
+import {
+  cardClass,
+  cardTitleClass,
+  dataLabelClass,
+  dataValueClass,
+  quoteClass,
+} from "@/components/ui/textStyles";
 import type { PaymentInfo, PostFn } from "@/components/admisiones/admin/adminTypes";
 
 const PAYMENT_MSG: Record<string, string> = {
@@ -18,14 +32,14 @@ const PAYMENT_MSG: Record<string, string> = {
 };
 
 export function PagoTab({
-  code,
+  id,
   payment,
   canManagePayments,
   busy,
   pending,
   post,
 }: {
-  code: string;
+  id: number;
   payment: PaymentInfo | null;
   canManagePayments: boolean;
   busy: boolean;
@@ -36,7 +50,7 @@ export function PagoTab({
 
   const reviewPayment = async (action: "validate" | "reject" | "exempt") => {
     const ok = await post(
-      API_ENDPOINTS.admissionsPaymentReview(code),
+      API_ENDPOINTS.admissionsPaymentReview(id),
       { action, note: paymentNote || undefined },
       { pendingKey: `pay-${action}`, successMsg: PAYMENT_MSG[action] },
     );
@@ -45,40 +59,34 @@ export function PagoTab({
 
   return (
     <div className="space-y-5">
-      <dl className="grid grid-cols-2 gap-4 rounded-xl border border-base-300 p-4 text-sm">
+      <dl className={`${cardClass} grid grid-cols-2 gap-x-6 gap-y-4 p-5`}>
         <div>
-          <dt className="text-base-content/60">Estado</dt>
-          <dd className="font-medium text-base-content">
-            {payment?.status_label ?? payment?.status ?? "—"}
+          <dt className={dataLabelClass}>Estado</dt>
+          <dd className={dataValueClass}>{payment?.status_label ?? payment?.status ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className={dataLabelClass}>Valor</dt>
+          <dd className={`${dataValueClass} tabular-nums`}>
+            {payment?.amount ? formatCop(payment.amount) : "—"}
           </dd>
-        </div>
-        <div>
-          <dt className="text-base-content/60">Valor</dt>
-          <dd className="font-medium text-base-content">
-            {payment?.amount ? `$${payment.amount}` : "—"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-base-content/60">Fecha de pago</dt>
-          <dd className="text-base-content">{payment?.paid_at ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-base-content/60">Referencia</dt>
-          <dd className="text-base-content">{payment?.reference ?? "—"}</dd>
         </div>
         <div className="col-span-2">
-          <dt className="text-base-content/60">Comprobante</dt>
-          <dd className="text-base-content">
+          <dt className={dataLabelClass}>Comprobante</dt>
+          <dd className={`flex items-center gap-1 ${dataValueClass}`}>
             {payment?.receipt_url ? (
-              <a
-                href={payment.receipt_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Ver comprobante
-              </a>
+              <>
+                Cargado
+                <a
+                  href={payment.receipt_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Ver"
+                  aria-label="Ver el comprobante de pago"
+                  className={`${iconBtnClass} ${iconHover.primary}`}
+                >
+                  <Eye className={iconClass} aria-hidden="true" />
+                </a>
+              </>
             ) : payment?.has_receipt ? (
               "Cargado (no se pudo abrir)"
             ) : (
@@ -89,14 +97,12 @@ export function PagoTab({
       </dl>
 
       {payment?.admin_note && (
-        <p className="rounded-xl border border-base-300 bg-base-200 p-4 text-sm text-base-content/70">
-          {payment.admin_note}
-        </p>
+        <p className={quoteClass}>{payment.admin_note}</p>
       )}
 
       {canManagePayments && (
         <div className="space-y-3 rounded-xl border border-base-300 p-4">
-          <h3 className="font-display font-semibold text-secondary">Revisar pago</h3>
+          <h3 className={cardTitleClass}>Revisar pago</h3>
           <textarea
             rows={2}
             className={textareaClass}

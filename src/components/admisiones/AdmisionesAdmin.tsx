@@ -22,7 +22,10 @@ const STATUS_FILTERS = [
   { value: "PAGO_REPORTADO", label: "Pago reportado (por validar)" },
   { value: "PENDIENTE_DOCUMENTOS", label: "Pendiente de documentos" },
   { value: "DOCUMENTOS_EN_REVISION", label: "Documentos por revisar" },
-  { value: "DOCUMENTOS_COMPLETOS", label: "Documentos completos" },
+  { value: "PENDIENTE_AGENDA", label: "Pendiente de asignación" },
+  { value: "EN_VALORACION", label: "En valoración" },
+  { value: "COMITE_ADMISION", label: "En comité" },
+  { value: "PENDIENTE_DECISION", label: "Pendiente de decisión" },
   { value: "LISTA_ESPERA", label: "Lista de espera" },
   { value: "ADMITIDO", label: "Admitidos" },
   { value: "NO_ADMITIDO", label: "No admitidos" },
@@ -51,7 +54,7 @@ export default function AdmisionesAdmin() {
   // (solo `detailOpen` se apaga al cerrar) para que la animación de salida del modal
   // (components/ui/Modal.tsx) tenga tiempo de reproducirse — si se desmontara de
   // inmediato con la fila del expediente, el cierre se vería sin transición.
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -83,6 +86,10 @@ export default function AdmisionesAdmin() {
     load();
   }, [load]);
 
+  // "Mi pendiente": solo si a quien consulta le asignaron algo (psicóloga, docente,
+  // responsable del concepto).
+  const showPending = rows.some((r) => r.my_pending?.length > 0);
+
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
@@ -98,7 +105,7 @@ export default function AdmisionesAdmin() {
       <div>
         <h1 className="font-display text-3xl font-bold text-secondary">Admisiones</h1>
         <p className="mt-1 text-base-content/60">
-          Expedientes de aspirantes nuevos: validación, pago y documentos.
+          Expedientes de aspirantes nuevos: validación, pago, documentos y valoración.
         </p>
       </div>
 
@@ -124,7 +131,7 @@ export default function AdmisionesAdmin() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nombre o código"
+            placeholder="Buscar por nombre"
             aria-label="Buscar expedientes"
             className="h-11 w-full rounded-lg border border-base-300 bg-base-100 pl-9 pr-4 text-sm text-base-content placeholder:text-base-content/40 transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
@@ -181,15 +188,17 @@ export default function AdmisionesAdmin() {
                   <th className="px-5 py-3 font-medium text-base-content/70">Aspirante</th>
                   <th className="px-5 py-3 font-medium text-base-content/70">Grado</th>
                   <th className="px-5 py-3 font-medium text-base-content/70">Año</th>
-                  <th className="px-5 py-3 font-medium text-base-content/70">Código</th>
                   <th className="px-5 py-3 font-medium text-base-content/70">Estado</th>
+                  {showPending && (
+                    <th className="px-5 py-3 font-medium text-base-content/70">Mi pendiente</th>
+                  )}
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-base-300">
                 {visible.map((row) => (
                   <tr
-                    key={row.code}
+                    key={row.id}
                     className={`transition-colors hover:bg-base-200/60 ${
                       row.is_deleted ? "opacity-60" : ""
                     }`}
@@ -208,19 +217,31 @@ export default function AdmisionesAdmin() {
                     <td className="px-5 py-3 text-base-content/70">
                       {row.academic_year}
                     </td>
-                    <td className="px-5 py-3 text-base-content/50">{row.code}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={row.status} label={row.status_label} />
                     </td>
+                    {showPending && (
+                      <td className="px-5 py-3 text-base-content/70">
+                        {row.my_pending.length === 0
+                          ? "—"
+                          : row.my_pending
+                              .map((p) =>
+                                p.scheduled_at
+                                  ? `${p.label} · ${new Date(p.scheduled_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`
+                                  : p.label,
+                              )
+                              .join(", ")}
+                      </td>
+                    )}
                     <td className="px-5 py-3 text-right">
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedCode(row.code);
+                          setSelectedId(row.id);
                           setDetailOpen(true);
                         }}
                         title="Ver expediente"
-                        aria-label={`Ver expediente ${row.code}`}
+                        aria-label={`Ver expediente de ${row.applicant_name}`}
                         className={`${iconBtnClass} ${iconHover.primary}`}
                       >
                         <Eye className={iconClass} aria-hidden="true" />
@@ -234,9 +255,9 @@ export default function AdmisionesAdmin() {
         </div>
       )}
 
-      {selectedCode && (
+      {selectedId !== null && (
         <ApplicationDetail
-          code={selectedCode}
+          id={selectedId}
           isOpen={detailOpen}
           onClose={() => setDetailOpen(false)}
           onChanged={load}

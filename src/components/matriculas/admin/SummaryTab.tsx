@@ -1,6 +1,7 @@
 /**
  * Pestaña "Resumen" del detalle: el historial de la matrícula como línea de tiempo, con el
- * paso que sigue al final. Los documentos y los datos tienen su propia pestaña.
+ * paso que sigue al final. Los documentos y los datos tienen su propia pestaña. La línea
+ * de tiempo la pinta `ui/HistoryTimeline` (compartida con Admisiones).
  *
  * Con varias correcciones se ve cada vuelta: enviada → corrección solicitada → reenviada → …
  * Cada corrección guarda el envío que devolvió (`submitted_at`), porque la matrícula solo
@@ -11,7 +12,6 @@ import {
   Archive,
   Ban,
   CheckCircle2,
-  Clock,
   FilePlus2,
   Send,
   Undo2,
@@ -20,37 +20,10 @@ import {
 } from "lucide-react";
 
 import type { EnrollmentDetail } from "@/components/matriculas/enrollmentApi";
-import {
-  cardClass,
-  cardHeaderClass,
-  cardTitleClass,
-  itemTitleClass,
-  metaTextClass,
-  quoteClass,
-} from "@/components/ui/textStyles";
+import { HistoryTimeline, type HistoryEvent, type HistoryTone } from "@/components/ui/HistoryTimeline";
 import { INACTIVE_REASON_LABELS } from "@/utils/statusHelpers";
-import { formatDateTime } from "./shared";
 
-type Tone = "neutral" | "info" | "success" | "warning" | "error";
-
-const TONE_CLASS: Record<Tone, string> = {
-  neutral: "bg-base-200 text-base-content/70",
-  info: "bg-info/10 text-info",
-  success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-warning",
-  error: "bg-error/10 text-error",
-};
-
-interface HistoryEvent {
-  at: string;
-  title: string;
-  by?: string | null;
-  note?: string | null;
-  /** Documentos que se pidieron corregir en una corrección. */
-  documents?: string[];
-  tone: Tone;
-  icon: LucideIcon;
-}
+type Tone = HistoryTone;
 
 /** Dos marcas de tiempo del mismo envío (el backend las escribe casi juntas). */
 const sameMoment = (a: string, b: string) => Math.abs(new Date(a).getTime() - new Date(b).getTime()) < 60_000;
@@ -76,7 +49,7 @@ function historyOf(detail: EnrollmentDetail): HistoryEvent[] {
       title: "Corrección solicitada",
       by: correction.requested_by,
       note: correction.comment,
-      documents: correction.rejected_documents.map((doc) => doc.label),
+      items: correction.rejected_documents.map((doc) => doc.label),
       tone: "warning",
       icon: Undo2,
     });
@@ -130,60 +103,5 @@ function nextStep(detail: EnrollmentDetail): string | null {
 }
 
 export function SummaryTab({ detail }: { detail: EnrollmentDetail }) {
-  const events = historyOf(detail);
-  const next = nextStep(detail);
-
-  return (
-    <section aria-labelledby="resumen-historial" className={cardClass}>
-      <header className={cardHeaderClass}>
-        <h3 id="resumen-historial" className={cardTitleClass}>
-          Historial
-        </h3>
-      </header>
-
-      <ol className="p-5">
-        {events.map((event, index) => {
-          const Icon = event.icon;
-          const isLastEvent = index === events.length - 1;
-          return (
-            <li key={`${event.title}-${event.at}`} className="relative flex gap-4 pb-6 last:pb-0">
-              {(!isLastEvent || next) && (
-                <span
-                  aria-hidden="true"
-                  className={`absolute top-10 bottom-1.5 left-4 -translate-x-1/2 border-l-2 border-base-300 ${
-                    isLastEvent ? "border-dashed" : ""
-                  }`}
-                />
-              )}
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${TONE_CLASS[event.tone]}`}>
-                <Icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1 pt-1">
-                <p className={itemTitleClass}>{event.title}</p>
-                <p className={metaTextClass}>
-                  <time dateTime={event.at}>{formatDateTime(event.at)}</time>
-                  {event.by && <> · por {event.by}</>}
-                </p>
-                {event.note && <p className={`mt-2 ${quoteClass}`}>{event.note}</p>}
-                {event.documents && event.documents.length > 0 && (
-                  <p className={`mt-2 ${metaTextClass}`}>
-                    <span className="font-medium text-base-content/70">Documentos a corregir:</span>{" "}
-                    {event.documents.join(", ")}
-                  </p>
-                )}
-              </div>
-            </li>
-          );
-        })}
-        {next && (
-          <li className="flex gap-4">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-base-300 text-base-content/50">
-              <Clock className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <p className="min-w-0 flex-1 pt-1 font-semibold text-base-content/80">{next}</p>
-          </li>
-        )}
-      </ol>
-    </section>
-  );
+  return <HistoryTimeline events={historyOf(detail)} next={nextStep(detail)} itemsLabel="Documentos a corregir" />;
 }

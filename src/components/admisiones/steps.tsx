@@ -23,7 +23,7 @@
  * `docs/paso0-informe-schema-driven-fields.md` para el porqué de cada decisión.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useWatch,
   type Control,
@@ -47,6 +47,8 @@ export interface StepProps {
   register: UseFormRegister<SectionValues>;
   setValue: UseFormSetValue<SectionValues>;
   getValues: UseFormGetValues<SectionValues>;
+  /** Valores actuales de la sección Residencia (para precargar la del padre/madre). */
+  residence?: UseFormGetValues<SectionValues>;
 }
 
 // Grados del colegio (para "último grado cursado"). Coincide con `seed_grades`.
@@ -180,9 +182,38 @@ export function AcademicHistoryStep({ control, register, setValue }: StepProps) 
 }
 
 // ---------------------------------------------------------------- Acudientes
-export function GuardiansStep({ control, register, setValue, getValues }: StepProps) {
+export function GuardiansStep({ control, register, setValue, getValues, residence }: StepProps) {
   const { user } = useAuth();
   const guardianType = (useWatch({ control, name: "guardian_type" }) as string) ?? "";
+  const livesWithFather = useWatch({ control, name: "father_lives_with_student" });
+  const livesWithMother = useWatch({ control, name: "mother_lives_with_student" });
+
+  // Si vive con el padre y/o la madre, su residencia es la del aspirante: se precarga
+  // desde la sección Residencia (editable). Al pasar de "No" a "Sí" se vuelve a copiar;
+  // al hidratar una solicitud guardada solo se llena si esa residencia está vacía, para
+  // no pisar lo que ya escribieron.
+  const prevLives = useRef<Record<string, unknown>>({});
+  useEffect(() => {
+    if (!residence) return;
+    const src = residence();
+    (
+      [
+        ["father_", livesWithFather],
+        ["mother_", livesWithMother],
+      ] as const
+    ).forEach(([prefix, lives]) => {
+      const prev = prevLives.current[prefix];
+      prevLives.current[prefix] = lives;
+      if (lives !== true || prev === true) return;
+      const target = RESIDENCE_SUFFIXES.map((s) => `${prefix}residence_${s}`);
+      const empty = target.every((name) => !getValues(name));
+      if (prev !== false && !empty) return;
+      RESIDENCE_SUFFIXES.forEach((s, i) => {
+        setValue(target[i], src[s] ?? "", { shouldDirty: true });
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livesWithFather, livesWithMother]);
 
   // Acordeón: solo una sección abierta a la vez. `null` = todas plegadas (estado inicial).
   const [openSection, setOpenSection] = useState<string | null>(null);
@@ -340,11 +371,11 @@ export function GuardiansStep({ control, register, setValue, getValues }: StepPr
         </FieldGrid>
       </SubSection>
 
-      {/* Acudiente / Adulto responsable */}
-      <SubSection title="Acudiente / Adulto responsable" {...section("guardian")}>
+      {/* Tutor responsable / acudiente (en Admisiones nunca "responsable financiero") */}
+      <SubSection title="Tutor responsable / acudiente" {...section("guardian")}>
         <FieldGrid>
           <div>
-            <label htmlFor="guardian_type" className={labelClass}>Tipo de acudiente</label>
+            <label htmlFor="guardian_type" className={labelClass}>¿Quién es el tutor responsable?</label>
             <Select
               id="guardian_type"
               value={guardianType}

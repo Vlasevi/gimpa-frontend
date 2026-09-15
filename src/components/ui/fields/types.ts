@@ -179,6 +179,7 @@ export type FieldType =
   | "tel"
   | "number"
   | "date"
+  | "time"
   | "textarea"
   | "select"
   | "combobox"
@@ -225,6 +226,8 @@ export type FieldDescriptor =
       min?: string;
       max?: string | "today";
     })
+  /** Hora "HH:mm" elegida de una lista cada 15 min (`@/components/ui/timeOptions`). */
+  | (FieldDescriptorBase & { type: "time"; name: string })
   | (FieldDescriptorBase & { type: "textarea"; name: string; rows?: number })
   | (FieldDescriptorBase & {
       type: "select";

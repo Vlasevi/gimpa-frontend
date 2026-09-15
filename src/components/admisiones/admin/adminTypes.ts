@@ -1,6 +1,6 @@
 /**
  * Tipos compartidos entre `ApplicationDetail.tsx` y las pestañas que extrae —
- * `components/admisiones/admin/tabs/*`, `DecisionPanel.tsx`, `InterviewsPanel.tsx` —
+ * `components/admisiones/admin/tabs/*` y `ValoracionTab.tsx` —
  * Paso 7 del refactor de Admisiones (docs/plan-admisiones-ui-rhf-acordeon.md).
  *
  * Viven en un archivo aparte (no en `ApplicationDetail.tsx`) para que las pestañas no
@@ -26,16 +26,8 @@ export type PostFn = (
   opts?: { pendingKey?: string; successMsg?: string },
 ) => Promise<boolean>;
 
-export interface PaymentInfo {
-  status: string;
-  status_label?: string;
-  amount: string | null;
-  paid_at?: string | null;
-  reference?: string | null;
-  has_receipt?: boolean;
-  receipt_url?: string | null;
-  admin_note?: string | null;
-}
+/** El pago lo comparten el acudiente y el staff: vive en `admissionTypes.ts`. */
+export type { PaymentInfo } from "@/components/admisiones/admissionTypes";
 
 export interface DocumentRow {
   doc_type: string;
@@ -47,4 +39,15 @@ export interface DocumentRow {
   reject_reason: string | null;
   note_public: string | null;
   note_internal?: string | null;
+}
+
+/** `GET /api/admissions/<id>/advance/`: paso actual y a qué pasos se puede enviar. */
+export interface AdvanceOptions {
+  status: string;
+  status_label: string;
+  options: { value: string; label: string; requires_comment: boolean }[];
+  /** El paso que sigue según lo resuelto (preseleccionado). */
+  recommended: string | null;
+  /** Qué está pasando cuando no hay nada que avanzar a mano. */
+  hint: string;
 }

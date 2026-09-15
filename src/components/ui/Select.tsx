@@ -37,6 +37,8 @@ export interface SelectProps {
   /** Con `name` se incluye un `<input type="hidden">` para los formularios nativos. */
   name?: string;
   onBlur?: () => void;
+  /** Lo que muestra la lista abierta cuando no hay opciones. */
+  emptyText?: string;
 }
 
 /**
@@ -72,6 +74,7 @@ export function Select({
   disabled,
   name,
   onBlur,
+  emptyText = "No hay opciones para mostrar.",
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -265,6 +268,11 @@ export function Select({
             onPointerDown={(event) => event.stopPropagation()}
             className="z-[70] overflow-y-auto overscroll-contain rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
           >
+            {options.length === 0 && (
+              <li role="presentation" className="px-3 py-2 text-left text-sm text-base-content/60">
+                {emptyText}
+              </li>
+            )}
             {options.map((o, i) => {
               const isSelected = o.value === value;
               return (

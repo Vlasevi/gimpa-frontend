@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import {
   Loader2,
@@ -24,12 +24,12 @@ import {
   AcademicHistoryStep,
   GuardiansStep,
   HealthStep,
-  DeclarationsStep,
   type StepProps,
 } from "@/components/admisiones/steps";
 import { SubSection, type SubSectionStatus } from "@/components/ui/SubSection";
 import { Alert } from "@/components/ui/Alert";
 import { primaryBtnClass } from "@/components/ui/formStyles";
+import { ADMISSIONS_PATH, useGuardianNav } from "@/components/admisiones/acudiente/guardianNav";
 import {
   resolveDraft,
   useAutosaveDraft,
@@ -90,9 +90,8 @@ function UnsavedIndicator({ dirty }: { dirty: boolean }) {
   );
 }
 
-export default function SolicitudWizard() {
-  const { code = "" } = useParams();
-  const navigate = useNavigate();
+export default function SolicitudWizard({ id }: { id: number }) {
+  const { go, back } = useGuardianNav();
 
   const [application, setApplication] = useState<AdmissionApplication | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,7 +142,6 @@ export default function SolicitudWizard() {
   const academicForm = useForm<SectionValues>({ defaultValues: {} });
   const guardiansForm = useForm<SectionValues>({ defaultValues: {} });
   const healthForm = useForm<SectionValues>({ defaultValues: {} });
-  const declarationsForm = useForm<SectionValues>({ defaultValues: {} });
 
   /**
    * PATCH de una sección puntual (lo usa solo `saveSection`). Siempre manda `versions`
@@ -152,7 +150,7 @@ export default function SolicitudWizard() {
    */
   const patchSection = async (key: string, values: SectionValues): Promise<PatchResult> => {
     try {
-      const res = await apiFetch(API_ENDPOINTS.admissionsApplicationByCode(code), {
+      const res = await apiFetch(API_ENDPOINTS.admissionsApplication(id), {
         method: "PATCH",
         body: JSON.stringify({
           sections: { [key]: values },
@@ -201,27 +199,24 @@ export default function SolicitudWizard() {
   // varios hijos y varios expedientes abiertos a la vez).
   const draftsEnabled = !!application && isEditable(application.status);
   const residenceDraft = useAutosaveDraft<SectionValues, DraftMeta>({
-    key: `admision:${code}:residence`,
+    key: `admision:${id}:residence`,
     enabled: draftsEnabled,
   });
   const academicDraft = useAutosaveDraft<SectionValues, DraftMeta>({
-    key: `admision:${code}:academic_history`,
+    key: `admision:${id}:academic_history`,
     enabled: draftsEnabled,
   });
   const guardiansDraft = useAutosaveDraft<SectionValues, DraftMeta>({
-    key: `admision:${code}:guardians`,
+    key: `admision:${id}:guardians`,
     enabled: draftsEnabled,
   });
   const healthDraft = useAutosaveDraft<SectionValues, DraftMeta>({
-    key: `admision:${code}:health`,
-    enabled: draftsEnabled,
-  });
-  const declarationsDraft = useAutosaveDraft<SectionValues, DraftMeta>({
-    key: `admision:${code}:declarations`,
+    key: `admision:${id}:health`,
     enabled: draftsEnabled,
   });
 
-  /** Las 5 secciones, en orden. `key` = sección de `data` en el backend. */
+  /** Las 4 secciones, en orden. `key` = sección de `data` en el backend. Las
+   * declaraciones ya no van aquí: se aceptan al crear la admisión (`ConsentCard`). */
   const STEPS: Step[] = [
     {
       key: "residence",
@@ -255,19 +250,11 @@ export default function SolicitudWizard() {
       form: healthForm,
       draft: healthDraft,
     },
-    {
-      key: "declarations",
-      title: "Declaraciones",
-      subtitle: "Revisa y envía tu solicitud.",
-      Component: DeclarationsStep,
-      form: declarationsForm,
-      draft: declarationsDraft,
-    },
   ];
 
   useEffect(() => {
     let active = true;
-    apiFetch(API_ENDPOINTS.admissionsApplicationByCode(code))
+    apiFetch(API_ENDPOINTS.admissionsApplication(id))
       .then(async (res) => {
         if (!active) return;
         if (!res.ok) {
@@ -333,7 +320,7 @@ export default function SolicitudWizard() {
           (s) => !data.data?.[s.key] || Object.keys(data.data[s.key]).length === 0,
         );
         const initialKey = STEPS[firstPending === -1 ? 0 : firstPending].key;
-        setOpenSections(new Set([initialKey, ...toOpen]));
+        setOpenSections(new Set([initialKey, ...toOpen, ...(data.open_correction?.sections ?? [])]));
       })
       .catch(() => {
         if (active) setGlobalError("No pudimos conectar con el servidor.");
@@ -344,10 +331,10 @@ export default function SolicitudWizard() {
     return () => {
       active = false;
     };
-    // Solo al montar / cuando cambia `code`. Los 5 `useForm()` mantienen identidad
+    // Solo al montar / cuando cambia `id`. Los 5 `useForm()` mantienen identidad
     // estable entre renders (react-hook-form), listarlos no cambiaría nada.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  }, [id]);
 
   // Puente RHF → borrador local. `form.watch(callback)` (imperativo, fuera del render)
   // en vez de `useWatch`: así ninguna tecla re-renderiza el wizard, que es justo el
@@ -517,13 +504,14 @@ export default function SolicitudWizard() {
 
     setSubmitting(true);
     try {
-      const res = await apiFetch(API_ENDPOINTS.admissionsApplicationSubmit(code), {
+      const res = await apiFetch(API_ENDPOINTS.admissionsApplicationSubmit(id), {
         method: "POST",
       });
       if (res.ok) {
         // Envío completo confirmado: ya no hace falta ningún borrador local.
         STEPS.forEach((s) => s.draft.discard());
-        navigate(`/admisiones/${code}`, { replace: true });
+        // Vuelve al detalle (la entrada anterior del historial), que recarga el estado.
+        back({ view: "detail", id });
       } else {
         const data = await res.json().catch(() => ({}));
         setGlobalError(
@@ -581,7 +569,7 @@ export default function SolicitudWizard() {
           <p className="font-medium text-base-content">{globalError}</p>
           <button
             type="button"
-            onClick={() => navigate("/admisiones")}
+            onClick={() => go({ view: "list" })}
             className="mt-1 text-sm font-medium text-primary hover:underline"
           >
             Volver a mis solicitudes
@@ -593,17 +581,19 @@ export default function SolicitudWizard() {
 
   // Una solicitud ya enviada no se edita: la vista de detalle explica el estado.
   if (application && !isEditable(application.status)) {
-    return <Navigate to={`/admisiones/${code}`} replace />;
+    return <Navigate to={ADMISSIONS_PATH} state={{ view: "detail", id }} replace />;
   }
 
   const completeCount = STEPS.filter((s) => sectionStatus(s) === "complete").length;
+  // Secciones que el colegio pidió corregir (el comentario llega por correo, no aquí).
+  const flaggedSections = new Set(application?.open_correction?.sections ?? []);
   const progress = (completeCount / STEPS.length) * 100;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <button
         type="button"
-        onClick={() => navigate(`/admisiones/${code}`)}
+        onClick={() => back({ view: "detail", id })}
         className="inline-flex items-center gap-1.5 text-sm font-medium text-base-content/60 transition-colors hover:text-base-content focus-visible:outline-none focus-visible:text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -673,7 +663,7 @@ export default function SolicitudWizard() {
         </div>
       )}
 
-      {/* Las 5 secciones, siempre presentes como tarjetas plegables — nada se oculta
+      {/* Las secciones, siempre presentes como tarjetas plegables — nada se oculta
           por completo como en el wizard anterior. */}
       <div className="space-y-4">
         {STEPS.map((s) => {
@@ -685,7 +675,11 @@ export default function SolicitudWizard() {
             <SubSection
               key={s.key}
               title={s.title}
-              subtitle={s.subtitle}
+              subtitle={
+                flaggedSections.has(s.key)
+                  ? "Por corregir: el colegio te pidió revisar esta sección (detalle en tu correo)."
+                  : s.subtitle
+              }
               open={openSections.has(s.key)}
               onToggle={() => toggleSection(s.key)}
               status={sectionStatus(s)}
@@ -695,6 +689,7 @@ export default function SolicitudWizard() {
                 register={s.form.register}
                 setValue={s.form.setValue}
                 getValues={s.form.getValues}
+                residence={residenceForm.getValues}
               />
 
               {sectionError && (
@@ -760,7 +755,7 @@ export default function SolicitudWizard() {
           ) : (
             <>
               <Send className="h-4 w-4" />
-              Enviar solicitud
+              {application?.status === "DEVUELTA_PARA_CORRECCION" ? "Enviar correcciones" : "Enviar solicitud"}
             </>
           )}
         </button>

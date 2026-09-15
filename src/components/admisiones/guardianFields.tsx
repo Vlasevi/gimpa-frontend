@@ -21,7 +21,7 @@
 
 import type { Control, UseFormRegister, UseFormSetValue } from "react-hook-form";
 
-import { BARRIOS_BARRANQUILLA, DOCUMENT_TYPES } from "@/components/shared/formLists";
+import { BARRIOS_BARRANQUILLA, DOCUMENT_TYPES, RELIGIONS } from "@/components/shared/formLists";
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { SchemaSection } from "@/components/ui/fields/registry";
 import type { FieldDescriptor, GeoCascadeSource } from "@/components/ui/fields/types";
@@ -100,7 +100,7 @@ export function PersonFields({ prefix, control, register, setValue }: PersonWork
     { type: "text", name: k("id_number"), label: "Número de documento" },
     { type: "email", name: k("email"), label: "Correo electrónico" },
     { type: "tel", name: k("phone"), label: "Celular" },
-    { type: "text", name: k("religion"), label: "Religión" },
+    { type: "select", name: k("religion"), label: "Religión", options: RELIGIONS },
   ];
   return (
     <SchemaSection schema={schema} control={control} register={register} setValue={setValue} />

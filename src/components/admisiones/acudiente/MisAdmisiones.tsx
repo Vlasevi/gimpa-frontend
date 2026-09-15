@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import {
   Loader2,
   Plus,
   AlertCircle,
-  FileText,
   ArrowRight,
   GraduationCap,
 } from "lucide-react";
@@ -16,9 +14,10 @@ import {
   type AdmissionApplicationRow,
 } from "@/components/admisiones/admissionTypes";
 import { primaryBtnClass } from "@/components/ui/formStyles";
+import { useGuardianNav } from "@/components/admisiones/acudiente/guardianNav";
 
 export default function MisAdmisiones() {
-  const navigate = useNavigate();
+  const { go } = useGuardianNav();
   const [rows, setRows] = useState<AdmissionApplicationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +62,7 @@ export default function MisAdmisiones() {
         {rows.length > 0 && (
           <button
             type="button"
-            onClick={() => navigate("/admisiones/nueva")}
+            onClick={() => go({ view: "new" })}
             className={primaryBtnClass}
           >
             <Plus className="h-5 w-5" />
@@ -115,7 +114,7 @@ export default function MisAdmisiones() {
           </p>
           <button
             type="button"
-            onClick={() => navigate("/admisiones/nueva")}
+            onClick={() => go({ view: "new" })}
             className={`${primaryBtnClass} mt-6`}
           >
             <Plus className="h-5 w-5" />
@@ -130,10 +129,11 @@ export default function MisAdmisiones() {
           {rows.map((row) => {
             const editable = isEditable(row.status);
             return (
-              <li key={row.code}>
-                <Link
-                  to={`/admisiones/${row.code}`}
-                  className="group flex flex-wrap items-center justify-between gap-4 rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:bg-base-200/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              <li key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => go({ view: "detail", id: row.id })}
+                  className="group flex w-full flex-wrap text-left items-center justify-between gap-4 rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm transition-colors hover:bg-base-200/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -148,17 +148,13 @@ export default function MisAdmisiones() {
                     <p className="mt-1 text-sm text-base-content/60">
                       {row.grade_name} · {row.academic_year}
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-base-content/50">
-                      <FileText className="h-3.5 w-3.5" />
-                      {row.code}
-                    </p>
                   </div>
 
                   <span className="inline-flex items-center gap-1.5 text-sm font-medium text-primary">
                     {editable ? "Continuar solicitud" : "Ver detalle"}
                     <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
                   </span>
-                </Link>
+                </button>
               </li>
             );
           })}

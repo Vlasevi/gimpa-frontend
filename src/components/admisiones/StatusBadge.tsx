@@ -54,18 +54,13 @@ const STATUS_TONES: Record<string, Tone> = {
   DOCUMENTOS_EN_REVISION: "progress",
   DOCUMENTOS_COMPLETOS: "progress",
 
-  // — Agenda (P10) —
-  PENDIENTE_AGENDA: "progress",
-  CITA_PROGRAMADA: "progress",
-  CITA_REALIZADA: "progress",
+  // — Valoración GIMPA AVANZA —
+  PENDIENTE_AGENDA: "attention",
+  EN_VALORACION: "progress",
 
-  // — Workflow evaluativo (P11–P13) —
-  ENTREVISTA_REGISTRADA: "progress",
-  DIAGNOSTICO_REGISTRADO: "progress",
-  REVISION_PSICOPEDAGOGICA: "progress",
-
-  // — Comité y decisión (P14–P15) —
+  // — Comité y decisión —
   COMITE_ADMISION: "progress",
+  PENDIENTE_DECISION: "attention",
   ADMITIDO: "success",
   ADMITIDO_CON_CONDICIONES: "success",
   LISTA_ESPERA: "attention",

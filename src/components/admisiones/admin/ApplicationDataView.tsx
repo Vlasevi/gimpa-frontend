@@ -1,8 +1,17 @@
 /**
  * Muestra todo lo que llenó el acudiente (`application.data`) de forma legible, para que
  * el staff pueda revisarlo antes de decidir. Renderiza cada sección con sus campos
- * (etiquetas humanizadas), omitiendo lo vacío.
+ * (etiquetas humanizadas), omitiendo lo vacío. Misma tipografía que la ficha de
+ * Matrículas (`ProfileTab`): tarjetas por sección y los tokens de `ui/textStyles`.
  */
+
+import {
+  cardClass,
+  cardHeaderClass,
+  cardTitleClass,
+  dataLabelClass,
+  dataValueClass,
+} from "@/components/ui/textStyles";
 
 const SECTION_TITLES: Record<string, string> = {
   residence: "Residencia",
@@ -25,10 +34,10 @@ const SECTION_ORDER = [
 const PREFIXES: [string, string][] = [
   ["father_residence_", "Padre · "],
   ["mother_residence_", "Madre · "],
-  ["guardian_residence_", "Acudiente · "],
+  ["guardian_residence_", "Tutor responsable · "],
   ["father_", "Padre · "],
   ["mother_", "Madre · "],
-  ["guardian_", "Acudiente · "],
+  ["guardian_", "Tutor responsable · "],
 ];
 
 const LABELS: Record<string, string> = {
@@ -40,7 +49,7 @@ const LABELS: Record<string, string> = {
   profession: "Profesión", religion: "Religión",
   company_name: "Empresa", company_address: "Dirección empresa",
   full_name: "Nombre / Razón social", relationship: "Parentesco",
-  relationship_other: "Parentesco (otro)", type: "Tipo de acudiente",
+  relationship_other: "Parentesco (otro)", type: "Tutor responsable",
   lives_with_student: "Vive con el estudiante",
   country: "País", country_other: "País (otro)",
   department: "Departamento", city: "Ciudad",
@@ -126,9 +135,9 @@ function renderValue(v: unknown): string {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="py-1.5">
-      <dt className="text-xs text-base-content/50">{label}</dt>
-      <dd className="text-sm text-base-content">{value}</dd>
+    <div className="min-w-0">
+      <dt className={dataLabelClass}>{label}</dt>
+      <dd className={`whitespace-pre-line ${dataValueClass}`}>{value}</dd>
     </div>
   );
 }
@@ -137,7 +146,7 @@ function Row({ label, value }: { label: string; value: string }) {
 const GUARDIAN_GROUPS: [string, string][] = [
   ["father_", "Padre"],
   ["mother_", "Madre"],
-  ["guardian_", "Acudiente"],
+  ["guardian_", "Tutor responsable / acudiente"],
 ];
 
 function stripGuardianPrefix(key: string, prefix: string) {
@@ -146,7 +155,7 @@ function stripGuardianPrefix(key: string, prefix: string) {
   return rest;
 }
 
-/** Acudientes separados en Padre / Madre / Acudiente (no todo en un montón). */
+/** Acudientes separados en Padre / Madre / Tutor responsable (no todo en un montón). */
 function GuardiansView({ data }: { data: Record<string, unknown> }) {
   const general = Object.entries(data).filter(
     ([k, v]) =>
@@ -157,8 +166,8 @@ function GuardiansView({ data }: { data: Record<string, unknown> }) {
     <div className="space-y-4">
       {general.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-base-content/70">Convivencia</h4>
-          <dl className="grid gap-x-6 sm:grid-cols-2">
+          <h4 className={`mb-3 ${cardTitleClass}`}>Convivencia</h4>
+          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             {general.map(([k, v]) => (
               <Row key={k} label={humanize(k)} value={renderValue(v)} />
             ))}
@@ -175,9 +184,9 @@ function GuardiansView({ data }: { data: Record<string, unknown> }) {
           );
         if (entries.length === 0) return null;
         return (
-          <div key={prefix} className="rounded-lg border border-base-300 p-3">
-            <h4 className="mb-2 text-sm font-semibold text-secondary">{title}</h4>
-            <dl className="grid gap-x-6 sm:grid-cols-2">
+          <div key={prefix} className="rounded-lg border border-base-300 p-4">
+            <h4 className={`mb-3 ${cardTitleClass}`}>{title}</h4>
+            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
               {entries.map(([k, v]) => (
                 <Row key={k} label={humanizeSuffix(stripGuardianPrefix(k, prefix))}
                   value={renderValue(v)} />
@@ -196,11 +205,11 @@ function SectionFields({ data }: { data: Record<string, unknown> }) {
     .sort(([a], [b]) => orderIndex(a) - orderIndex(b));
 
   if (entries.length === 0) {
-    return <p className="text-sm text-base-content/50">Sin diligenciar.</p>;
+    return <p className="text-sm text-base-content/60">Sin diligenciar.</p>;
   }
 
   return (
-    <dl className="grid gap-x-6 sm:grid-cols-2">
+    <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
       {entries.map(([key, value]) => {
         // Objeto anidado (repeated, difficulties): sub-lista.
         if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -209,11 +218,9 @@ function SectionFields({ data }: { data: Record<string, unknown> }) {
           );
           if (subEntries.length === 0) return null;
           return (
-            <div key={key} className="py-1.5 sm:col-span-2">
-              <dt className="mb-1 text-xs font-medium text-base-content/60">
-                {humanize(key)}
-              </dt>
-              <dd className="grid gap-x-6 rounded-lg bg-base-200 p-3 sm:grid-cols-2">
+            <div key={key} className="sm:col-span-2">
+              <dt className={`mb-2 ${dataLabelClass}`}>{humanize(key)}</dt>
+              <dd className="grid gap-x-6 gap-y-4 rounded-lg bg-base-200 p-4 sm:grid-cols-2">
                 {subEntries.map(([sk, sv]) => (
                   <Row key={sk} label={humanize(sk)} value={renderValue(sv)} />
                 ))}
@@ -245,18 +252,20 @@ export function ApplicationDataView({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {all.map((sectionKey) => (
-        <div key={sectionKey} className="rounded-xl border border-base-300 p-4">
-          <h3 className="mb-3 font-display font-semibold text-secondary">
-            {SECTION_TITLES[sectionKey] ?? sectionKey}
-          </h3>
-          {sectionKey === "guardians" ? (
-            <GuardiansView data={data[sectionKey] as Record<string, unknown>} />
-          ) : (
-            <SectionFields data={data[sectionKey] as Record<string, unknown>} />
-          )}
-        </div>
+        <section key={sectionKey} className={cardClass}>
+          <header className={cardHeaderClass}>
+            <h3 className={cardTitleClass}>{SECTION_TITLES[sectionKey] ?? sectionKey}</h3>
+          </header>
+          <div className="p-5">
+            {sectionKey === "guardians" ? (
+              <GuardiansView data={data[sectionKey] as Record<string, unknown>} />
+            ) : (
+              <SectionFields data={data[sectionKey] as Record<string, unknown>} />
+            )}
+          </div>
+        </section>
       ))}
     </div>
   );

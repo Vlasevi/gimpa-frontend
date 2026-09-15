@@ -69,6 +69,11 @@ export const adminGhostBtnClass = ghostBtnClass;
 export const iconBtnClass =
   "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full p-2 text-[color:color-mix(in_oklab,var(--color-base-content)_70%,var(--color-base-100))] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40";
 export const iconClass = "h-5 w-5";
+
+/** Pestaña de `@/components/ui/tabs` (detalle de matrícula, expediente, solicitud del
+ * acudiente). `shrink-0` para que la barra haga scroll horizontal en pantallas chicas. */
+export const tabTriggerClass =
+  "shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=inactive]:text-base-content/60 data-[state=inactive]:hover:bg-base-200";
 /** Color en hover según la intención de la acción. */
 export const iconHover = {
   primary: "hover:bg-primary/10 hover:text-primary",

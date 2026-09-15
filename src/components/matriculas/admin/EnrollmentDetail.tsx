@@ -43,7 +43,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ghostBtnClass, iconBtnClass, iconClass, iconHover, primaryBtnClass } from "@/components/ui/formStyles";
+import { ghostBtnClass, iconBtnClass, iconClass, iconHover, primaryBtnClass, tabTriggerClass } from "@/components/ui/formStyles";
 import { titleClass } from "@/components/ui/textStyles";
 import { getStatusBadgeClass, getStatusLabel, INACTIVE_REASON_LABELS } from "@/utils/statusHelpers";
 import { ChangeGradeDialog, InactivateDialog, ReasonDialog, ReturnDialog } from "./ActionDialogs";
@@ -67,9 +67,6 @@ const REVIEW_MESSAGES: Partial<Record<DocumentStatus, string>> = {
   NOT_APPLICABLE: "Documento marcado como «no aplica»",
   UPLOADED: "Revisión deshecha",
 };
-
-const TAB_CLASS =
-  "rounded-lg px-3 py-2 text-sm font-medium transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=inactive]:text-base-content/60 data-[state=inactive]:hover:bg-base-200";
 
 /** Rechazar / Cancelar / Inactivar: con contorno, como "Solicitar corrección". */
 const dangerBtnClass = "btn btn-outline btn-error gap-2";
@@ -301,13 +298,13 @@ export function EnrollmentDetail({
 
             {detail && (
               <TabsList aria-label="Secciones de la matrícula" className="mt-4 flex gap-1 overflow-x-auto">
-                <TabsTrigger value="resumen" className={TAB_CLASS}>
+                <TabsTrigger value="resumen" className={tabTriggerClass}>
                   Resumen
                 </TabsTrigger>
-                <TabsTrigger value="datos" className={TAB_CLASS}>
+                <TabsTrigger value="datos" className={tabTriggerClass}>
                   Datos
                 </TabsTrigger>
-                <TabsTrigger value="documentos" className={TAB_CLASS}>
+                <TabsTrigger value="documentos" className={tabTriggerClass}>
                   Documentos
                   {detail.pending_documents.length > 0 && (
                     <span className="badge badge-xs badge-warning badge-soft ml-1.5">
@@ -316,7 +313,7 @@ export function EnrollmentDetail({
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="correcciones" className={TAB_CLASS}>
+                <TabsTrigger value="correcciones" className={tabTriggerClass}>
                   Correcciones
                   {detail.corrections.length > 0 && (
                     <span className="badge badge-xs badge-ghost ml-1.5">{detail.corrections.length}</span>

@@ -109,3 +109,13 @@ export const EDUCATION_LEVELS = [
   "Maestría",
   "Doctorado",
 ];
+
+/** Religión: el mismo desplegable en Matrículas y Admisiones. */
+export const RELIGIONS = [
+  { value: "CATOLICA", label: "Católica" },
+  { value: "CRISTIANA", label: "Cristiana" },
+  { value: "JUDIA", label: "Judía" },
+  { value: "MUSULMANA", label: "Musulmana" },
+  { value: "ATEA", label: "Atea" },
+  { value: "OTRA", label: "Otra" },
+];

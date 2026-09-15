@@ -6,21 +6,22 @@
  */
 
 import { useState } from "react";
-import { CheckCircle2, ExternalLink, Loader2, MinusCircle, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, Loader2, MinusCircle, XCircle } from "lucide-react";
 
 import { API_ENDPOINTS } from "@/utils/api";
 import { adminGhostBtnClass, iconBtnClass, iconClass, iconHover, labelClass, textareaClass } from "@/components/ui/formStyles";
 import type { DocumentRow, PostFn } from "@/components/admisiones/admin/adminTypes";
+import { itemTitleClass, metaTextClass } from "@/components/ui/textStyles";
 
 export function DocumentosTab({
-  code,
+  id,
   documents,
   canReviewDocuments,
   busy,
   pending,
   post,
 }: {
-  code: string;
+  id: number;
   documents: DocumentRow[];
   canReviewDocuments: boolean;
   busy: boolean;
@@ -35,7 +36,7 @@ export function DocumentosTab({
     rejectReason?: string,
   ) =>
     post(
-      API_ENDPOINTS.admissionsDocumentReview(code),
+      API_ENDPOINTS.admissionsDocumentReview(id),
       { doc_type: docType, action, reject_reason: rejectReason },
       {
         pendingKey: `doc-${docType}-${action}`,
@@ -54,11 +55,11 @@ export function DocumentosTab({
         <li key={doc.doc_type} className="py-4 first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-medium text-base-content">{doc.label}</p>
-              <p className="text-sm text-base-content/60">
+              <p className={itemTitleClass}>{doc.label}</p>
+              <p className={`mt-0.5 ${metaTextClass}`}>
                 {doc.status_label}
                 {doc.sensitivity !== "normal" && (
-                  <span className="ml-2 rounded-full border border-base-300 px-2 py-0.5 text-xs text-base-content/50">
+                  <span className="ml-2 rounded-full border border-base-300 px-2 py-0.5 text-xs text-base-content/70">
                     {doc.sensitivity === "medical" ? "médico" : "sensible"}
                   </span>
                 )}
@@ -74,10 +75,11 @@ export function DocumentosTab({
                   href={doc.url}
                   target="_blank"
                   rel="noreferrer"
-                  className={adminGhostBtnClass}
+                  title="Ver"
+                  aria-label={`Ver ${doc.label ?? doc.doc_type}`}
+                  className={`${iconBtnClass} ${iconHover.primary}`}
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  Ver
+                  <Eye className={iconClass} aria-hidden="true" />
                 </a>
               )}
               {canReviewDocuments && doc.status === "CARGADO" && (

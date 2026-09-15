@@ -15,6 +15,7 @@ import {
 } from "react-hook-form";
 
 import { labelClass } from "@/components/ui/formStyles";
+import { TIME_OPTIONS } from "@/components/ui/timeOptions";
 import {
   TextField,
   TextAreaField,
@@ -139,6 +140,27 @@ function SelectTypeField(props: SchemaFieldProps) {
       label={d.label}
       control={props.control}
       options={d.options}
+      full={d.full}
+      startsRow={d.startsRow}
+      disabled={props.disabled}
+      required={props.required}
+      hint={props.hint ?? d.hint}
+    />
+  );
+}
+
+/** `type: "time"` — el mismo `Select`, con las horas cada 15 min; guarda "HH:mm". */
+function TimeTypeField(props: SchemaFieldProps) {
+  const d = props.descriptor;
+  if (d.type !== "time") return null;
+  return (
+    <SelectField
+      name={d.name}
+      id={d.id}
+      label={d.label}
+      control={props.control}
+      options={TIME_OPTIONS}
+      placeholder={d.placeholder ?? "Elige la hora"}
       full={d.full}
       startsRow={d.startsRow}
       disabled={props.disabled}
@@ -325,6 +347,7 @@ export const FIELD_REGISTRY: Record<FieldType, ComponentType<SchemaFieldProps>> 
   tel: TextTypeField,
   number: TextTypeField,
   date: TextTypeField,
+  time: TimeTypeField,
   textarea: TextAreaTypeField,
   select: SelectTypeField,
   combobox: ComboBoxTypeField,

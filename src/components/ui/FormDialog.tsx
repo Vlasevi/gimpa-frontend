@@ -198,12 +198,15 @@ export function FormSelect({
   hint,
   full,
   name,
+  emptyText,
 }: {
   label: string;
   id?: string;
   value: string;
   onChange: (value: string) => void;
   options: readonly SelectOption[];
+  /** Lo que muestra la lista abierta cuando no hay opciones. */
+  emptyText?: string;
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
@@ -230,6 +233,7 @@ export function FormSelect({
         required={required}
         disabled={disabled}
         describedBy={hintId}
+        emptyText={emptyText}
       />
       {hint && (
         <p id={hintId} className={formHintClass}>

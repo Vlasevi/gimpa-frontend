@@ -1,47 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  Loader2,
-  CalendarClock,
-  Video,
-  MapPin,
-  ExternalLink,
-  CheckCircle2,
-  Clock,
-} from "lucide-react";
+import { Loader2, CalendarClock, Video, MapPin, ExternalLink, CheckCircle2, Clock } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
+import { titleClass } from "@/components/ui/textStyles";
+import { formatWhen } from "@/components/admisiones/valoracion/types";
 
-interface InterviewRow {
+interface Appointment {
   kind: string;
   label: string;
-  status: string;
-  status_label: string;
-  scheduled_at: string | null;
-  modality: string;
+  status: "PROGRAMADA" | "REALIZADA";
+  scheduled_at: string;
+  modality: "VIRTUAL" | "PRESENCIAL";
+  modality_label: string;
   meeting_link: string;
 }
 
-function formatWhen(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("es-CO", { dateStyle: "long", timeStyle: "short" });
-}
-
-/** Tarjeta del acudiente: muestra las citas de evaluación (fecha/hora/enlace). Nunca
- * expone respuestas ni conceptos: la evaluación es interna del colegio. */
-export function GuardianInterviewsCard({ code }: { code: string }) {
-  const [interviews, setInterviews] = useState<InterviewRow[]>([]);
+/** Pestaña "Entrevistas" del acudiente: las citas de la valoración (fecha, modalidad y
+ * enlace). Nunca expone respuestas, puntajes ni conceptos: la valoración es interna. */
+export function GuardianInterviewsCard({ id }: { id: number }) {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const res = await apiFetch(API_ENDPOINTS.admissionsInterviews(code));
-      if (res.ok) setInterviews((await res.json()).interviews ?? []);
+      const res = await apiFetch(API_ENDPOINTS.admissionsAppointments(id));
+      if (res.ok) setAppointments((await res.json()).appointments ?? []);
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [id]);
 
   useEffect(() => {
     load();
@@ -56,47 +43,35 @@ export function GuardianInterviewsCard({ code }: { code: string }) {
     );
   }
 
-  // Solo mostramos las que ya tienen cita: las pendientes de agendar no aportan nada.
-  const scheduled = interviews.filter((i) => i.scheduled_at);
-
   return (
     <div className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
-      <h2 className="mb-1 font-display text-xl font-bold text-secondary">
-        Citas de admisión
-      </h2>
+      <h2 className={`mb-1 ${titleClass}`}>Citas de admisión</h2>
       <p className="mb-4 text-sm text-base-content/60">
-        El colegio te contactará por cada cita. Aquí verás la fecha, la modalidad y el
-        enlace cuando estén programadas.
+        La valoración tiene una entrevista con la familia, una con el aspirante y un examen
+        académico. Aquí verás la fecha, la modalidad y el enlace de cada una.
       </p>
 
-      {scheduled.length === 0 ? (
+      {appointments.length === 0 ? (
         <p className="flex items-center gap-2 rounded-xl bg-base-200 px-4 py-3 text-sm text-base-content/60">
           <Clock className="h-4 w-4" />
           Aún no hay citas programadas. Te avisaremos por correo.
         </p>
       ) : (
         <ul className="space-y-3">
-          {scheduled.map((iv) => {
-            const done = iv.status === "REALIZADA";
+          {appointments.map((a) => {
+            const done = a.status === "REALIZADA";
             return (
-              <li
-                key={iv.kind}
-                className="rounded-xl border border-base-300 p-4"
-              >
+              <li key={a.kind} className="rounded-xl border border-base-300 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-medium text-base-content">{iv.label}</p>
+                    <p className="font-medium text-base-content">{a.label}</p>
                     <p className="mt-1 flex items-center gap-2 text-sm text-base-content/70">
                       <CalendarClock className="h-4 w-4 text-primary" />
-                      {formatWhen(iv.scheduled_at)}
+                      {formatWhen(a.scheduled_at)}
                     </p>
                     <p className="mt-1 flex items-center gap-2 text-sm text-base-content/60">
-                      {iv.modality === "VIRTUAL" ? (
-                        <Video className="h-4 w-4" />
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                      {iv.modality === "VIRTUAL" ? "Virtual (Teams)" : "Presencial"}
+                      {a.modality === "VIRTUAL" ? <Video className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+                      {a.modality_label}
                     </p>
                   </div>
                   <span
@@ -109,10 +84,10 @@ export function GuardianInterviewsCard({ code }: { code: string }) {
                   </span>
                 </div>
 
-                {iv.meeting_link && !done && (
-                  iv.meeting_link.startsWith("http") ? (
+                {a.meeting_link && !done &&
+                  (a.meeting_link.startsWith("http") ? (
                     <a
-                      href={iv.meeting_link}
+                      href={a.meeting_link}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
@@ -123,10 +98,9 @@ export function GuardianInterviewsCard({ code }: { code: string }) {
                   ) : (
                     <p className="mt-3 flex items-center gap-1.5 text-sm text-base-content/70">
                       <MapPin className="h-4 w-4" />
-                      {iv.meeting_link}
+                      {a.meeting_link}
                     </p>
-                  )
-                )}
+                  ))}
               </li>
             );
           })}

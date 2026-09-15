@@ -198,7 +198,7 @@ const ALL_MENU_ITEMS: MenuItem[] = [
   },
   {
     label: "Admisiones",
-    path: "/admisiones-admin",
+    path: "/admisiones",
     icon: GraduationCap,
     section: "admissions",
     anyOf: ["canView"],
@@ -233,8 +233,8 @@ export const Sidebar = () => {
   if (!user) return null;
 
   // Un acudiente puro no tiene ningún ítem de ALL_MENU_ITEMS (todos son de secciones
-  // de staff, incluido el de "Admisiones" que apunta al panel INTERNO en
-  // /admisiones-admin, no al área del acudiente) — se le arma un menú de un solo ítem
+  // de staff, incluido el de "Admisiones", que con permisos de staff abre el panel
+  // interno en /admisiones) — se le arma un menú de un solo ítem
   // en vez de intentar reusar el filtro de arriba. Mismo drawer-side/logo/estilo de
   // NavLink que el resto: es el mismo componente, no una copia paralela.
   //

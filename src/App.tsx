@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import {
   AuthProvider,
   ProtectedRoute,
@@ -24,11 +24,8 @@ import Roles from "./pages/Roles";
 import Contratacion from "./pages/Contratacion";
 import MiContrato from "./pages/MiContrato";
 import Perfil from "./pages/Perfil";
-import AdmisionesAdmin from "./pages/AdmisionesAdmin";
-import MisAdmisiones from "./pages/admisiones/MisAdmisiones";
-import NuevaAdmision from "./pages/admisiones/NuevaAdmision";
-import DetalleAdmision from "./pages/admisiones/DetalleAdmision";
-import SolicitudWizard from "./pages/admisiones/SolicitudWizard";
+import Admisiones from "./pages/Admisiones";
+import ActividadPage from "@/components/admisiones/valoracion/ActividadPage";
 import NotAuthorized from "./pages/NotAuthorized";
 import NotFound from "./pages/NotFound";
 
@@ -41,14 +38,20 @@ const HomeRedirect = () => {
   return <Navigate to={resolveHomePath(user)} replace />;
 };
 
+/** Marco según quién entra: el acudiente ve su propia área; el resto, la institucional. */
+const AppArea = () => {
+  const { user } = useAuth();
+  return isGuardianOnly(user) ? <AcudienteLayout /> : <Layout />;
+};
+
 /**
- * Área institucional. Un acudiente no tiene nada que hacer aquí (vería el sidebar
- * del colegio), así que se le devuelve a su propia área.
+ * Rutas institucionales. Un acudiente no tiene nada que hacer aquí, así que se le
+ * devuelve a su propia área.
  */
-const StaffArea = () => {
+const StaffOnly = () => {
   const { user } = useAuth();
   if (isGuardianOnly(user)) return <Navigate to="/admisiones" replace />;
-  return <Layout />;
+  return <Outlet />;
 };
 
 const App = () => (
@@ -62,73 +65,64 @@ const App = () => (
           <Route path="/404" element={<NotFound />} />
 
           <Route element={<ProtectedRoute />}>
-            {/* --- Área institucional (staff) --- */}
-            <Route element={<StaffArea />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/estudiantes" element={<Estudiantes />} />
-              <Route
-                path="/matriculas"
-                element={
-                  <PermissionRoute section="enrollments" anyOf={["canView"]}>
-                    <Matriculas />
-                  </PermissionRoute>
-                }
-              />
-              <Route
-                path="/notas"
-                element={
-                  <PermissionRoute section="grades" anyOf={["canView", "canManage"]}>
-                    <Notas />
-                  </PermissionRoute>
-                }
-              />
-              <Route
-                path="/pagos"
-                element={
-                  <PermissionRoute section="payments" anyOf={["canView", "canManage"]}>
-                    <Pagos />
-                  </PermissionRoute>
-                }
-              />
-              <Route
-                path="/certificados"
-                element={
-                  <PermissionRoute section="certifications" anyOf={["canView", "canManage"]}>
-                    <Certificados />
-                  </PermissionRoute>
-                }
-              />
-              <Route
-                path="/usuarios"
-                element={
-                  <PermissionRoute section="users" anyOf={["canView"]}>
-                    <Usuarios />
-                  </PermissionRoute>
-                }
-              />
-              <Route
-                path="/admisiones-admin"
-                element={
-                  <PermissionRoute section="admissions" anyOf={["canView"]}>
-                    <AdmisionesAdmin />
-                  </PermissionRoute>
-                }
-              />
-              <Route path="/roles" element={<Roles />} />
-              <Route path="/contratacion" element={<Contratacion />} />
-              <Route path="/mi-contrato" element={<MiContrato />} />
-              <Route path="/perfil" element={<Perfil />} />
-            </Route>
+            <Route element={<AppArea />}>
+              {/* --- Solo staff --- */}
+              <Route element={<StaffOnly />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/estudiantes" element={<Estudiantes />} />
+                <Route
+                  path="/matriculas"
+                  element={
+                    <PermissionRoute section="enrollments" anyOf={["canView"]}>
+                      <Matriculas />
+                    </PermissionRoute>
+                  }
+                />
+                <Route
+                  path="/notas"
+                  element={
+                    <PermissionRoute section="grades" anyOf={["canView", "canManage"]}>
+                      <Notas />
+                    </PermissionRoute>
+                  }
+                />
+                <Route
+                  path="/pagos"
+                  element={
+                    <PermissionRoute section="payments" anyOf={["canView", "canManage"]}>
+                      <Pagos />
+                    </PermissionRoute>
+                  }
+                />
+                <Route
+                  path="/certificados"
+                  element={
+                    <PermissionRoute section="certifications" anyOf={["canView", "canManage"]}>
+                      <Certificados />
+                    </PermissionRoute>
+                  }
+                />
+                <Route
+                  path="/usuarios"
+                  element={
+                    <PermissionRoute section="users" anyOf={["canView"]}>
+                      <Usuarios />
+                    </PermissionRoute>
+                  }
+                />
+                <Route path="/roles" element={<Roles />} />
+                <Route path="/contratacion" element={<Contratacion />} />
+                <Route path="/mi-contrato" element={<MiContrato />} />
+                <Route path="/perfil" element={<Perfil />} />
+                {/* Formulario de una actividad de la valoración (se abre en otra pestaña). */}
+                <Route path="/admisiones/:id/:actividad" element={<ActividadPage />} />
+              </Route>
 
-            {/* --- Área del acudiente (admisiones) --- */}
-            <Route element={<AcudienteLayout />}>
-              <Route path="/admisiones" element={<MisAdmisiones />} />
-              <Route path="/admisiones/nueva" element={<NuevaAdmision />} />
-              <Route path="/admisiones/:code" element={<DetalleAdmision />} />
-              <Route
-                path="/admisiones/:code/solicitud"
-                element={<SolicitudWizard />}
-              />
+              {/* Acudiente y staff comparten la ruta; la página elige la vista. Las URLs
+                  viejas (`/admisiones-admin`, `/admisiones/<código>/…`) llevan aquí. */}
+              <Route path="/admisiones" element={<Admisiones />} />
+              <Route path="/admisiones/*" element={<Navigate to="/admisiones" replace />} />
+              <Route path="/admisiones-admin" element={<Navigate to="/admisiones" replace />} />
             </Route>
           </Route>
 

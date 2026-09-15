@@ -194,8 +194,12 @@ const StepOTP = ({ next }: { next: () => void }) => {
         credentials: "include",
         headers: buildHeaders(),
       });
-      if (res.ok) setSent(true);
-      else setError((await res.json()).error || "Error al enviar el código");
+      if (res.ok) {
+        setSent(true);
+        // Código nuevo (también al reenviar): casillas vacías. El foco vuelve solo al
+        // habilitarse el campo (`OtpInput` lo restaura al salir de `disabled`).
+        setCode("");
+      } else setError((await res.json()).error || "Error al enviar el código");
     } catch {
       setError("Error de conexión.");
     } finally {

@@ -7,13 +7,15 @@ import {
   Clock,
   Circle,
   MinusCircle,
-  ExternalLink,
+  Eye,
   FileText,
   X,
 } from "lucide-react";
 
 import { apiUrl, apiFetch, API_ENDPOINTS } from "@/utils/api";
-import { primaryBtnClass } from "@/components/ui/formStyles";
+import { fileRuleError, type FileRule } from "@/components/admisiones/admissionTypes";
+import { primaryBtnClass, iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
+import { titleClass } from "@/components/ui/textStyles";
 
 interface DocumentRow {
   doc_type: string;
@@ -21,8 +23,9 @@ interface DocumentRow {
   status: string;
   status_label: string;
   url: string | null;
-  reject_reason: string | null;
   note_public: string | null;
+  /** Formato y tamaño máximo que acepta (`admissions/documents.py`). */
+  rule: FileRule;
 }
 
 /** Estados en los que el acudiente puede (o debe) cargar el archivo. */
@@ -44,11 +47,14 @@ const secondaryBtn =
   "inline-flex h-10 items-center gap-1.5 rounded-lg border border-base-300 bg-base-100 px-3 text-sm font-medium text-base-content transition-colors hover:bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
 export function GuardianDocumentsCard({
-  code,
+  id,
   onChanged,
+  correcting = false,
 }: {
-  code: string;
+  id: number;
   onChanged: () => void;
+  /** Hay una corrección abierta: solo se vuelve a subir lo marcado ("Por corregir"). */
+  correcting?: boolean;
 }) {
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +67,7 @@ export function GuardianDocumentsCard({
 
   const load = useCallback(async () => {
     try {
-      const res = await apiFetch(API_ENDPOINTS.admissionsDocuments(code));
+      const res = await apiFetch(API_ENDPOINTS.admissionsDocuments(id));
       if (res.ok) setDocuments((await res.json()).documents ?? []);
       else setError("No pudimos cargar los documentos.");
     } catch {
@@ -69,7 +75,7 @@ export function GuardianDocumentsCard({
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [id]);
 
   useEffect(() => {
     load();
@@ -78,6 +84,12 @@ export function GuardianDocumentsCard({
   /** Selecciona (o quita) un archivo localmente, sin subirlo todavía. */
   const pick = (docType: string, file: File | null) => {
     setError(null);
+    const rule = documents.find((d) => d.doc_type === docType)?.rule;
+    const problem = file ? fileRuleError(file, rule) : null;
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setStaged((prev) => {
       const next = { ...prev };
       if (file) next[docType] = file;
@@ -100,7 +112,7 @@ export function GuardianDocumentsCard({
       body.append("file", file);
       try {
         // FormData: sin Content-Type manual; el Bearer lo pone el interceptor global.
-        const res = await fetch(apiUrl(API_ENDPOINTS.admissionsDocuments(code)), {
+        const res = await fetch(apiUrl(API_ENDPOINTS.admissionsDocuments(id)), {
           method: "POST",
           body,
         });
@@ -135,13 +147,14 @@ export function GuardianDocumentsCard({
     );
   }
 
-  const pendingCount = documents.filter((d) => CAN_UPLOAD.includes(d.status)).length;
+  const uploadable = correcting ? ["RECHAZADO"] : CAN_UPLOAD;
+  const pendingCount = documents.filter((d) => uploadable.includes(d.status)).length;
   const stagedCount = Object.keys(staged).length;
 
   return (
     <div className="rounded-lg border border-base-300 bg-base-100 p-6 shadow-sm">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-xl font-bold text-secondary">Documentos</h2>
+        <h2 className={titleClass}>Documentos</h2>
         <span className="text-sm text-base-content/60">
           {pendingCount === 0 ? "No falta ninguno" : `${pendingCount} por cargar`}
         </span>
@@ -163,7 +176,7 @@ export function GuardianDocumentsCard({
             Icon: Circle,
             className: "text-base-content/25",
           };
-          const canUpload = CAN_UPLOAD.includes(doc.status);
+          const canUpload = uploadable.includes(doc.status);
           const file = staged[doc.doc_type];
 
           return (
@@ -173,11 +186,12 @@ export function GuardianDocumentsCard({
                   <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${className}`} />
                   <div className="min-w-0">
                     <p className="font-medium text-base-content">{doc.label}</p>
-                    <p className="text-sm text-base-content/60">{doc.status_label}</p>
-
-                    {/* Motivo del rechazo: lo que el acudiente debe corregir */}
-                    {doc.reject_reason && (
-                      <p className="mt-1 text-sm text-warning">{doc.reject_reason}</p>
+                    <p className={`text-sm ${doc.status === "RECHAZADO" ? "font-medium text-warning" : "text-base-content/60"}`}>
+                      {/* El motivo llega por correo; aquí solo se marca qué corregir. */}
+                      {doc.status === "RECHAZADO" ? "Por corregir" : doc.status_label}
+                    </p>
+                    {canUpload && (
+                      <p className="mt-0.5 text-xs text-base-content/60">{doc.rule.hint}</p>
                     )}
                     {doc.note_public && (
                       <p className="mt-1 text-sm text-base-content/60">
@@ -193,10 +207,11 @@ export function GuardianDocumentsCard({
                       href={doc.url}
                       target="_blank"
                       rel="noreferrer"
-                      className={secondaryBtn}
+                      title="Ver"
+                      aria-label={`Ver ${doc.label}`}
+                      className={`${iconBtnClass} ${iconHover.primary}`}
                     >
-                      <ExternalLink className="h-4 w-4" />
-                      Ver
+                      <Eye className={iconClass} aria-hidden="true" />
                     </a>
                   )}
 
@@ -207,7 +222,7 @@ export function GuardianDocumentsCard({
                           inputs.current[doc.doc_type] = el;
                         }}
                         type="file"
-                        accept="image/*,application/pdf"
+                        accept={doc.rule.accept}
                         className="hidden"
                         onChange={(e) => {
                           pick(doc.doc_type, e.target.files?.[0] ?? null);
