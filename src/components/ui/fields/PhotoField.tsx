@@ -1,0 +1,165 @@
+/**
+ * Foto (informe §3.2, §5.2). Compuesto: el valor no es un string de formulario sino
+ * `{file, removed}` (`PhotoFieldValue`, ver `./types.ts`) + una URL preexistente que
+ * puede necesitar "olvidarse" explícitamente.
+ *
+ * Simplificación real respecto a `PhotoUploadField` (la versión anterior, local a
+ * `components/matriculas/Step3StudentData.tsx`, ya migrada a este componente): la
+ * bandera `_uploaded` de esa versión era redundante — `value.file !== null` ya la
+ * reemplaza, no hace falta un segundo booleano gemelo. Confirmado antes de migrar que
+ * ningún otro archivo lee `_uploaded`/`_manually_removed` (`Step6Confirmation.tsx` solo
+ * mira `uploadedFiles.<key> instanceof File`, un objeto que este componente sigue sin
+ * tocar directamente — ver la corrección de diseño sobre `Controller`/RHF documentada en
+ * `PhotoFieldProps`, `./types.ts`).
+ *
+ * HISTORIA del disparador (por qué esto NO es un `<label>` ni un `<button onClick>` con
+ * `inputRef.current.click()`): esos dos intentos, más un input real transparente
+ * superpuesto (`opacity-0` + `absolute inset-0` sobre una capa visual separada), fallaban
+ * en el navegador real del usuario — confirmado sin ser problema de caché ni de bundle
+ * desactualizado, pese a que las pruebas automatizadas vía Chrome DevTools/CDP sí los
+ * validaban. Teoría (no confirmada): algún bloqueador/extensión de privacidad neutraliza
+ * específicamente inputs invisibles superpuestos sobre otro contenido — el patrón que
+ * usan los clickjacks reales — mientras que un `<input type="file">` normal, aunque esté
+ * "disfrazado" con estilos, no dispara esa protección porque no hay una SEGUNDA capa
+ * separada debajo de la que sea invisible; el input ES el cuadro (la foto es su propio
+ * `background-image`), no algo transparente puesto ENCIMA de la foto. Con esta variante,
+ * si el navegador del usuario también la bloquea, no hay vuelta atrás sin admitirlo — de
+ * ahí que quede documentado el riesgo, aceptado explícitamente por el usuario.
+ *
+ * Previsualización: `URL.createObjectURL(file)` para un archivo recién elegido en esta
+ * sesión; `preloadedUrl` (string, típicamente base64, ver `preview_base64` del backend)
+ * si no se ha elegido ni quitado nada nuevo. El botón "Quitar" pone `removed: true` en
+ * el valor del campo — así, aunque `preloadedUrl` siga llegando por props en el
+ * siguiente render, no vuelve a aparecer solo.
+ *
+ * Este componente NO decide cuándo se sube el archivo — solo expone `onFileStaged` para
+ * que el padre lo recoja (el mismo patrón de "staged upload" que ya usa Matrículas hoy,
+ * pero sin la subida en bloque de Step6; eso sigue siendo decisión del consumidor).
+ *
+ * Validación de formato/tamaño (JPG/JPEG/PNG, máx. 3MB) real en JS, no solo cosmética:
+ * `accept` en el `<input>` es apenas un filtro del selector nativo del SO, no una
+ * validación — no impide que un archivo inválido llegue a `onChange` (drag&drop,
+ * selectores que ignoran `accept`, etc.). El chequeo real vive en `handleFileChange`,
+ * antes de llamar `onChange`; un archivo rechazado nunca se propaga al padre.
+ */
+
+import { useEffect, useState } from "react";
+import { Camera, X } from "lucide-react";
+
+import { RequiredMark } from "./fieldErrors";
+import type { PhotoFieldProps } from "./types";
+
+const MAX_FILE_SIZE_BYTES = 3 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png"];
+const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png"];
+
+/**
+ * Componente controlado desde afuera (`value`/`onChange`) — sin `Controller`, sin
+ * `control`. Ni `file` ni `removed` tocan RHF (ver la corrección documentada en
+ * `PhotoFieldProps`, `./types.ts`): quien lo consuma decide dónde vive ese estado, igual
+ * que `uploadedFiles`/`updateUploadedFiles` ya funciona hoy en Matrículas.
+ */
+export function PhotoField({ label, value, onChange, preloadedUrl, required }: PhotoFieldProps) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Blob URL solo para un archivo recién elegido en esta sesión; se revoca al
+  // reemplazarlo o al desmontar. `preloadedUrl` (base64) no pasa por aquí.
+  useEffect(() => {
+    if (!value.file) {
+      setObjectUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(value.file);
+    setObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [value.file]);
+
+  const preview = value.file ? objectUrl : !value.removed && preloadedUrl ? preloadedUrl : null;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0] ?? null;
+    // Permite volver a elegir el mismo archivo dos veces seguidas (ej. tras corregir un
+    // rechazo, re-seleccionar el mismo nombre de archivo debe volver a disparar onChange).
+    e.target.value = "";
+    if (!selected) return;
+
+    // Extensión como respaldo del MIME type: algunos selectores (drag&drop, ciertos
+    // gestores de archivos) dejan `file.type` vacío pese a ser un JPG/PNG real.
+    const extension = selected.name.split(".").pop()?.toLowerCase() ?? "";
+    const validType =
+      ALLOWED_MIME_TYPES.includes(selected.type) || ALLOWED_EXTENSIONS.includes(extension);
+
+    if (!validType) {
+      setError("Formato no permitido. Usa JPG, JPEG o PNG.");
+      return;
+    }
+    if (selected.size > MAX_FILE_SIZE_BYTES) {
+      const sizeMb = (selected.size / (1024 * 1024)).toFixed(1);
+      setError(`El archivo pesa ${sizeMb}MB. El máximo permitido es 3MB.`);
+      return;
+    }
+
+    setError(null);
+    onChange({ file: selected, removed: false });
+  };
+
+  const handleRemove = () => {
+    setError(null);
+    onChange({ file: null, removed: true });
+  };
+
+  return (
+    <div className="form-control w-full rounded-lg border border-base-300 bg-base-200/40 p-4 shadow-sm">
+      <span className="label-text mb-2 block font-medium text-base-content/70">
+        {label}
+        <RequiredMark required={required} />
+      </span>
+      <div className="flex items-start gap-4">
+        <div className="group relative h-20 w-20 shrink-0">
+          {/* El input ES el cuadro — la foto es su propio `background-image`, no una capa
+              aparte debajo de un input transparente (ver HISTORIA arriba). `file:hidden`
+              quita el botón nativo "Seleccionar archivo"; `text-transparent` esconde el
+              texto nativo "Sin archivos seleccionados" (mismo color que ya viene del
+              navegador, no se puede quitar el texto en sí, solo su color). */}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+            onChange={handleFileChange}
+            title={preview ? "Cambiar foto" : "Subir foto"}
+            style={preview ? { backgroundImage: `url(${preview})` } : undefined}
+            className="file-input h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-base-300 bg-base-200 bg-cover bg-center p-0 text-transparent shadow-sm file:hidden"
+          />
+          {!preview && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-base-content/40">
+              <Camera className="h-6 w-6" aria-hidden="true" />
+            </div>
+          )}
+          {/* Overlay de cámara al hover, visible solo si ya hay una foto (si no la hay, el
+              ícono de la cámara ya está a la vista dentro del cuadro). */}
+          {preview && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-6 items-center justify-center rounded-b-lg bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera className="h-3.5 w-3.5 text-white" aria-hidden="true" />
+            </div>
+          )}
+          {preview && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-error text-error-content shadow-sm transition-colors hover:bg-error/90"
+              title="Eliminar foto"
+            >
+              <X className="h-3 w-3" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 pt-1">
+          <p className="text-xs font-semibold text-base-content/60">Formato y tamaño:</p>
+          <p className="text-xs text-base-content/50">JPG, JPEG, PNG</p>
+          <p className="text-xs text-base-content/50">Máx. 3MB</p>
+          {error && <p className="mt-1.5 text-xs font-medium text-error">{error}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}

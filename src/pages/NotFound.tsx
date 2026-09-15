@@ -30,7 +30,7 @@ const NotFound = () => {
         </p>
 
         <Link
-          to="/dashboard"
+          to="/"
           className="mt-8 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-primary px-6 text-base font-medium text-primary-content shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
         >
           Volver al inicio

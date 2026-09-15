@@ -5,12 +5,16 @@ import {
   Trash2,
   Lock,
   Loader2,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { apiUrl } from "@/utils/api";
 import { useAuth } from "@/components/Login/loginLogic";
 import useBodyScrollLock from "@/hooks/useBodyScrollLock";
+import { ConfirmDeleteDialog } from "@/components/ui/ConfirmDeleteDialog";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { Toast } from "@/components/ui/Toast";
+import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
+import { useToast } from "@/hooks/use-toast";
 
 type CatalogItem = { key: string; label: string; isSelf: boolean };
 type CatalogGroup = { group: string; capabilities: CatalogItem[] };
@@ -36,7 +40,8 @@ export default function Roles() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Role | "new" | null>(null);
   const [toDelete, setToDelete] = useState<Role | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  // Toast compartido (arriba a la derecha), el mismo del resto de la plataforma.
+  const { toast, flash } = useToast();
 
   const groupOf = useMemo(() => {
     const m = new Map<string, string>();
@@ -50,10 +55,6 @@ export default function Roles() {
     return m;
   }, [allRoles]);
 
-  const showToast = (m: string) => {
-    setToast(m);
-    setTimeout(() => setToast(null), 3200);
-  };
 
   const load = async () => {
     setLoading(true);
@@ -84,18 +85,21 @@ export default function Roles() {
     );
   }
 
-  const handleDelete = async () => {
-    if (!toDelete) return;
-    const res = await fetch(apiUrl(`/api/accounts/roles/${toDelete.slug}/`), { method: "DELETE" });
-    if (res.ok) {
-      showToast(`Rol "${toDelete.name}" eliminado.`);
-      setToDelete(null);
-      load();
-    } else {
+  /** `false` = falló: el diálogo de confirmación queda abierto para reintentar. */
+  const handleDelete = async (role: Role) => {
+    try {
+      const res = await fetch(apiUrl(`/api/accounts/roles/${role.slug}/`), { method: "DELETE" });
+      if (res.ok) {
+        flash("success", `Rol "${role.name}" eliminado`);
+        load();
+        return true;
+      }
       const data = await res.json().catch(() => ({}));
-      showToast(data.detail || "No se pudo eliminar el rol.");
-      setToDelete(null);
+      flash("error", data.detail || "No se pudo eliminar el rol.");
+    } catch {
+      flash("error", "No hay conexión con el servidor. Intenta de nuevo.");
     }
+    return false;
   };
 
   const domainsOf = (role: Role): string[] => {
@@ -153,20 +157,24 @@ export default function Roles() {
         <td className="px-6 py-4">
           <div className="flex items-center justify-end gap-1">
             <button
-              className="rounded-full p-2 text-primary transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:text-base-content/25 disabled:hover:bg-transparent"
+              type="button"
+              className={`${iconBtnClass} ${iconHover.primary} disabled:hover:bg-transparent`}
               title={isAdmin ? "El rol admin está bloqueado" : "Editar rol"}
+              aria-label={`Editar el rol ${role.name}`}
               disabled={isAdmin}
               onClick={() => setEditing(role)}
             >
-              <Pencil className="h-5 w-5" />
+              <Pencil className={iconClass} aria-hidden="true" />
             </button>
             <button
-              className="rounded-full p-2 text-error transition-all hover:bg-error/10 disabled:cursor-not-allowed disabled:text-base-content/25 disabled:hover:bg-transparent"
+              type="button"
+              className={`${iconBtnClass} ${iconHover.error} disabled:hover:bg-transparent`}
               title={isAdmin ? "El rol admin no se puede borrar" : "Eliminar rol"}
+              aria-label={`Eliminar el rol ${role.name}`}
               disabled={isAdmin}
               onClick={() => setToDelete(role)}
             >
-              <Trash2 className="h-5 w-5" />
+              <Trash2 className={iconClass} aria-hidden="true" />
             </button>
           </div>
         </td>
@@ -194,9 +202,7 @@ export default function Roles() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <LoadingState compact className="py-16" label="Cargando roles…" />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm">
           <table className="w-full text-sm">
@@ -225,22 +231,28 @@ export default function Roles() {
           onClose={() => setEditing(null)}
           onSaved={(msg) => {
             setEditing(null);
-            showToast(msg);
+            flash("success", msg);
             load();
           }}
         />
       )}
 
       {toDelete && (
-        <ConfirmDelete role={toDelete} onCancel={() => setToDelete(null)} onConfirm={handleDelete} />
+        <ConfirmDeleteDialog
+          isOpen
+          onClose={() => setToDelete(null)}
+          onConfirm={() => handleDelete(toDelete)}
+          title="Eliminar rol"
+          confirmText="Eliminar rol"
+        >
+          <p>
+            Se eliminará el rol <strong>{toDelete.name}</strong>. Las personas con ese rol se quedan sin sus
+            permisos.
+          </p>
+        </ConfirmDeleteDialog>
       )}
 
-      {toast && (
-        <div className="fixed right-6 top-6 z-[110] flex items-center gap-2 rounded-xl border border-base-300 bg-base-100 px-4 py-3 text-sm shadow-lg">
-          <ShieldCheck className="h-4 w-4 text-accent" />
-          {toast}
-        </div>
-      )}
+      <Toast toast={toast} />
     </div>
   );
 }
@@ -332,10 +344,13 @@ function RoleEditor({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-base-content/40 transition-colors hover:bg-base-200 hover:text-base-content"
+            aria-label="Cerrar"
+            title="Cerrar"
+            className={`${iconBtnClass} ${iconHover.neutral}`}
           >
-            <X className="h-5 w-5" />
+            <X className={iconClass} aria-hidden="true" />
           </button>
         </div>
 
@@ -459,43 +474,6 @@ function RoleEditor({
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {role ? "Guardar cambios" : "Crear rol"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmDelete({
-  role,
-  onCancel,
-  onConfirm,
-}: {
-  role: Role;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  useBodyScrollLock(true);
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl bg-base-100 p-6 shadow-xl">
-        <h3 className="font-display text-lg font-bold text-secondary">Eliminar rol</h3>
-        <p className="mt-2 text-sm text-base-content/70">
-          ¿Seguro que quieres eliminar el rol <strong>{role.name}</strong>? Esta acción no se
-          puede deshacer.
-        </p>
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="h-10 rounded-xl border border-base-300 bg-base-100 px-4 text-sm font-medium text-base-content transition-colors hover:bg-base-200"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="h-10 rounded-xl bg-error px-4 text-sm font-medium text-error-content transition-colors hover:bg-error/90"
-          >
-            Eliminar
           </button>
         </div>
       </div>

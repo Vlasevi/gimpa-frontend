@@ -1,6 +1,11 @@
 // components/ui/Alert.tsx
+//
+// Accesibilidad: diálogo modal con título y descripción asociados (ids únicos por
+// instancia), foco inicial dentro del diálogo, foco de vuelta al control que lo abrió al
+// cerrar, y el contenido desplazable con teclado cuando se exige leerlo hasta el final.
 import {
   ReactNode,
+  useId,
   useRef,
   useState,
   useEffect,
@@ -8,6 +13,7 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { BusyLabel } from "@/components/ui/BusyLabel";
 
 interface AlertProps {
   isOpen: boolean;
@@ -38,6 +44,11 @@ interface AlertProps {
     | "link";
   // Requiere scroll hasta el final para habilitar el botón de aceptar
   requireScrollToBottom?: boolean;
+  /** Acción en curso: spinner en el botón de aceptar, botones deshabilitados y el
+   * diálogo no se cierra (ni con Escape ni con el fondo) hasta que termine. */
+  pending?: boolean;
+  /** Texto del botón de aceptar mientras `pending` ("Eliminando…"). */
+  pendingText?: string;
 }
 
 // Color del ícono según la intención del aviso (tokens del theme daisyui)
@@ -116,9 +127,24 @@ export const Alert = ({
   acceptButtonVariant = "default",
   cancelButtonVariant = "outline",
   requireScrollToBottom = false,
+  pending = false,
+  pendingText,
 }: AlertProps) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const titleId = useId();
+  const contentId = useId();
+
+  // Foco al abrir (en el contenido si hay que leerlo; si no, en el diálogo) y de vuelta
+  // al control que lo abrió al cerrar.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const target = requireScrollToBottom ? contentRef.current : dialogRef.current;
+    target?.focus();
+    return () => previous?.focus?.();
+  }, [isOpen, requireScrollToBottom]);
 
   // Resetear el estado cuando el modal se abre
   useEffect(() => {
@@ -141,15 +167,15 @@ export const Alert = ({
   // Bloquear el scroll del fondo mientras el modal está abierto (patrón compartido).
   useBodyScrollLock(isOpen);
 
-  // Cerrar con la tecla Escape
+  // Cerrar con la tecla Escape (no mientras la acción está en curso)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || pending) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, pending]);
 
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
@@ -171,21 +197,25 @@ export const Alert = ({
       {/* Fondo */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={pending ? undefined : onClose}
         aria-hidden="true"
       />
 
       {/* Contenedor del modal */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="alert-title"
-        className="animate-modal-pop relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-base-100 shadow-xl"
+        aria-labelledby={titleId}
+        aria-describedby={contentId}
+        aria-busy={pending || undefined}
+        tabIndex={-1}
+        className="animate-modal-pop relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-base-100 shadow-xl focus:outline-none"
       >
         {/* Header fijo */}
         <div className="flex-shrink-0 px-6 pt-6">
           <h2
-            id="alert-title"
+            id={titleId}
             className="flex items-center gap-3 text-xl font-semibold text-base-content"
           >
             <span className={variantStyles[variant]}>{variantIcons[variant]}</span>
@@ -199,18 +229,31 @@ export const Alert = ({
         {/* Contenido scrollable */}
         <div
           ref={contentRef}
+          id={contentId}
           onScroll={handleScroll}
-          className="flex-1 space-y-4 overflow-y-auto px-6 py-4 leading-relaxed text-base-content/80"
+          tabIndex={requireScrollToBottom ? 0 : undefined}
+          className="flex-1 space-y-4 overflow-y-auto px-6 py-4 leading-relaxed text-base-content/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
         >
           {children}
         </div>
 
         {/* Footer fijo */}
-        <div className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-base-300 px-6 py-4 sm:flex-row sm:justify-end">
+        <div className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-base-300 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+          {isAcceptDisabled && (
+            <p className="text-xs text-base-content/60 sm:mr-auto" role="status">
+              Lee el texto hasta el final para continuar.
+            </p>
+          )}
+          {pending && pendingText && (
+            <p className="sr-only" role="status">
+              {pendingText}
+            </p>
+          )}
           <button
             type="button"
             className={cn(buttonVariantClasses[cancelButtonVariant], cancelButtonClassName)}
             onClick={onClose}
+            disabled={pending}
           >
             {cancelText}
           </button>
@@ -220,11 +263,14 @@ export const Alert = ({
               buttonVariantClasses[acceptButtonVariant],
               acceptButtonClassName,
               isAcceptDisabled && "cursor-not-allowed opacity-50",
+              pending && "gap-2",
             )}
             onClick={onAccept}
-            disabled={isAcceptDisabled}
+            disabled={isAcceptDisabled || pending}
           >
-            {acceptText}
+            <BusyLabel busy={pending} busyText={pendingText ?? acceptText}>
+              {acceptText}
+            </BusyLabel>
           </button>
         </div>
       </div>

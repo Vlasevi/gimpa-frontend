@@ -4,6 +4,8 @@ import { ChevronDown, Camera, Loader2 } from "lucide-react";
 import { apiUrl, API_ENDPOINTS, apiFetch, buildHeaders } from "@/utils/api";
 import { useAuth } from "@/components/Login/loginLogic";
 import { PdfModal, embedImagesInPdf, type FieldOverlay } from "@/components/pdf/PdfSignViewer";
+import { OtpInput } from "@/components/ui/OtpInput";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { FieldWidget } from "./FieldWidget";
 import {
   DATA_FIELDS,
@@ -15,6 +17,7 @@ import {
   computeAge,
   CONTRACT_DEFAULTS,
 } from "./contractConfig";
+import { BusyLabel } from "@/components/ui/BusyLabel";
 
 interface Contract {
   id: number;
@@ -96,8 +99,8 @@ export const ContratacionEmpleado = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6 flex justify-center">
-        <span className="loading loading-spinner loading-lg text-primary" />
+      <div className="container mx-auto p-6">
+        <LoadingState label="Cargando contrato…" />
       </div>
     );
   }
@@ -191,8 +194,12 @@ const StepOTP = ({ next }: { next: () => void }) => {
         credentials: "include",
         headers: buildHeaders(),
       });
-      if (res.ok) setSent(true);
-      else setError((await res.json()).error || "Error al enviar el código");
+      if (res.ok) {
+        setSent(true);
+        // Código nuevo (también al reenviar): casillas vacías. El foco vuelve solo al
+        // habilitarse el campo (`OtpInput` lo restaura al salir de `disabled`).
+        setCode("");
+      } else setError((await res.json()).error || "Error al enviar el código");
     } catch {
       setError("Error de conexión.");
     } finally {
@@ -200,7 +207,11 @@ const StepOTP = ({ next }: { next: () => void }) => {
     }
   };
 
-  const validate = async () => {
+  // `codeOverride`: ver el comentario equivalente en Step1Verification.tsx —
+  // `OtpInput.onComplete` manda el valor recién completado en vez de depender del
+  // estado `code`, que al pegar el código todavía no se actualizó en este punto.
+  const validate = async (codeOverride?: string) => {
+    const otpCode = codeOverride ?? code;
     setLoading(true);
     setError("");
     try {
@@ -208,7 +219,7 @@ const StepOTP = ({ next }: { next: () => void }) => {
         method: "POST",
         credentials: "include",
         headers: buildHeaders(),
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: otpCode }),
       });
       const data = await res.json();
       if (res.ok && data.valid) next();
@@ -226,28 +237,41 @@ const StepOTP = ({ next }: { next: () => void }) => {
       <p className="text-base-content/60">
         Enviaremos un código de verificación a tu correo para iniciar tu contratación.
       </p>
-      {error && <div className="alert alert-error"><span>{error}</span></div>}
+      {!sent && error && <div className="alert alert-error"><span>{error}</span></div>}
       {!sent ? (
         <button className="btn btn-primary" onClick={request} disabled={loading}>
-          {loading ? <span className="loading loading-spinner" /> : "Enviar Código"}
+          <BusyLabel busy={loading} busyText="Enviando código…">Enviar código</BusyLabel>
         </button>
       ) : (
-        <div className="form-control w-full max-w-xs">
-          <label className="label"><span className="label-text">Código recibido</span></label>
-          <input
-            type="text"
-            placeholder="123456"
-            className="input input-bordered w-full mb-4"
-            value={code}
-            maxLength={6}
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <button className="btn btn-secondary w-full mb-2" onClick={validate} disabled={loading || code.length !== 6}>
-            {loading ? <span className="loading loading-spinner loading-sm" /> : "Validar y Continuar"}
+        // `w-fit` en vez de `w-full max-w-xs`: ver Step1Verification.tsx (misma
+        // instancia unificada) — el ancho real de las casillas del OTP es menor que el
+        // de la tarjeta, así que con `w-full` el botón y el link de reenviar quedaban
+        // más anchos que las casillas.
+        <div className="mx-auto flex w-fit flex-col">
+          <div className="mb-4">
+            <OtpInput
+              label="Código recibido"
+              value={code}
+              onChange={setCode}
+              disabled={loading}
+              onComplete={validate}
+              error={error || undefined}
+            />
+          </div>
+          <button className="btn btn-secondary w-full mb-2" onClick={() => validate()} disabled={loading || code.length !== 6}>
+            <BusyLabel busy={loading} busyText="Validando…">Validar y continuar</BusyLabel>
           </button>
-          <button className="btn btn-ghost btn-sm w-full" onClick={request} disabled={loading}>
-            Reenviar código
-          </button>
+          <p className="text-center text-sm text-base-content/60">
+            ¿No recibiste el código?{" "}
+            <button
+              type="button"
+              onClick={request}
+              disabled={loading}
+              className="font-medium text-primary transition-colors hover:text-primary/80 hover:underline disabled:cursor-not-allowed disabled:text-base-content/40 disabled:no-underline"
+            >
+              Reenviar
+            </button>
+          </p>
         </div>
       )}
     </div>
@@ -430,7 +454,7 @@ const StepData = ({
 
       <div className="flex justify-end mt-2">
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? <span className="loading loading-spinner loading-sm" /> : "Guardar y Continuar"}
+          <BusyLabel busy={saving} busyText="Guardando…">Guardar y continuar</BusyLabel>
         </button>
       </div>
     </div>
@@ -524,7 +548,7 @@ const StepDocuments = ({
                 </h4>
                 {uploading === d.key ? (
                   <div className="flex items-center gap-2 py-2 text-sm text-primary">
-                    <span className="loading loading-spinner loading-sm" /> Subiendo documento...
+                    <span className="loading loading-spinner loading-sm" aria-hidden="true" /> Subiendo documento…
                   </div>
                 ) : uploaded ? (
                   <div className="space-y-2">
@@ -709,9 +733,7 @@ const StepSign = ({
       {error && <div className="alert alert-error"><span>{error}</span></div>}
 
       {generating ? (
-        <div className="flex justify-center py-10">
-          <span className="loading loading-spinner loading-lg text-primary" />
-        </div>
+        <LoadingState compact className="py-10" label="Generando contrato…" />
       ) : (
         <>
           {/* Progreso */}
@@ -735,7 +757,7 @@ const StepSign = ({
                 onClick={() => setOpen(true)}
                 disabled={!unsigned}
               >
-                {unsigned ? "Ver y firmar" : <span className="loading loading-spinner loading-xs" />}
+                <BusyLabel busy={!unsigned} busyText="Preparando…">Ver y firmar</BusyLabel>
               </button>
             </div>
           </div>
@@ -744,7 +766,7 @@ const StepSign = ({
           <div className="flex justify-between mt-4">
             <button className="btn btn-ghost" onClick={back} disabled={submitting}>Atrás</button>
             <button className="btn btn-primary" onClick={signAndSubmit} disabled={submitting || !allFilled}>
-              {submitting ? <span className="loading loading-spinner loading-sm" /> : "Firmar y Enviar"}
+              <BusyLabel busy={submitting} busyText="Enviando…">Firmar y enviar</BusyLabel>
             </button>
           </div>
 

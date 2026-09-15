@@ -85,4 +85,58 @@ export const API_ENDPOINTS = {
   positions: "/api/contracting/positions/",
   contractRequestOtp: "/api/contracting/contracts/request-otp/",
   contractValidateOtp: "/api/contracting/contracts/validate-otp/",
+
+  // Admissions — cuenta del acudiente (público)
+  admissionsRegister: "/api/admissions/auth/register/",
+  admissionsVerifyOtp: "/api/admissions/auth/verify-otp/",
+  admissionsResendOtp: "/api/admissions/auth/resend-otp/",
+  admissionsPasswordReset: "/api/admissions/auth/password-reset/",
+  admissionsPasswordResetConfirm: "/api/admissions/auth/password-reset/confirm/",
+
+  // Admissions — expedientes (por id, como /api/enrollments/<id>/)
+  admissionsApplications: "/api/admissions/",
+  admissionsApplication: (id: number) =>
+    `/api/admissions/${id}/`,
+  admissionsApplicationSubmit: (id: number) =>
+    `/api/admissions/${id}/submit/`,
+  admissionsApplicationTransition: (id: number) =>
+    `/api/admissions/${id}/transition/`,
+  admissionsApplicationRestore: (id: number) =>
+    `/api/admissions/${id}/restore/`,
+
+  // Geo (catálogo Colombia — dropdowns en cascada)
+  geoDepartments: "/api/geo/departments/",
+  geoCities: "/api/geo/cities/",
+
+  // Admissions — operación interna (fase 2)
+  // Enviar el expediente a otro paso (pestaña "Avanzar" y diálogo tras validar)
+  admissionsAdvance: (id: number) => `/api/admissions/${id}/advance/`,
+  // Solicitar corrección de datos y/o documentos (el comentario va solo al correo)
+  admissionsCorrection: (id: number) => `/api/admissions/${id}/correction/`,
+  admissionsPayment: (id: number) =>
+    `/api/admissions/${id}/payment/`,
+  admissionsPaymentReport: (id: number) =>
+    `/api/admissions/${id}/payment/report/`,
+  admissionsPaymentReview: (id: number) =>
+    `/api/admissions/${id}/payment/review/`,
+  admissionsDocuments: (id: number) =>
+    `/api/admissions/${id}/documents/`,
+  admissionsDocumentReview: (id: number) =>
+    `/api/admissions/${id}/documents/review/`,
+
+  // Admissions — valoración GIMPA AVANZA
+  admissionsAssignableUsers: "/api/admissions/assignable-users/",
+  admissionsAppointments: (id: number) => `/api/admissions/${id}/appointments/`,
+  admissionsEvaluation: (id: number) => `/api/admissions/${id}/evaluation/`,
+  admissionsEvaluationReopen: (id: number) => `/api/admissions/${id}/evaluation/reopen/`,
+  admissionsActivity: (id: number, slug: string) => `/api/admissions/${id}/evaluation/${slug}/`,
+  admissionsActivityComplete: (id: number, slug: string) =>
+    `/api/admissions/${id}/evaluation/${slug}/complete/`,
+  admissionsExamAttachment: (id: number) => `/api/admissions/${id}/evaluation/examen/attachment/`,
+  admissionsExamKey: (id: number) => `/api/admissions/${id}/evaluation/examen/key/`,
+  admissionsMaterial: (id: number, key: string) =>
+    `/api/admissions/${id}/evaluation/material/${key}/`,
+
+  // Admissions — decisión de la rectora
+  admissionsDecision: (id: number) => `/api/admissions/${id}/decision/`,
 } as const;

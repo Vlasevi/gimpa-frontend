@@ -35,7 +35,7 @@ export default function AuthCallback() {
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
           loginWithPayload(data);
-          navigate("/dashboard", { replace: true });
+          navigate("/", { replace: true });
         } else {
           setError(true);
           setTimeout(() => navigate("/login?error=exchange_failed", { replace: true }), 1800);

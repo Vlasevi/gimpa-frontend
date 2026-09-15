@@ -8,6 +8,7 @@ import {
   setTokens,
   clearTokens,
 } from "@/utils/tokens";
+import { clearAllDrafts } from "@/hooks/useAutosaveDraft";
 
 // Tipos de roles del backend. Con roles dinámicos, el rol es cualquier slug; se listan
 // los de sistema para autocompletar, pero `(string & {})` permite cualquier valor.
@@ -32,6 +33,17 @@ export interface SectionPermissions {
   canApprove?: boolean;
   canManage?: boolean;
   canExport?: boolean;
+  // Operación interna de admisiones (fase 2)
+  canValidate?: boolean;
+  canManagePayments?: boolean;
+  canReviewDocuments?: boolean;
+  // Valoración GIMPA AVANZA de admisiones
+  canScheduleInterviews?: boolean;
+  canConductInterviews?: boolean;
+  canApplyExams?: boolean;
+  // Decisión de admisiones
+  canManageCommittee?: boolean;
+  canDecide?: boolean;
 }
 
 // Permisos de visibilidad/edición de documentos por clase de sensibilidad
@@ -58,6 +70,7 @@ export interface UserPermissions {
   certifications: SectionPermissions;
   documents: DocumentPermissions;
   contracting: ContractingPermissions;
+  admissions: SectionPermissions;
 }
 
 // Secciones cuyo valor es SectionPermissions (excluye 'documents' y
@@ -81,6 +94,8 @@ export interface User {
   guardian_phone?: string;
   guardian_relationship?: string;
   user_data?: Record<string, any>;
+  /** URL firmada (1 hora) de la foto de perfil, o null. */
+  photo_url?: string | null;
 }
 
 // Payload que devuelven login-admissions y login-social/exchange.
@@ -96,6 +111,9 @@ interface AuthContextType {
   isLoading: boolean;
   isLoggingOut: boolean;
   checkAuth: () => Promise<void>;
+  /** Reemplaza el usuario en sesión con la respuesta de un endpoint que devuelve la
+   * cuenta actualizada (p. ej. la foto de perfil), sin pasar por la pantalla de carga. */
+  updateUser: (user: User) => void;
   loginWithPayload: (payload: AuthPayload) => void;
   logout: () => Promise<void>;
 }
@@ -106,6 +124,7 @@ const AuthContext = React.createContext<AuthContextType>({
   isLoading: true,
   isLoggingOut: false,
   checkAuth: async () => {},
+  updateUser: () => {},
   loginWithPayload: () => {},
   logout: async () => {},
 });
@@ -183,6 +202,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Ignoramos errores de red en logout: igual limpiamos el estado local.
     } finally {
       clearTokens();
+      // Borradores de formularios sin guardar (solo viven en este navegador y pueden
+      // traer datos de salud): no deben quedar para el siguiente que use el equipo.
+      clearAllDrafts();
       setAuthenticated(false);
       setUser(null);
       navigate("/login", { replace: true });
@@ -192,7 +214,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, user, isLoading, isLoggingOut, checkAuth, loginWithPayload, logout }}
+      value={{ isAuthenticated, user, isLoading, isLoggingOut, checkAuth, updateUser: setUser, loginWithPayload, logout }}
     >
       {children}
       {isLoggingOut && (
@@ -245,4 +267,34 @@ export function useHasRole(...roles: UserRole[]): boolean {
   const { user } = useAuth();
   if (!user?.role) return false;
   return roles.includes(user.role);
+}
+
+/**
+ * ¿Es una cuenta externa de admisiones (acudiente)?
+ *
+ * Se decide por **capabilities**, no por el slug del rol: cualquier usuario cuyo único
+ * acceso sea admisiones recibe la experiencia del acudiente. Así, si mañana se crea un
+ * rol distinto con ese mismo alcance desde `/roles`, funciona sin tocar código.
+ */
+export function isGuardianOnly(user: User | null): boolean {
+  const p = user?.permissions;
+  if (!p) return false;
+
+  const hasStaffAccess =
+    p.users?.canView ||
+    p.enrollments?.canView ||
+    p.grades?.canView ||
+    p.payments?.canView ||
+    p.certifications?.canView ||
+    p.contracting?.canManage ||
+    p.contracting?.canViewAll ||
+    p.contracting?.canFillOwn;
+
+  return !hasStaffAccess && Boolean(p.admissions?.canView);
+}
+
+/** Ruta de inicio según a qué tiene acceso el usuario. */
+export function resolveHomePath(user: User | null): string {
+  if (isGuardianOnly(user)) return "/admisiones";
+  return "/dashboard";
 }

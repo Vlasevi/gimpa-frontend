@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
-@plugin "daisyui";
+/* Sin los temas incluidos de daisyUI: solo existe "gimpa" (abajo). Con los de fábrica,
+   el tema oscuro se aplicaba al <html> cuando el sistema está en modo oscuro y el fondo
+   de la página se veía azul marino al hacer scroll más allá del contenido. */
+@plugin "daisyui" {
+  themes: false;
+}
 @plugin "tailwindcss-animate";
 
 @plugin "daisyui/theme" {
@@ -9,30 +14,36 @@
   prefersdark: false;
   color-scheme: light;
 
-  /* Colores principales */
-  --color-primary: #3b4aa0;
+  /* Colores principales — manual de marca (confirmado con el usuario:
+     #1F3A5F primary, #2E75B6 secondary, #003496 info, #59AF4E accent). */
+  --color-primary: #1F3A5F;
   --color-primary-content: #ffffff;
-  --color-secondary: #2d3561;
+  --color-secondary: #2E75B6;
   --color-secondary-content: #ffffff;
-  --color-accent: #52b455;
+  --color-accent: #59AF4E;
   --color-accent-content: #ffffff;
-  --color-neutral: #2a2a2a;
+  /* --color-neutral: sin dato en el manual para este rol específico — se usa
+     el gris medio de los "colores secundarios" (#6B7280). */
+  --color-neutral: #6B7280;
   --color-neutral-content: #ffffff;
 
-  /* Colores base */
-  --color-base-100: #ffffff;
-  --color-base-200: #f8f9fa;
+  /* Colores base — manual de marca (grises secundarios). */
+  --color-base-100: #FAFAFA;
+  --color-base-200: #F3F4F6;
+  /* --color-base-300: el manual no trae un tercer gris para bordes; se deja
+     el valor previo (#e9ecef), muy cercano en tono a base-200. */
   --color-base-300: #e9ecef;
-  --color-base-content: #2a2a2a;
+  --color-base-content: #374151;
 
-  /* Colores de estado */
-  --color-info: #ffcd3c;
-  --color-info-content: #2a2a2a;
-  --color-success: #52b455;
+  /* Colores de estado — manual de marca. */
+  --color-info: #003496;
+  --color-info-content: #ffffff;
+  --color-success: #166534;
   --color-success-content: #ffffff;
+  /* --color-warning: sin dato en el manual — se deja el valor previo. */
   --color-warning: #ff6b35;
   --color-warning-content: #ffffff;
-  --color-error: #dc3545;
+  --color-error: #B91C1C;
   --color-error-content: #ffffff;
 
   /* Border radius */
@@ -45,27 +56,122 @@
 }
 
 /* =====================================================================
-   SISTEMA DE DISEÑO — Tipografía parametrizada
-   Para cambiar la fuente de TODO el sitio, edita solo estas dos líneas.
-   (Las familias se cargan en index.html vía Google Fonts.)
-   Uso: clase `font-sans` (por defecto en body) y `font-display` (títulos).
-   ===================================================================== */
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+   Aleo — reemplaza a Neue Aachen Pro como fuente de marca (decisión del
+   usuario: Neue Aachen Pro llegó sin archivo de licencia — no se podía
+   confirmar uso web —, Aleo es de Google Fonts con licencia libre, OFL).
+   NO está en el <link> de Google Fonts de index.html, se auto-hospeda aquí
+   igual que Inter. Archivos en src/assets/fonts/aleo/ (solo los 4 pesos
+   del manual: Thin/Book/Regular/Medium — el resto de variantes que
+   llegaron, itálicas/SemiBold/Bold/ExtraBold/Black/ExtraLight, no se
+   copiaron). Igual que con Inter, Aleo no tiene un peso literal llamado
+   "Book" — se usa "Light" como el más cercano a ese rol. */
+@font-face {
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Thin.ttf") format("truetype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aleo";
+  src: url("./assets/fonts/aleo/Aleo-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
 }
 
-/* Variables personalizadas para el Sidebar (usadas vía bg-[hsl(var(--...))]).
-   No borrar: Sidebar.tsx depende de --accent y --accentlight. */
-@layer base {
-  :root {
-    --accentlight: 120 56% 80%;
-    --accent: 122 39% 52%;
-    --primary-light: 231 41% 54%;
-    --primary-dark: 230 50% 35%;
-    --accent-dark: 123 44% 38%;
-  }
+/* =====================================================================
+   Inter — mismos 4 pesos del manual (Thin/Book/Regular/Medium), pero
+   auto-hospedado con los archivos reales en vez de depender del Google
+   Fonts <link> de index.html (que solo traía 400/500/600/700, sin Thin
+   ni nada equivalente a Book — se quitó Inter de ese link).
+   OJO "Book": Inter no tiene un peso que se llame así (sus nombres son
+   Thin/ExtraLight/Light/Regular/Medium/SemiBold/Bold/ExtraBold/Black) —
+   se usa el archivo "Light" (300) como el más cercano al rol de Book.
+   Si el manual de marca da un valor de peso numérico distinto para
+   "Book" en Inter, ajustar aquí.
+   Bucket óptico: Inter trae variantes 18pt/24pt/28pt (afinadas para
+   distintos tamaños de texto); se usó 18pt, el de uso general para
+   UI/cuerpo — igual a lo que sirve Google Fonts por defecto en la
+   mayoría de tamaños de este sitio. Licencia: libre (OFL.txt incluido).
+   SemiBold(600) y Bold(700) TAMBIÉN se auto-hospedan aquí, aunque no
+   están en la lista de pesos del manual: 51 archivos en src/ ya usan
+   `font-bold`/`font-semibold` sobre el body (Inter) de antes de este
+   cambio. Sin estos dos pesos reales, el navegador los "inventa"
+   (negrita sintética, estirando el 400) — una regresión visual en toda
+   la app, no solo en Login. */
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/inter/Inter-Thin.ttf") format("truetype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
 }
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/inter/Inter-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/inter/Inter-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/inter/Inter-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/inter/Inter-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/inter/Inter-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =====================================================================
+   SISTEMA DE DISEÑO — Tipografía parametrizada
+   Para cambiar la fuente de TODO el sitio, edita solo estas dos líneas.
+   (Inter y Aleo se auto-hospedan arriba, ver @font-face.)
+   Uso: clase `font-sans` (por defecto en body) y `font-display` (títulos).
+   Aleo activada _(2026-09-09)_: reemplaza a Poppins en --font-display —
+   licencia libre confirmada (OFL), ya auto-hospedada arriba. Con este
+   cambio Poppins queda sin ningún uso real en el código (era solo este
+   token), así que también se quitó su <link> de Google Fonts en
+   index.html. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Aleo", ui-serif, Georgia, serif;
+}
+
 
 /* Fuente base del documento (parametrizada arriba) */
 @layer base {

@@ -65,6 +65,37 @@ export const ATLANTICO_CITIES = [
   "Suan", "Tubará", "Usiacurí",
 ];
 
+// Barrios de Barranquilla (dropdown cuando la ciudad es Barranquilla). Termina en "Otro".
+export const BARRIOS_BARRANQUILLA = [
+  "7 de Abril", "7 de Agosto", "Adela de Char", "Alameda del Río", "Alfonso López",
+  "Alianza", "Altamira", "Alto Prado", "Altos de Riomar", "Altos del Limón", "América",
+  "Andalucia", "Atlántico", "Barlovento", "Barrio Abajo", "Bella Arena", "Bellavista",
+  "Bendición de Dios", "Bernardo Hoyos", "Bethania", "Bosque", "Boston", "Boyacá",
+  "Buena Esperanza", "Buenos Aires", "California", "Campito", "Campo Alegre",
+  "Carlos Meisel", "Carrizal", "Casa Blanca", "Centro", "Centro Histórico", "Cevillar",
+  "Chiquinquirá", "Ciudadela 20 de Julio", "Ciudadela de Paz", "Colombia", "Concepción",
+  "Conjunto Residencial", "Country", "Cuchilla de Villate", "El Campito", "El Carmen",
+  "El Castillo", "El Edén", "El Ferry", "El Golf", "El Limón", "El Limoncito",
+  "El Milagro", "El Oasis", "El Paraíso", "El Parque", "El Poblado", "El Pueblo",
+  "El Recreo", "El Santuario", "El Silencio", "El Valle", "Galán", "Gerlein y Villate",
+  "Granadillo", "Hipódromo", "Juan Mina (Corregimiento)", "Kennedy", "La Ceiba",
+  "La Chinita", "La Cumbre", "La Floresta", "La Florida", "La Luz", "La Magdalena",
+  "La Manga", "La María", "La Paz", "La Peña", "La Playa", "La Pradera", "La Sierrita",
+  "La Trinidad", "La Unión", "La Victoria", "Las Américas", "Las Colinas", "Las Delicias",
+  "Las Estrellas", "Las Flores", "Las Gardenias", "Las Malvinas", "Las Mercedes",
+  "Las Nieves", "Las Palmas", "Las Terrazas", "Lipaya", "Loma Fresca", "Los Alpes",
+  "Los Andes", "Los Continentes", "Los Girasoles", "Los Jobos", "Los Nogales",
+  "Los Olivos", "Los Pinos", "Lucero", "Me Quejo", "Modelo", "Montecristo", "Montes",
+  "Nueva Colombia", "Nueva Granada", "Olaya", "Pasadena", "Pumarejo", "Rebolo", "Recreo",
+  "Riomar", "Rosales", "San Felipe", "San Isidro", "San José", "San Luis", "San Martín",
+  "San Nicolás", "San Pedro", "San Vicente", "Santa Ana", "Santa Lucía", "Santa María",
+  "Santa Mónica", "Santo Domingo", "Santo Domingo de Guzmán", "Siape", "Simón Bolívar",
+  "Tabor", "Tayrona", "Universal", "Villa Blanca", "Villa Campestre", "Villa Carolina",
+  "Villa del Carmen", "Villa del Rosario", "Villa del Sol", "Villa del Sur",
+  "Villa San Carlos", "Villa San Pedro", "Villa Santos", "Villate", "Villas de San Pablo",
+  "Zona Franca", "Otro",
+];
+
 export const GENDERS = ["Masculino", "Femenino"];
 export const BLOOD_ABO = ["A", "B", "AB", "O"];
 export const BLOOD_RH = ["+", "-"];
@@ -77,4 +108,14 @@ export const EDUCATION_LEVELS = [
   "Especialización",
   "Maestría",
   "Doctorado",
+];
+
+/** Religión: el mismo desplegable en Matrículas y Admisiones. */
+export const RELIGIONS = [
+  { value: "CATOLICA", label: "Católica" },
+  { value: "CRISTIANA", label: "Cristiana" },
+  { value: "JUDIA", label: "Judía" },
+  { value: "MUSULMANA", label: "Musulmana" },
+  { value: "ATEA", label: "Atea" },
+  { value: "OTRA", label: "Otra" },
 ];

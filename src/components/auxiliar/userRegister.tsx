@@ -1,48 +1,87 @@
-import { useState } from "react";
+/**
+ * Formulario "Registrar usuario" (cuenta de estudiante + acudiente) del panel de Matrículas.
+ *
+ * Formato de diálogo de formulario (DESIGN_SYSTEM §12b, `ui/FormDialog`): secciones en
+ * tarjetas, etiquetas de 12 px en negrita con `*`, campos con ícono, "Cancelar" + botón con
+ * spinner. El resultado va en el toast de la página: los errores los muestra este
+ * formulario con `flash`; el éxito lo anuncia quien lo abre (`onSuccess`).
+ */
+
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { Mail, Phone, User, Users } from "lucide-react";
+
+import { FormActions, FormGrid, FormInput, FormSection, FormSelect } from "@/components/ui/FormDialog";
+import type { ToastVariant } from "@/hooks/use-toast";
 import { apiUrl, buildHeaders } from "@/utils/api";
 
 const endpoint = apiUrl("/api/accounts/users/register/");
 
-export default function UserRegister({ onCancel, onSuccess }) {
-  const inputBorder = "border border-gray-300";
-  const [successMsg, setSuccessMsg] = useState("");
-  const [form, setForm] = useState({
-    displayname: "",
-    first_name: "",
-    last_name: "",
-    email: "",
-    guardian_full_name: "",
-    guardian_email: "",
-    guardian_phone: "",
-    guardian_relationship: "",
-  });
+const RELATIONSHIP_OPTIONS = ["Padre", "Madre", "Abuelo/a", "Tío/a", "Tutor Legal", "Otro"].map((value) => ({
+  value,
+  label: value,
+}));
+
+const EMPTY_FORM = {
+  displayname: "",
+  first_name: "",
+  last_name: "",
+  email: "",
+  guardian_full_name: "",
+  guardian_email: "",
+  guardian_phone: "",
+  guardian_relationship: "",
+};
+
+type FormState = typeof EMPTY_FORM;
+
+interface UserRegisterProps {
+  onCancel?: () => void;
+  onSuccess?: () => void;
+  /** Toast de la página (arriba a la derecha). */
+  flash: (type: ToastVariant, msg: string) => void;
+}
+
+/** Mensaje legible del error del backend (`detail` o el primer error de un campo). */
+function errorText(data: unknown): string {
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+    for (const value of Object.values(record)) {
+      if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+      if (typeof value === "string") return value;
+    }
+  }
+  return "No se pudo registrar el usuario.";
+}
+
+const RELATIONSHIP_ID = "register-guardian-relationship";
+
+export default function UserRegister({ onCancel, onSuccess, flash }: UserRegisterProps) {
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    if (name === "first_name") {
-      setForm({ ...form, first_name: value, displayname: value });
-    } else {
-      setForm({ ...form, [name]: value });
-    }
+    setForm((current) =>
+      name === "first_name"
+        ? { ...current, first_name: value, displayname: value }
+        : { ...current, [name]: value },
+    );
   };
 
   const handleCancel = () => {
-    setForm({
-      displayname: "",
-      first_name: "",
-      last_name: "",
-      email: "",
-      guardian_full_name: "",
-      guardian_email: "",
-      guardian_phone: "",
-      guardian_relationship: "",
-    });
-    if (onCancel) onCancel();
+    setForm(EMPTY_FORM);
+    onCancel?.();
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    // El `Select` no participa en la validación nativa del formulario (el select nativo con `required` sí).
+    if (!form.guardian_relationship) {
+      flash("error", "Selecciona la relación del acudiente.");
+      document.getElementById(RELATIONSHIP_ID)?.focus();
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(endpoint, {
@@ -52,213 +91,99 @@ export default function UserRegister({ onCancel, onSuccess }) {
         credentials: "include",
       });
       if (res.ok) {
-        setSuccessMsg("¡Estudiante matriculado exitosamente!");
-        setForm({
-          displayname: "",
-          first_name: "",
-          last_name: "",
-          email: "",
-          guardian_full_name: "",
-          guardian_email: "",
-          guardian_phone: "",
-          guardian_relationship: "",
-        });
-        if (onSuccess) onSuccess();
+        setForm(EMPTY_FORM);
+        onSuccess?.();
       } else {
-        const errorData = await res.json();
-        let errorMsg = "";
-        if (typeof errorData.detail === "string") {
-          errorMsg = `Error: ${errorData.detail}`;
-        } else if (errorData.email && Array.isArray(errorData.email)) {
-          errorMsg = `Error: ${errorData.email[0]}`;
-        } else {
-          errorMsg = `Error: ${JSON.stringify(errorData)}`;
-        }
-        setSuccessMsg(errorMsg);
+        flash("error", errorText(await res.json().catch(() => null)));
       }
+    } catch {
+      flash("error", "No hay conexión con el servidor. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
   };
-  return (
-    <form className="space-y-6 bg-white" onSubmit={handleSubmit}>
-      {successMsg && (
-        <div
-          className={`font-semibold mb-2 ${
-            successMsg.includes("Error") ? "text-red-600" : "text-green-600"
-          }`}
-        >
-          {successMsg}
-        </div>
-      )}
 
-      {/* Sección: Datos del Estudiante */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-700 border-b pb-2">
-          Datos del Estudiante
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium leading-none"
-              htmlFor="first_name"
-            >
-              Nombre <span className="text-red-500">*</span>
-            </label>
-            <input
-              className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base placeholder:text-base-content/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-              id="first_name"
-              name="first_name"
-              required
-              placeholder="Ej: Juan"
-              value={form.first_name}
-              onChange={handleChange}
-            />
-          </div>
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium leading-none"
-              htmlFor="last_name"
-            >
-              Apellido <span className="text-red-500">*</span>
-            </label>
-            <input
-              className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base placeholder:text-base-content/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-              id="last_name"
-              name="last_name"
-              required
-              placeholder="Ej: Pérez"
-              value={form.last_name}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium leading-none" htmlFor="email">
-            Email <span className="text-red-500">*</span>
-          </label>
-          <input
+  return (
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      <FormSection title="Datos del estudiante" required>
+        <FormGrid>
+          <FormInput
+            label="Nombre"
+            icon={User}
+            name="first_name"
+            required
+            placeholder="Ej: Juan"
+            value={form.first_name}
+            onChange={handleChange}
+          />
+          <FormInput
+            label="Apellido"
+            icon={User}
+            name="last_name"
+            required
+            placeholder="Ej: Pérez"
+            value={form.last_name}
+            onChange={handleChange}
+          />
+          <FormInput
+            label="Email"
+            icon={Mail}
             type="email"
-            className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base placeholder:text-base-content/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-            id="email"
             name="email"
             required
+            full
             placeholder="ejemplo@correo.com"
             value={form.email}
             onChange={handleChange}
           />
-        </div>
-      </div>
+        </FormGrid>
+      </FormSection>
 
-      {/* Sección: Datos del Acudiente */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-700 border-b pb-2">
-          Datos del Acudiente
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium leading-none"
-              htmlFor="guardian_full_name"
-            >
-              Nombre Completo <span className="text-red-500">*</span>
-            </label>
-            <input
-              className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base placeholder:text-base-content/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-              id="guardian_full_name"
-              name="guardian_full_name"
-              required
-              placeholder="Ej: María García"
-              value={form.guardian_full_name}
-              onChange={handleChange}
-            />
-          </div>
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium leading-none"
-              htmlFor="guardian_relationship"
-            >
-              Relación <span className="text-red-500">*</span>
-            </label>
-            <select
-              className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-              id="guardian_relationship"
-              name="guardian_relationship"
-              required
-              value={form.guardian_relationship}
-              onChange={handleChange}
-            >
-              <option value="">Seleccione...</option>
-              <option value="Padre">Padre</option>
-              <option value="Madre">Madre</option>
-              <option value="Abuelo/a">Abuelo/a</option>
-              <option value="Tío/a">Tío/a</option>
-              <option value="Tutor Legal">Tutor Legal</option>
-              <option value="Otro">Otro</option>
-            </select>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium leading-none"
-              htmlFor="guardian_email"
-            >
-              Email <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base placeholder:text-base-content/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-              id="guardian_email"
-              name="guardian_email"
-              required
-              placeholder="acudiente@correo.com"
-              value={form.guardian_email}
-              onChange={handleChange}
-            />
-          </div>
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium leading-none"
-              htmlFor="guardian_phone"
-            >
-              Teléfono <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="tel"
-              className={`flex h-10 w-full rounded-md border ${inputBorder} bg-base-100 px-3 py-2 text-base placeholder:text-base-content/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
-              id="guardian_phone"
-              name="guardian_phone"
-              required
-              placeholder="Ej: 3001234567"
-              value={form.guardian_phone}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
-      </div>
+      <FormSection title="Datos del acudiente" required>
+        <FormGrid>
+          <FormInput
+            label="Nombre completo"
+            icon={Users}
+            name="guardian_full_name"
+            required
+            placeholder="Ej: María García"
+            value={form.guardian_full_name}
+            onChange={handleChange}
+          />
+          <FormSelect
+            id={RELATIONSHIP_ID}
+            label="Relación"
+            name="guardian_relationship"
+            required
+            value={form.guardian_relationship}
+            onChange={(v) => setForm((f) => ({ ...f, guardian_relationship: v }))}
+            placeholder="Selecciona…"
+            options={RELATIONSHIP_OPTIONS}
+          />
+          <FormInput
+            label="Email acudiente"
+            icon={Mail}
+            type="email"
+            name="guardian_email"
+            required
+            placeholder="acudiente@correo.com"
+            value={form.guardian_email}
+            onChange={handleChange}
+          />
+          <FormInput
+            label="Teléfono acudiente"
+            icon={Phone}
+            type="tel"
+            name="guardian_phone"
+            required
+            placeholder="Ej: 3001234567"
+            value={form.guardian_phone}
+            onChange={handleChange}
+          />
+        </FormGrid>
+      </FormSection>
 
-      <div className="flex justify-end gap-3 pt-4">
-        <button
-          className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium border ${inputBorder} bg-base-100 hover:bg-base-200 h-10 px-4 py-2`}
-          type="button"
-          onClick={handleCancel}
-          disabled={loading}
-        >
-          Cancelar
-        </button>
-        <button
-          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 h-10 px-4 py-2"
-          type="submit"
-          disabled={loading}
-        >
-          {loading ? (
-            <span className="loading loading-spinner loading-sm"></span>
-          ) : (
-            "Registrar estudiante"
-          )}
-        </button>
-      </div>
+      <FormActions onCancel={handleCancel} busy={loading} submitText="Registrar" busyText="Registrando…" />
     </form>
   );
 }

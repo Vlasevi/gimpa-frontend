@@ -11,7 +11,7 @@ export default function NotAuthorized() {
         <p className="text-xl text-base-content/60 max-w-md">
           No tienes permisos para acceder a esta página con tu rol actual.
         </p>
-        <button onClick={() => navigate('/dashboard')} className="btn btn-primary">
+        <button onClick={() => navigate('/')} className="btn btn-primary">
           Volver al Inicio
         </button>
       </div>

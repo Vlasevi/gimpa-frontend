@@ -1,312 +1,279 @@
-// components/matriculas/MatriculasEstudiantes.tsx
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { Step1Verification } from "./Step1Verification";
-import { Step2GradeSelection } from "./Step2GradeSelection";
-import { Step3StudentData } from "./Step3StudentData";
-const Step4Documents = lazy(() =>
-  import("./Step4Documents").then((m) => ({ default: m.Step4Documents })),
-);
-import { Step5Documents } from "./Step5Documents";
-import { Step6Confirmation } from "./Step6Confirmation";
-import { EnrollmentBlockedMessage } from "./EnrollmentBlockedMessage";
-import { useAuth } from "@/components/Login/loginLogic";
-import { apiUrl, API_ENDPOINTS, apiFetch } from "@/utils/api";
+/**
+ * Matrículas — vista del estudiante (Matrícula v2).
+ *
+ * Una sola llamada al entrar (`GET /api/enrollments/me/`, plan 15.3): la matrícula
+ * vigente con sus documentos; la ficha solo viene si la matrícula es editable.
+ *
+ * - Editable (CREATED / DRAFT / RETURNED) → asistente de 6 pasos. Tras el OTP retoma
+ *   donde quedó según lo guardado en el servidor (plan 15.2, hallazgo #7): sin ficha →
+ *   paso 2; con ficha sin firmas → paso 4; con firmas → paso 5.
+ * - Resto de estados → `EnrollmentStatusView`.
+ *
+ * El `<h1>` depende del estado (hallazgo #6): "Creación de matrícula 2027", "Edición de
+ * matrícula 2027" o "Matrícula 2027".
+ */
 
-// Tipado de la respuesta del backend (estructura optimizada)
-export interface EnrollmentResponse {
-  actual_enrollment: {
-    id: number;
-    grade: {
-      id: number;
-      name: string;
-      description: string;
-    };
-    academic_year: number;
-    status: string;
-    is_editable: boolean;
-    is_first_enrollment: boolean;
-    needs_correction: boolean;
-    correction_comment: string | null;
-  } | null;
-  suggested_enrollment: {
-    grade: {
-      id: number;
-      name: string;
-      description: string;
-    };
-    academic_year: number;
-  } | null;
-  eligibility: {
-    can_enroll: boolean;
-    message: string;
-    existing_data: Record<string, any>;
-  };
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Check, RefreshCw } from "lucide-react";
+
+import { useAuth } from "@/components/Login/loginLogic";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { Toast } from "@/components/ui/Toast";
+import { useToast } from "@/hooks/use-toast";
+import {
+  ApiError,
+  enrollmentApi,
+  type EnrollmentDocument,
+  type MyEnrollmentResponse,
+  type StudentEnrollment,
+} from "./enrollmentApi";
+import { replaceDocument } from "./student/DocumentChecklist";
+import { EnrollmentStatusView } from "./student/EnrollmentStatusView";
+import { OtherPendingNotice } from "./student/OtherPendingNotice";
+import { StepVerification } from "./student/StepVerification";
+import { StepGrade } from "./student/StepGrade";
+import { StepProfile } from "./student/StepProfile";
+import { StepDocuments } from "./student/StepDocuments";
+import { StepSubmit } from "./student/StepSubmit";
+import { smallTitleClass } from "@/components/ui/textStyles";
+
+// El paso de firmas carga pdf.js y pdf-lib (~1 MB): se descarga solo al llegar a él.
+const StepSign = lazy(() => import("./student/StepSign").then((m) => ({ default: m.StepSign })));
+
+const STEPS = ["Verificación", "Grado", "Datos", "Firmas", "Documentos", "Envío"];
+
+function resumeStep(enrollment: StudentEnrollment): number {
+  if (!enrollment.progress?.data_saved) return 2;
+  if (!enrollment.progress?.signed) return 4;
+  return 5;
+}
+
+function pageTitle(enrollment: StudentEnrollment | null): string {
+  if (!enrollment) return "Matrícula";
+  const year = enrollment.academic_year;
+  if (enrollment.status === "CREATED") return `Creación de matrícula ${year}`;
+  if (enrollment.status === "DRAFT" || enrollment.status === "RETURNED") return `Edición de matrícula ${year}`;
+  return `Matrícula ${year}`;
+}
+
+function Stepper({ current, furthest, onGo }: { current: number; furthest: number; onGo: (step: number) => void }) {
+  return (
+    <nav aria-label="Pasos de la matrícula" className="overflow-x-auto pb-1">
+      <ol className="steps w-full min-w-[36rem]">
+        {STEPS.map((label, index) => {
+          const step = index + 1;
+          const reachable = step > 1 && step <= furthest && step !== current;
+          const done = step < current;
+          return (
+            <li
+              key={label}
+              className={`step text-xs sm:text-sm ${step <= current ? "step-primary" : ""}`}
+              data-content={done ? "✓" : String(step)}
+              aria-current={step === current ? "step" : undefined}
+            >
+              {reachable ? (
+                <button type="button" className="link link-hover" onClick={() => onGo(step)}>
+                  {label}
+                  <span className="sr-only">{done ? " (completado)" : ""}</span>
+                </button>
+              ) : (
+                <span className={step === current ? "font-semibold text-base-content" : "text-base-content/60"}>
+                  {label}
+                  {done && <span className="sr-only"> (completado)</span>}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+function CorrectionNotice({ enrollment }: { enrollment: StudentEnrollment }) {
+  const correction = enrollment.correction;
+  if (enrollment.status !== "RETURNED" || !correction) return null;
+  return (
+    <div role="alert" className="rounded-2xl border border-warning/40 bg-warning/5 p-5">
+      <h2 className={smallTitleClass}>La institución pidió correcciones</h2>
+      <p className="mt-2 whitespace-pre-line text-sm text-base-content/80">{correction.comment}</p>
+      {correction.rejected_documents.length > 0 && (
+        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-base-content/80">
+          {correction.rejected_documents.map((d) => (
+            <li key={d.key}>
+              <span className="font-medium">{d.label}:</span> {d.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 text-xs text-base-content/60">
+        Si cambias los datos, tendrás que volver a firmar los documentos antes de reenviar.
+      </p>
+    </div>
+  );
 }
 
 export const MatriculasEstudiantes = () => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [enrollmentInfo, setEnrollmentInfo] =
-    useState<EnrollmentResponse | null>(null);
-  const [formData, setFormData] = useState<any>({});
-  const [documents, setDocuments] = useState<any>({}); // Store all preloaded documents
-  const [uploadedFiles, setUploadedFiles] = useState<any>({}); // Store new uploaded files separately
-  const [loadingEligibility, setLoadingEligibility] = useState(true); // Loading state
-  const [unsignedPdfs, setUnsignedPdfs] = useState<{
-    contrato: Uint8Array | null;
-    pagare: Uint8Array | null;
-    hoja_matricula: Uint8Array | null;
-    signers: { label: string; key: string }[];
-    signatureFields: Record<string, Record<string, { page: number; x: number; y: number; w: number; h: number }>>;
-  }>({ contrato: null, pagare: null, hoja_matricula: null, signers: [], signatureFields: {} });
-  const [signedPdfs, setSignedPdfs] = useState<{
-    contrato: Uint8Array | null;
-    pagare: Uint8Array | null;
-    hoja_matricula: Uint8Array | null;
-  }>({ contrato: null, pagare: null, hoja_matricula: null });
-  const [generatingPdfs, setGeneratingPdfs] = useState(false);
-  const lastGeneratedHashRef = useRef<string | null>(null);
   const { user } = useAuth();
+  const { toast, flash } = useToast();
+  const [response, setResponse] = useState<MyEnrollmentResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [step, setStep] = useState(1);
+  const [furthest, setFurthest] = useState(1);
+  const headingRef = useRef<HTMLDivElement>(null);
 
-  const nextStep = () => setCurrentStep((prev) => prev + 1);
-  const prevStep = () => setCurrentStep((prev) => prev - 1);
-
-  const updateFormData = (data: any) => {
-    setFormData((prev: any) => ({ ...prev, ...data }));
-  };
-
-  const updateUploadedFiles = (files: any) => {
-    setUploadedFiles((prev: any) => ({ ...prev, ...files }));
-  };
-
-  const base64ToUint8Array = (b64: string) =>
-    Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-
-  const handleStep3Next = async () => {
-    const enrollmentId = enrollmentInfo?.actual_enrollment?.id;
-    if (!enrollmentId) return;
-
-    const currentHash = JSON.stringify(formData, Object.keys(formData).sort());
-    if (
-      lastGeneratedHashRef.current === currentHash &&
-      unsignedPdfs.contrato !== null
-    ) {
-      nextStep();
-      return;
-    }
-
-    setGeneratingPdfs(true);
+  const load = useCallback(async () => {
+    setLoadError(null);
     try {
-      const res = await apiFetch(
-        API_ENDPOINTS.enrollmentGenerateUnsigned(enrollmentId),
-        {
-          method: "POST",
-          body: JSON.stringify({ user_data: formData }),
-        },
-      );
-      if (!res.ok) throw new Error("Error generando PDFs");
-      const data = await res.json();
-      setUnsignedPdfs({
-        contrato: base64ToUint8Array(data.contrato),
-        pagare: base64ToUint8Array(data.pagare),
-        hoja_matricula: base64ToUint8Array(data.hoja_matricula),
-        signers: data.signers,
-        signatureFields: data.signatureFields,
-      });
-      setSignedPdfs({ contrato: null, pagare: null, hoja_matricula: null });
-      lastGeneratedHashRef.current = currentHash;
-      nextStep();
+      setResponse(await enrollmentApi.me());
     } catch (e) {
-      console.error("Error generando PDFs sin firma:", e);
-    } finally {
-      setGeneratingPdfs(false);
+      setLoadError(e instanceof ApiError ? e.message : "No se pudo cargar la matrícula.");
     }
-  };
-
-  // Load eligibility on mount (before OTP)
-  useEffect(() => {
-    const loadEligibility = async () => {
-      setLoadingEligibility(true);
-      try {
-        const response = await fetch(apiUrl(API_ENDPOINTS.enrollments), {
-          credentials: "include",
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setEnrollmentInfo(data);
-        }
-      } catch (error) {
-        console.error("Error loading eligibility:", error);
-      } finally {
-        setLoadingEligibility(false);
-      }
-    };
-
-    loadEligibility();
   }, []);
 
-  // Use eligibility logic from backend
-  const canEnroll = enrollmentInfo?.eligibility?.can_enroll ?? true;
-  const eligibilityMessage = enrollmentInfo?.eligibility?.message ?? "";
-  const enrollmentStatus = enrollmentInfo?.actual_enrollment?.status;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const enrollment = response?.enrollment ?? null;
+
+  const setEnrollment = (next: StudentEnrollment) =>
+    setResponse((prev) => ({ ...prev, message: prev?.message ?? "", enrollment: next }));
+
+  const goTo = (next: number) => {
+    setStep(next);
+    setFurthest((f) => Math.max(f, next));
+    // Al cambiar de paso, el foco y la vista vuelven al inicio del asistente.
+    requestAnimationFrame(() => {
+      headingRef.current?.focus();
+      headingRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  };
+
+  // Actualización funcional: dos subidas seguidas no deben pisarse.
+  const onDocumentChange = (doc: EnrollmentDocument) =>
+    setResponse((prev) =>
+      prev?.enrollment
+        ? { ...prev, enrollment: { ...prev.enrollment, documents: replaceDocument(prev.enrollment.documents, doc) } }
+        : prev,
+    );
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-4xl">
+        <div role="alert" className="alert alert-error alert-soft flex flex-wrap justify-between gap-3">
+          <span>{loadError}</span>
+          <button type="button" className="btn btn-sm gap-1.5" onClick={load}>
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!response) return <LoadingState label="Cargando tu matrícula…" />;
+
+  const editable = !!enrollment?.is_editable;
+  const studentName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.displayname || "";
 
   return (
-    <div className="container mx-auto p-6">
-      {/* Loading overlay while generating PDFs */}
-      {generatingPdfs && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg text-primary" />
-        </div>
-      )}
-      <div className="max-w-4xl mx-auto">
-        {/* Show loading spinner while checking eligibility */}
-        {loadingEligibility ? (
-          <div className="bg-white rounded-lg shadow-lg p-12 flex flex-col items-center justify-center">
-            <span className="loading loading-spinner loading-lg text-primary"></span>
-            <p className="mt-4 text-gray-600">Verificando elegibilidad...</p>
-          </div>
-        ) : (
-          <>
-            {/* Show eligibility message if user cannot enroll */}
-            {enrollmentInfo && !canEnroll && eligibilityMessage ? (
-              <EnrollmentBlockedMessage
-                message={eligibilityMessage}
-                targetYear={
-                  enrollmentInfo.suggested_enrollment?.academic_year ||
-                  new Date().getFullYear()
-                }
-                existingEnrollment={
-                  enrollmentInfo.actual_enrollment
-                    ? {
-                        grade: enrollmentInfo.actual_enrollment.grade,
-                        status: enrollmentInfo.actual_enrollment.status,
-                      }
-                    : undefined
-                }
-              />
-            ) : (
-              <>
-                {/* Progress Steps */}
-                <ul className="steps steps-horizontal w-full mb-8">
-                  <li
-                    className={`step ${currentStep >= 1 ? "step-primary" : ""}`}
-                  >
-                    Verificación
-                  </li>
-                  <li
-                    className={`step ${currentStep >= 2 ? "step-primary" : ""}`}
-                  >
-                    Grado
-                  </li>
-                  <li
-                    className={`step ${currentStep >= 3 ? "step-primary" : ""}`}
-                  >
-                    Datos
-                  </li>
-                  <li
-                    className={`step ${currentStep >= 4 ? "step-primary" : ""}`}
-                  >
-                    Firmas
-                  </li>
-                  <li
-                    className={`step ${currentStep >= 5 ? "step-primary" : ""}`}
-                  >
-                    Documentos
-                  </li>
-                  <li
-                    className={`step ${currentStep >= 6 ? "step-primary" : ""}`}
-                  >
-                    Confirmación
-                  </li>
-                </ul>
-
-                {/* Step Content */}
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                  {currentStep === 1 && (
-                    <Step1Verification
-                      next={nextStep}
-                      userEmail={user?.email}
-                      onEnrollmentInfoLoaded={setEnrollmentInfo}
-                      onDocumentsLoaded={setDocuments}
-                    />
-                  )}
-
-                  {currentStep === 2 && enrollmentInfo && (
-                    <Step2GradeSelection
-                      next={nextStep}
-                      back={prevStep}
-                      enrollmentInfo={enrollmentInfo}
-                    />
-                  )}
-
-                  {currentStep === 3 && enrollmentInfo && (
-                    <Step3StudentData
-                      next={handleStep3Next}
-                      back={prevStep}
-                      data={formData}
-                      update={updateFormData}
-                      uploadedFiles={uploadedFiles}
-                      updateUploadedFiles={updateUploadedFiles}
-                      enrollmentInfo={enrollmentInfo}
-                      enrollmentId={
-                        enrollmentInfo.actual_enrollment?.id ?? null
-                      }
-                      preloadedDocuments={documents}
-                    />
-                  )}
-
-                  {currentStep === 4 && enrollmentInfo && (
-                    <Suspense
-                      fallback={
-                        <div className="flex items-center justify-center h-48">
-                          <span className="loading loading-spinner loading-lg text-primary" />
-                        </div>
-                      }
-                    >
-                      <Step4Documents
-                        next={nextStep}
-                        back={prevStep}
-                        data={formData}
-                        update={updateFormData}
-                        uploadedFiles={uploadedFiles}
-                        updateUploadedFiles={updateUploadedFiles}
-                        enrollmentInfo={enrollmentInfo}
-                        preloadedDocuments={documents}
-                        unsignedPdfs={unsignedPdfs}
-                        signedPdfs={signedPdfs}
-                        setSignedPdfs={setSignedPdfs}
-                      />
-                    </Suspense>
-                  )}
-
-                  {currentStep === 5 && enrollmentInfo && (
-                    <Step5Documents
-                      next={nextStep}
-                      back={prevStep}
-                      data={formData}
-                      update={updateFormData}
-                      uploadedFiles={uploadedFiles}
-                      updateUploadedFiles={updateUploadedFiles}
-                      enrollmentInfo={enrollmentInfo}
-                      preloadedDocuments={documents}
-                    />
-                  )}
-
-                  {currentStep === 6 && enrollmentInfo && (
-                    <Step6Confirmation
-                      back={prevStep}
-                      data={formData}
-                      uploadedFiles={uploadedFiles}
-                      enrollmentInfo={enrollmentInfo}
-                      preloadedDocuments={documents}
-                    />
-                  )}
-                </div>
-              </>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <Toast toast={toast} />
+      <header ref={headingRef} tabIndex={-1} className="space-y-1 focus:outline-none">
+        <h1 className="font-display text-3xl font-bold text-secondary">{pageTitle(enrollment)}</h1>
+        {enrollment && (
+          <p className="flex flex-wrap items-center gap-x-2 text-base text-base-content/60">
+            <span>{enrollment.grade.label}</span>
+            <span aria-hidden="true">·</span>
+            <span>{studentName}</span>
+            {enrollment.status === "RETURNED" && (
+              <span className="badge badge-warning badge-sm">Devuelta para corrección</span>
             )}
-          </>
+          </p>
         )}
-      </div>
+      </header>
+
+      <OtherPendingNotice items={response.other_pending ?? []} flash={flash} />
+
+      {!editable || !enrollment ? (
+        <EnrollmentStatusView
+          enrollment={enrollment}
+          message={response.message}
+          onDocumentChange={onDocumentChange}
+          flash={flash}
+        />
+      ) : (
+        <>
+          {step > 1 && <Stepper current={step} furthest={furthest} onGo={goTo} />}
+          <CorrectionNotice enrollment={enrollment} />
+          <div className="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm sm:p-7" key={step}>
+            <div className="animate-view-in">
+              {step === 1 && (
+                <StepVerification
+                  onVerified={() => {
+                    const resume = resumeStep(enrollment);
+                    setFurthest(Math.max(resume, enrollment.progress?.signed ? 6 : resume));
+                    goTo(resume);
+                  }}
+                />
+              )}
+              {step === 2 && <StepGrade enrollment={enrollment} studentName={studentName} onNext={() => goTo(3)} />}
+              {step === 3 && (
+                <StepProfile
+                  enrollment={enrollment}
+                  onBack={() => goTo(2)}
+                  onSaved={(next) => {
+                    setEnrollment(next);
+                    goTo(4);
+                  }}
+                  flash={flash}
+                />
+              )}
+              {step === 4 && (
+                <Suspense fallback={<LoadingState compact label="Preparando los documentos…" />}>
+                  <StepSign
+                    enrollment={enrollment}
+                    onBack={() => goTo(3)}
+                    onSigned={setEnrollment}
+                    onNext={() => goTo(5)}
+                    flash={flash}
+                  />
+                </Suspense>
+              )}
+              {step === 5 && (
+                <StepDocuments
+                  enrollment={enrollment}
+                  onDocumentChange={onDocumentChange}
+                  onBack={() => goTo(4)}
+                  onNext={() => goTo(6)}
+                  flash={flash}
+                />
+              )}
+              {step === 6 && (
+                <StepSubmit
+                  enrollment={enrollment}
+                  onBack={() => goTo(5)}
+                  onGoToStep={goTo}
+                  onSubmitted={(res) => {
+                    // La respuesta ya trae la matrícula en revisión y su mensaje; `load()`
+                    // solo refresca lo demás (otras matrículas con pendientes).
+                    setResponse((prev) => ({ ...res, other_pending: prev?.other_pending }));
+                    load();
+                  }}
+                  flash={flash}
+                />
+              )}
+            </div>
+          </div>
+          {step === 1 && enrollment.progress?.data_saved && (
+            <p className="flex items-center gap-2 text-sm text-base-content/60">
+              <Check className="h-4 w-4 text-success" aria-hidden="true" />
+              Tu avance está guardado. Después de verificar, seguirás donde quedaste.
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 };

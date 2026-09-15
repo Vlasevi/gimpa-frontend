@@ -1,294 +1,132 @@
-import {
-    Eye,
-    MoreHorizontal,
-    Check,
-    MessageSquare,
-    FileText,
-    Ban,
-    Pencil,
-    Trash2,
-    User,
-} from "lucide-react";
-import { getStatusLabel } from "@/utils/statusHelpers";
+import { Eye, Trash2 } from "lucide-react";
 
-// Types
-interface Student {
-    id: number;
-    first_name: string;
-    last_name: string;
-    email: string;
-    photo_url?: string;
+import type { EnrollmentListItem } from "@/components/matriculas/enrollmentApi";
+import { StudentAvatar } from "@/components/matriculas/admin/StudentAvatar";
+import { formatDate } from "@/components/matriculas/admin/shared";
+import { getStatusBadgeClass, getStatusLabel, INACTIVE_REASON_LABELS } from "@/utils/statusHelpers";
+import { iconBtnClass, iconClass, iconHover } from "@/components/ui/formStyles";
+
+interface EnrollmentItemProps {
+  enrollment: EnrollmentListItem;
+  onView: (enrollment: EnrollmentListItem) => void;
+  /** Solo si el usuario puede eliminar matrículas. */
+  onDelete?: (enrollment: EnrollmentListItem) => void;
 }
 
-interface Grade {
-    id: number;
-    name: string;
-    description: string;
+/** Estado de la matrícula. */
+function StatusBadge({ enrollment }: { enrollment: EnrollmentListItem }) {
+  return (
+    <span className={`badge badge-sm whitespace-nowrap ${getStatusBadgeClass(enrollment.status)}`}>
+      {getStatusLabel(enrollment.status)}
+    </span>
+  );
 }
 
-interface Enrollment {
-    id: number;
-    student: Student;
-    grade: Grade;
-    academic_year: number;
-    enrollment_date: string;
-    status: "PENDING" | "IN_REVIEW" | "ACTIVE" | "CANCELLED";
-    is_editable: boolean;
-    correction_comment?: string;
-    submitted_at?: string;
-    approved_at?: string;
-    documents_folder_url?: string | null;
+/** Debajo del estado: documentos pendientes o motivo de inactivación. */
+function StatusNote({ enrollment }: { enrollment: EnrollmentListItem }) {
+  const pendingDocuments = enrollment.status === "ACTIVE" && enrollment.has_pending_documents;
+  return (
+    <>
+      {pendingDocuments && (
+        <span className="mt-1 flex items-center gap-1.5 whitespace-nowrap text-xs text-base-content/60">
+          <span className="status status-warning" aria-hidden="true" />
+          documentos pendientes
+        </span>
+      )}
+      {enrollment.status === "INACTIVE" && enrollment.inactive_reason && (
+        <span className="mt-1 block whitespace-nowrap text-xs text-base-content/60">
+          {INACTIVE_REASON_LABELS[enrollment.inactive_reason]}
+        </span>
+      )}
+    </>
+  );
 }
 
-interface EnrollmentRowProps {
-    enrollment: Enrollment;
-    isLastRows: boolean;
-    onViewDetails: (enrollment: Enrollment) => void;
-    onApprove: (id: number) => void;
-    onRequestCorrection: (enrollment: Enrollment) => void;
-    onCancel: (id: number) => void;
-    onDelete: (id: number) => void;
-    onEdit: (enrollment: Enrollment) => void;
-    onGeneratePDFs: (id: number) => void;
-    canEdit: boolean;
-    canDelete: boolean;
-    canApprove: boolean;
-    actionLoading: number | null;
-    formatDate: (dateString: string) => string;
-    showGrade?: boolean;
+/** Acciones con ícono solo (DESIGN_SYSTEM §5b): ver el detalle y, con permiso, eliminar. */
+function ItemActions({ enrollment, onView, onDelete }: EnrollmentItemProps) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => onView(enrollment)}
+        title="Ver matrícula"
+        aria-label={`Ver matrícula de ${enrollment.student_name}`}
+        className={`${iconBtnClass} ${iconHover.primary}`}
+      >
+        <Eye className={iconClass} aria-hidden="true" />
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(enrollment)}
+          title="Eliminar matrícula"
+          aria-label={`Eliminar la matrícula de ${enrollment.student_name}`}
+          className={`${iconBtnClass} ${iconHover.error}`}
+        >
+          <Trash2 className={iconClass} aria-hidden="true" />
+        </button>
+      )}
+    </>
+  );
 }
 
-// Helper function for status badge styles using theme colors with opacity and border
-const getStatusBadgeStyle = (status: string) => {
-    switch (status) {
-        case "ACTIVE":
-            return "bg-success/15 text-success border border-success/20";
-        case "PENDING":
-            return "bg-warning/15 text-warning border border-warning/20";
-        case "IN_REVIEW":
-            return "bg-info/15 text-info border border-info/20";
-        case "CANCELLED":
-            return "bg-error/15 text-error border border-error/20";
-        default:
-            return "bg-base-300 text-base-content border border-base-300";
-    }
-};
+/** Fila del listado de matrículas del staff (desde `sm`). Las acciones de estado viven en
+ * el detalle. */
+export function EnrollmentRow({ enrollment, onView, onDelete }: EnrollmentItemProps) {
+  const { student } = enrollment;
 
-export const EnrollmentRow = ({
-    enrollment,
-    isLastRows,
-    onViewDetails,
-    onApprove,
-    onRequestCorrection,
-    onCancel,
-    onDelete,
-    onEdit,
-    onGeneratePDFs,
-    canEdit,
-    canDelete,
-    canApprove,
-    actionLoading,
-    formatDate,
-    showGrade = false,
-}: EnrollmentRowProps) => {
-    const isLoading = actionLoading === enrollment.id;
-    const canShowActionsMenu =
-        (enrollment.status === "IN_REVIEW" && (canApprove || canEdit)) ||
-        (enrollment.status === "PENDING" && canEdit) ||
-        (enrollment.status === "ACTIVE" && (canApprove || canEdit)) ||
-        (enrollment.status === "CANCELLED" && canDelete);
+  return (
+    <tr className="transition-colors hover:bg-base-200/50">
+      <td>
+        <div className="flex items-center gap-3">
+          <StudentAvatar name={enrollment.student_name} photoUrl={student.photo_url} />
+          <div className="min-w-0">
+            <p className="font-semibold leading-tight text-base-content">{enrollment.student_name}</p>
+            <p className="truncate text-xs text-base-content/50">{student.email}</p>
+          </div>
+        </div>
+      </td>
+      <td className="whitespace-nowrap text-sm text-base-content/80">{enrollment.grade.label}</td>
+      <td>
+        <StatusBadge enrollment={enrollment} />
+        <StatusNote enrollment={enrollment} />
+      </td>
+      <td className="hidden text-sm text-base-content/70 xl:table-cell">{enrollment.origin_label}</td>
+      <td className="hidden whitespace-nowrap text-sm text-base-content/80 xl:table-cell">
+        <time dateTime={enrollment.updated_at}>{formatDate(enrollment.updated_at)}</time>
+        {enrollment.submitted_at && (
+          <span className="block text-xs text-base-content/50">Enviada {formatDate(enrollment.submitted_at)}</span>
+        )}
+      </td>
+      <td className="whitespace-nowrap text-right">
+        <ItemActions enrollment={enrollment} onView={onView} onDelete={onDelete} />
+      </td>
+    </tr>
+  );
+}
 
-    return (
-        <tr className="hover:bg-base-200/50 transition-colors">
-            {/* Estudiante con Avatar */}
-            <td className="py-4 px-6 align-middle">
-                <div className="flex items-center gap-3">
-                    {/* Avatar más grande con borde */}
-                    <div className="w-10 h-10 rounded-full bg-primary/10 shrink-0 border border-base-300 overflow-hidden flex items-center justify-center">
-                        {enrollment.student.photo_url ? (
-                            <img
-                                src={enrollment.student.photo_url}
-                                alt={enrollment.student.first_name}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            <User className="w-5 h-5 text-primary/60" />
-                        )}
-                    </div>
-                    <div>
-                        <p className="font-bold text-base-content leading-tight">
-                            {enrollment.student.first_name} {enrollment.student.last_name}
-                        </p>
-                        <p className="text-xs text-base-content/50">
-                            {enrollment.student.email}
-                        </p>
-                    </div>
-                </div>
-            </td>
+/** La misma matrícula como tarjeta, para el listado en pantallas angostas (bajo `sm`):
+ * estudiante, estado y grado, y las acciones a la derecha. */
+export function EnrollmentCard({ enrollment, onView, onDelete }: EnrollmentItemProps) {
+  const { student } = enrollment;
 
-            {/* Grado (solo en la tabla maestra) */}
-            {showGrade && (
-                <td className="py-4 px-6 text-sm text-base-content/80 align-middle whitespace-nowrap">
-                    {enrollment.grade.description || enrollment.grade.name}
-                </td>
-            )}
-
-            {/* Fecha de Matrícula */}
-            <td className="py-4 px-6 text-base-content text-sm align-middle">
-                {formatDate(enrollment.enrollment_date)}
-            </td>
-
-            {/* Estado */}
-            <td className="py-4 px-6 text-center align-middle">
-                <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${getStatusBadgeStyle(
-                        enrollment.status
-                    )}`}
-                >
-                    {getStatusLabel(enrollment.status)}
-                </span>
-            </td>
-
-            {/* Acciones */}
-            <td className="py-4 px-6 text-right align-middle">
-                <div className="flex justify-end gap-2">
-                    {/* Botón Ver Detalles */}
-                    <button
-                        className="p-2 text-base-content/40 hover:text-primary hover:bg-primary/10 rounded-full transition-all"
-                        onClick={() => onViewDetails(enrollment)}
-                        disabled={isLoading}
-                        title="Ver detalles"
-                    >
-                        <Eye className="h-5 w-5" />
-                    </button>
-
-                    {/* Dropdown de Acciones */}
-                    {canShowActionsMenu && (
-                        <div
-                            className={`dropdown dropdown-end ${isLastRows ? "dropdown-top" : "dropdown-bottom"
-                                }`}
-                        >
-                        <label
-                            tabIndex={0}
-                            className="p-2 text-base-content/40 hover:text-base-content hover:bg-base-200 rounded-full transition-all cursor-pointer inline-flex"
-                        >
-                            <MoreHorizontal className="h-5 w-5" />
-                        </label>
-                        <ul
-                            tabIndex={0}
-                            className="dropdown-content z-50 menu p-2 shadow-lg bg-base-100 rounded-lg w-52 border border-base-300"
-                        >
-                            {/* ESTADO: IN_REVIEW */}
-                            {enrollment.status === "IN_REVIEW" && (
-                                <>
-                                    {canApprove && (
-                                        <>
-                                            <li>
-                                                <button
-                                                    onClick={() => onApprove(enrollment.id)}
-                                                    disabled={isLoading}
-                                                >
-                                                    <Check size={16} /> Aprobar
-                                                </button>
-                                            </li>
-                                            <li>
-                                                <button
-                                                    onClick={() => onRequestCorrection(enrollment)}
-                                                    disabled={isLoading}
-                                                >
-                                                    <MessageSquare size={16} /> Solicitar cambios
-                                                </button>
-                                            </li>
-                                            <li>
-                                                <button
-                                                    onClick={() => onGeneratePDFs(enrollment.id)}
-                                                    disabled={isLoading}
-                                                >
-                                                    <FileText size={16} /> Generar PDFs
-                                                </button>
-                                            </li>
-                                        </>
-                                    )}
-                                    {canEdit && (
-                                        <li>
-                                            <button
-                                                onClick={() => onCancel(enrollment.id)}
-                                                disabled={isLoading}
-                                            >
-                                                <Ban size={16} /> Cancelar matrícula
-                                            </button>
-                                        </li>
-                                    )}
-                                </>
-                            )}
-
-                            {/* ESTADO: PENDING */}
-                            {enrollment.status === "PENDING" && canEdit && (
-                                <>
-                                    <li>
-                                        <button
-                                            onClick={() => onEdit(enrollment)}
-                                            disabled={isLoading}
-                                        >
-                                            <Pencil size={16} /> Editar
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button
-                                            onClick={() => onCancel(enrollment.id)}
-                                            disabled={isLoading}
-                                        >
-                                            <Ban size={16} /> Cancelar matrícula
-                                        </button>
-                                    </li>
-                                </>
-                            )}
-
-                            {/* ESTADO: ACTIVE */}
-                            {enrollment.status === "ACTIVE" && (
-                                <>
-                                    {canApprove && (
-                                        <li>
-                                            <button
-                                                onClick={() => onGeneratePDFs(enrollment.id)}
-                                                disabled={isLoading}
-                                            >
-                                                <FileText size={16} /> Generar PDFs
-                                            </button>
-                                        </li>
-                                    )}
-                                    {canEdit && (
-                                        <li>
-                                            <button
-                                                onClick={() => onCancel(enrollment.id)}
-                                                className="text-error"
-                                                disabled={isLoading}
-                                            >
-                                                <Ban size={16} /> Cancelar matrícula
-                                            </button>
-                                        </li>
-                                    )}
-                                </>
-                            )}
-
-                            {/* ESTADO: CANCELLED */}
-                            {enrollment.status === "CANCELLED" && canDelete && (
-                                <li>
-                                    <button
-                                        onClick={() => onDelete(enrollment.id)}
-                                        disabled={isLoading}
-                                    >
-                                        <Trash2 size={16} /> Eliminar permanentemente
-                                    </button>
-                                </li>
-                            )}
-                        </ul>
-                        </div>
-                    )}
-                </div>
-            </td>
-        </tr>
-    );
-};
+  return (
+    <li className="flex items-start gap-3 px-4 py-3">
+      <StudentAvatar name={enrollment.student_name} photoUrl={student.photo_url} />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold leading-tight text-base-content">{enrollment.student_name}</p>
+        <p className="truncate text-xs text-base-content/50">{student.email}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <StatusBadge enrollment={enrollment} />
+          <span className="text-xs text-base-content/60">{enrollment.grade.label}</span>
+        </div>
+        <StatusNote enrollment={enrollment} />
+      </div>
+      <div className="-mr-2 flex shrink-0 items-center">
+        <ItemActions enrollment={enrollment} onView={onView} onDelete={onDelete} />
+      </div>
+    </li>
+  );
+}
 
 export default EnrollmentRow;
