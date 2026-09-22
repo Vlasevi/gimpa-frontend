@@ -134,6 +134,7 @@ export const API_ENDPOINTS = {
     `/api/admissions/${id}/evaluation/${slug}/complete/`,
   admissionsExamAttachment: (id: number) => `/api/admissions/${id}/evaluation/examen/attachment/`,
   admissionsExamKey: (id: number) => `/api/admissions/${id}/evaluation/examen/key/`,
+  admissionsExamStage: (id: number) => `/api/admissions/${id}/evaluation/examen/paquete/`,
   admissionsMaterial: (id: number, key: string) =>
     `/api/admissions/${id}/evaluation/material/${key}/`,
 

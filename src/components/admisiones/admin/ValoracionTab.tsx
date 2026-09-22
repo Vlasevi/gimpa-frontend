@@ -11,9 +11,10 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarClock, ExternalLink, Pencil, RotateCcw } from "lucide-react";
+import { CalendarClock, ExternalLink, Pencil, Replace, RotateCcw } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
+import { ExamStageDialog } from "@/components/admisiones/valoracion/ExamStageDialog";
 import { FormInput, FormSelect, FormGrid } from "@/components/ui/FormDialog";
 import { BusyLabel } from "@/components/ui/BusyLabel";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -93,6 +94,16 @@ function AssignForm({
   const byKind = new Map(summary.activities.map((a) => [a.kind, a]));
   const [users, setUsers] = useState<Record<string, AssignableUser[]> | null>(null);
   const [stage, setStage] = useState(summary.evaluation?.stage ?? summary.stages.suggested ?? "");
+  // El examen sigue al paquete mientras no lo cambien a mano (el docente puede cambiarlo
+  // después, ver `ExamStageDialog`).
+  const [examStage, setExamStage] = useState(
+    summary.evaluation?.exam_stage ?? summary.evaluation?.stage ?? summary.stages.suggested ?? "",
+  );
+  const [examTouched, setExamTouched] = useState(false);
+  const chooseStage = (value: string) => {
+    setStage(value);
+    if (!examTouched) setExamStage(value);
+  };
   const [psych, setPsych] = useState(String(byKind.get("ENTREVISTA_FAMILIAR")?.assigned_to ?? ""));
   const [teacher, setTeacher] = useState(String(byKind.get("EXAMEN")?.assigned_to ?? ""));
   const [committee, setCommittee] = useState(String(byKind.get("CONCEPTO")?.assigned_to ?? ""));
@@ -156,7 +167,7 @@ function AssignForm({
     try {
       const res = await apiFetch(API_ENDPOINTS.admissionsEvaluation(id), {
         method: "PUT",
-        body: JSON.stringify({ stage, activities }),
+        body: JSON.stringify({ stage, exam_stage: examStage, activities }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -175,9 +186,12 @@ function AssignForm({
   if (!users) return <LoadingState compact label="Cargando responsables…" />;
 
   const toOptions = (list: AssignableUser[]) => list.map((u) => ({ value: String(u.id), label: u.name }));
-  const stageOptions = summary.stages.options
-    .filter((o) => o.available)
-    .map((o) => ({ value: o.value, label: o.value === summary.stages.suggested ? `${o.label} · sugerido` : o.label }));
+  const toStageOptions = (stages: EvaluationSummary["stages"]) =>
+    stages.options
+      .filter((o) => o.available)
+      .map((o) => ({ value: o.value, label: o.value === stages.suggested ? `${o.label} · sugerido` : o.label }));
+  const stageOptions = toStageOptions(summary.stages);
+  const examStageOptions = toStageOptions(summary.exam_stages);
   const pending = summary.stages.options.filter((o) => !o.available).map((o) => o.value);
 
   return (
@@ -188,12 +202,25 @@ function AssignForm({
         <FormSelect
           label="Paquete"
           value={stage}
-          onChange={setStage}
+          onChange={chooseStage}
           options={stageOptions}
           placeholder="Elige el paquete"
           emptyText="No hay paquetes disponibles."
           required
           hint={`Edad del aspirante: ${summary.stages.age || "sin fecha de nacimiento"}. Aún no disponibles: ${pending.join(", ")}.`}
+        />
+        <FormSelect
+          label="Examen"
+          value={examStage}
+          onChange={(v) => {
+            setExamStage(v);
+            setExamTouched(true);
+          }}
+          options={examStageOptions}
+          placeholder="Elige el examen"
+          emptyText="No hay exámenes disponibles."
+          required
+          hint="Por defecto, el del paquete. El docente lo puede cambiar después si el aspirante necesita el de otra edad."
         />
         <FormSelect
           label="Psicóloga"
@@ -286,7 +313,7 @@ function AssignForm({
                 Cancelar
               </button>
             )}
-            <button type="submit" form={formId} disabled={saving || !stage} className={primaryBtnClass}>
+            <button type="submit" form={formId} disabled={saving || !stage || !examStage} className={primaryBtnClass}>
               <BusyLabel busy={saving} busyText="Guardando…">
                 Guardar asignación
               </BusyLabel>
@@ -318,6 +345,7 @@ export function ValoracionTab({
   const [summary, setSummary] = useState<EvaluationSummary | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState<ActivityKind | null>(null);
+  const [changingExam, setChangingExam] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -373,6 +401,8 @@ export function ValoracionTab({
                 <p className={itemTitleClass}>{summary.evaluation.stage_label}</p>
                 <p className={metaTextClass}>
                   {summary.evaluation.package}
+                  {summary.evaluation.exam_stage !== summary.evaluation.stage &&
+                    ` · examen ${summary.evaluation.exam_stage_label}`}
                   {summary.evaluation.round > 1 && ` · ronda ${summary.evaluation.round}`}
                   {summary.evaluation.assigned_by_name &&
                     ` · asignada por ${summary.evaluation.assigned_by_name} el ${formatWhen(summary.evaluation.assigned_at)}`}
@@ -421,7 +451,10 @@ export function ValoracionTab({
                   {a.is_mine && <span className="badge badge-sm badge-primary badge-soft">Tuya</span>}
                 </p>
                 <p className={metaTextClass}>
-                  {a.assigned_to_name || "Sin responsable"}
+                  {a.kind === "EXAMEN" && summary.evaluation
+                  ? `${summary.evaluation.exam_stage_label} · `
+                  : ""}
+                {a.assigned_to_name || "Sin responsable"}
                   {a.scheduled_at && (
                     <>
                       {" · "}
@@ -432,6 +465,12 @@ export function ValoracionTab({
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {a.kind === "EXAMEN" && summary.can_change_exam && (
+                  <button type="button" onClick={() => setChangingExam(true)} className={`${outlineBtnClass} btn-sm`}>
+                    <Replace className="h-4 w-4" />
+                    Cambiar examen
+                  </button>
+                )}
                 {summary.can_assign && a.status === "COMPLETADA" &&
                   (confirmReopen === a.kind ? (
                     <>
@@ -465,6 +504,21 @@ export function ValoracionTab({
         </ul>
       )}
 
+      {summary.evaluation && (
+        <ExamStageDialog
+          id={id}
+          isOpen={changingExam}
+          current={summary.evaluation.exam_stage}
+          options={summary.exam_stages.options}
+          onClose={() => setChangingExam(false)}
+          flash={flash}
+          onDone={() => {
+            setChangingExam(false);
+            load();
+            onChanged();
+          }}
+        />
+      )}
     </div>
   );
 }

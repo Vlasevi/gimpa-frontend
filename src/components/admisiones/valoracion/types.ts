@@ -166,7 +166,16 @@ export interface ActivityDetail {
   attachment_rule?: FileRule;
   attachment_url: string | null;
   missing: string[];
-  exam?: { structure: ExamStructure; result: ExamResult | null; can_view_key: boolean };
+  exam?: {
+    structure: ExamStructure;
+    result: ExamResult | null;
+    can_view_key: boolean;
+    /** Paquete del examen (se asigna aparte del de psicología). */
+    stage: string;
+    stage_label: string;
+    can_change: boolean;
+    stages: { suggested: string; age: string; options: StageOption[] };
+  };
   sources?: { exam: ExamResult | null; exam_validity: ValidityValue | null };
 }
 
@@ -180,10 +189,18 @@ export interface EvaluationSummary {
   status: string;
   can_assign: boolean;
   stages: { suggested: string; age: string; options: StageOption[] };
+  /** Etapas con paquete de examen cargado (puede diferir de `stages`). */
+  exam_stages: { suggested: string; age: string; options: StageOption[] };
+  can_change_exam?: boolean;
   evaluation: {
     stage: string;
     stage_label: string;
     package: string;
+    /** Examen asignado; puede ser de otra etapa que el paquete. */
+    exam_stage: string;
+    exam_stage_label: string;
+    exam_changed_at: string | null;
+    exam_changed_by_name: string;
     round: number;
     assigned_at: string | null;
     assigned_by_name: string;

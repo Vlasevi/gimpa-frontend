@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { AlertCircle, CheckCircle2, ExternalLink, Save } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, Replace, Save } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft";
@@ -31,6 +31,7 @@ import {
   toFormValues,
   toServerValues,
 } from "@/components/admisiones/valoracion/blocks";
+import { ExamStageDialog } from "@/components/admisiones/valoracion/ExamStageDialog";
 import {
   ACTIVITY_LABELS,
   formatWhen,
@@ -246,6 +247,7 @@ export default function ActividadPage() {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [answerKey, setAnswerKey] = useState<AnswerKey | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [changingExam, setChangingExam] = useState(false);
   const { toast, flash } = useToast();
 
   const load = useCallback(async () => {
@@ -342,6 +344,17 @@ export default function ActividadPage() {
         {!detail.can_edit && !done && (
           <p className={`mt-3 ${metaTextClass}`}>Solo lectura: la registra el responsable asignado.</p>
         )}
+        {detail.exam && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <p className={metaTextClass}>Examen asignado: {detail.exam.stage_label}</p>
+            {detail.exam.can_change && (
+              <button type="button" onClick={() => setChangingExam(true)} className={`${outlineBtnClass} btn-sm`}>
+                <Replace className="h-4 w-4" />
+                Cambiar examen
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {detail.package.central_rule && (
@@ -400,6 +413,22 @@ export default function ActividadPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {detail.exam && (
+        <ExamStageDialog
+          id={appId}
+          isOpen={changingExam}
+          current={detail.exam.stage}
+          options={detail.exam.stages.options}
+          onClose={() => setChangingExam(false)}
+          flash={flash}
+          onDone={() => {
+            setChangingExam(false);
+            setAnswerKey(null);
+            load();
+          }}
+        />
       )}
 
       <ConfirmDialog
