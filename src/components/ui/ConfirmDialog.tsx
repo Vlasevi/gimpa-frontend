@@ -44,6 +44,8 @@ export interface ConfirmDialogProps {
   children: ReactNode;
   /** Línea final en el color de la intención ("Este cambio es irreversible."). */
   note?: ReactNode;
+  /** Bloquea la acción mientras falte algo por elegir dentro del diálogo. */
+  confirmDisabled?: boolean;
 }
 
 const noop = () => {};
@@ -58,6 +60,7 @@ export function ConfirmDialog({
   tone = "primary",
   children,
   note,
+  confirmDisabled = false,
 }: ConfirmDialogProps) {
   const ids = useId();
   const titleId = `${ids}-title`;
@@ -128,7 +131,7 @@ export function ConfirmDialog({
             type="button"
             className={`${CONFIRM_BUTTON[tone]} gap-2`}
             onClick={confirm}
-            disabled={pending}
+            disabled={pending || confirmDisabled}
             aria-busy={pending || undefined}
           >
             <BusyLabel busy={pending} busyText={pendingText}>

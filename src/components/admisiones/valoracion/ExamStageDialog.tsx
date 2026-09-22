@@ -33,11 +33,12 @@ export function ExamStageDialog({
   onDone: () => void;
   flash: (type: "success" | "error", msg: string) => void;
 }) {
-  const available = options.filter((o) => o.available && o.value !== current);
-  const [stage, setStage] = useState(available[0]?.value ?? "");
+  // Se listan todos los exámenes cargados, el actual incluido (así se ve cuál tiene hoy).
+  const available = options.filter((o) => o.available);
+  const [stage, setStage] = useState(current);
 
   useEffect(() => {
-    if (isOpen) setStage(available[0]?.value ?? "");
+    if (isOpen) setStage(current);
     // Solo al abrir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -70,29 +71,28 @@ export function ExamStageDialog({
       title="Cambiar el examen"
       confirmText="Cambiar examen"
       pendingText="Cambiando…"
-      note="Se borra lo que ya esté calificado de este examen, incluida la hoja de respuestas."
+      confirmDisabled={!stage || stage === current}
     >
-      <p>
-        El aspirante presenta otro examen. Las entrevistas y el consolidado no se tocan.
-      </p>
-      <div className="mt-4">
+      <div>
         <label htmlFor="exam-stage" className={labelClass}>
-          Examen
+          Examen del estudiante
         </label>
-        {available.length > 0 ? (
-          <Select
-            id="exam-stage"
-            value={stage}
-            onChange={setStage}
-            options={available.map((o) => ({ value: o.value, label: o.label }))}
-            placeholder="Elige el examen"
-          />
-        ) : (
-          <p className="text-sm text-base-content/70">
-            Todavía no hay otro examen cargado en la plataforma.
-          </p>
-        )}
+        <Select
+          id="exam-stage"
+          value={stage}
+          onChange={setStage}
+          options={available.map((o) => ({
+            value: o.value,
+            label: o.value === current ? `${o.label} · actual` : o.label,
+          }))}
+          placeholder="Elige el examen"
+          emptyText="No hay exámenes cargados."
+        />
       </div>
+      <p className="mt-3">
+        Si cambias el examen del estudiante, perderás el progreso del examen anterior.
+        ¿Deseas continuar?
+      </p>
     </ConfirmDialog>
   );
 }
