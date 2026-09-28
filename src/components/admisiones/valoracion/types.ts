@@ -1,10 +1,6 @@
 /**
- * Tipos de la valoración GIMPA AVANZA (espejo de `admissions/instruments/*.json` y de
- * `evaluation_service` en el backend). Ver `docs/plan-valoracion-gimpa-avanza.md`.
- *
- * Una plantilla de paquete trae instrumentos; cada instrumento, bloques. Lo que se
- * registra en un instrumento es un objeto plano: los campos (`fields`) y las preguntas
- * (`questionnaire`) van por su nombre; el resto de bloques guarda lo suyo bajo su `id`.
+ * Contrato jerárquico de la valoración: nodos por type, respuestas por id.
+ * Los componentes y sus claves se cargan por separado desde la API protegida.
  */
 
 import type { FileRule } from "@/components/admisiones/admissionTypes";
@@ -36,64 +32,59 @@ export interface FieldSpec {
   placeholder?: string;
 }
 
-interface BlockBase {
-  id: string;
-  title?: string;
-  required?: boolean;
+/** Cada nodo mantiene las mismas seis propiedades; su tipo define cómo representarlo. */
+interface NodeBase<T extends string, C, G> {
+  id: string; type: T; title: string | null; content: C | null;
+  config: G | null; children: ContentNode[] | null;
 }
-
-export interface IndicatorItem {
-  id: string;
-  text: string;
-  /** Solo la entrevista al aspirante: el momento, la frase fija y la evidencia esperada. */
-  moment?: string;
-  prompt?: string;
-  evidence?: string;
+export interface Scoring {
+  mode: "points" | "rubric" | "observational_scale";
+  max: number | null; step: number | null; required?: boolean; scale_ref?: string;
+  rubric: { id: string; label: string; max: number; step?: number; descriptor: string }[] | null;
 }
-
-export type Block =
-  | (BlockBase & { type: "notice"; text: string })
-  | (BlockBase & { type: "rules"; items: { moment: string; rule: string }[] })
-  | (BlockBase & { type: "context"; items: { label: string; source: string }[] })
-  | (BlockBase & { type: "fields"; fields: FieldSpec[] })
-  | (BlockBase & { type: "questionnaire"; items: { id: string; text: string }[] })
-  | (BlockBase & { type: "scored_indicators"; items: IndicatorItem[] })
-  | (BlockBase & {
-      type: "supports";
-      categories: { id: string; label: string; examples: string }[];
-    })
-  | (BlockBase & { type: "validity" })
-  | (BlockBase & {
-      type: "consolidation_grid";
-      sources: { value: string; label: string }[];
-      dimensions: { id: string; label: string }[];
-    })
-  | (BlockBase & {
-      type: "concept";
-      options: { value: string; label: string; description: string }[];
-    })
-  | (BlockBase & { type: "exam_scoring"; dictation_rule?: string })
-  | (BlockBase & { type: "exam_profile" })
-  | (BlockBase & { type: "materials" })
-  | (BlockBase & { type: "attachment"; label: string; accept: string });
-
-export interface Instrument {
-  id: string;
-  /** `null` si la sección no es un instrumento del paquete (la hoja de respuestas). */
-  number: number | null;
-  title: string;
-  blocks: Block[];
+type TextContent = { text: string };
+type GroupConfig = { number?: number | string | null; code?: string; duration?: string;
+  expected_evidence?: string | null; criterion?: string | null; aggregation?: "sum"; key?: string;
+  average?: { mode: "mean"; exclude: string[]; decimals: number } };
+export type ContentNode =
+  | NodeBase<"instrument" | "section" | "area" | "question_group" | "indicator_group" | "support_group" | "exam_profile", TextContent, GroupConfig>
+  | NodeBase<"notice" | "reference_text" | "reference_material", TextContent, { delivery?: string; duration?: string }>
+  | NodeBase<"reference_table", { headers: string[]; rows: string[][] }, null>
+  | NodeBase<"reference_image", { src: string; alt: string }, null>
+  | NodeBase<"question", TextContent, { number?: number; reference_ids: string[] | null;
+      response: { input: "textarea"; required: boolean } | null; scoring: Scoring | null }>
+  | NodeBase<"indicator", TextContent, { required: boolean; scoring: Scoring; record: { support: boolean; evidence: boolean } }>
+  | NodeBase<"field", null, { input: FieldSpec["type"] | "checkbox"; required: boolean;
+      options: string[] | null; placeholder?: string | null; layout: { full: boolean; starts_row: boolean | null } }>
+  | NodeBase<"validity", null, { required: boolean; catalog_ref: string }>
+  | NodeBase<"consolidation_dimension", null, { sources: { value: string; label: string }[] }>
+  | NodeBase<"concept", null, { required: boolean; options: { value: string; label: string; description: string }[] }>
+  | NodeBase<"context_item", null, { source: string }>
+  | NodeBase<"answer_guide", null, { access: string[] }>
+  | NodeBase<"expected_answer", TextContent, { question_id: string }>
+  | NodeBase<"attachment", null, { required: boolean; label: string; accept: string }>
+  | NodeBase<"materials", null, null>;
+export type Instrument = ContentNode;
+export interface Methodology {
+  central_rule: string | null; age_references: Record<string, string> | null;
+  scale: { code: string; label: string; criterion: string }[] | null;
+  validity: { code: string; label: string; use: string }[] | null;
+  exam: Record<string, unknown> | null;
+}
+export function* walkNodes(nodes: ContentNode[]): Generator<ContentNode> {
+  for (const node of nodes) { yield node; yield* walkNodes(node.children ?? []); }
 }
 
 export interface ExamStructure {
   code: string;
   areas: { label: string; items: number[]; max: number }[];
-  items: { n: number; max: number; text: string }[];
-  rubric_item: number;
+  items: { n: number; max: number; text: string; step?: number }[];
+  rubric_item: number | null;
   rubric: { id: string; label: string; max: number; descriptor: string }[];
   subcomponents: { key: string; label: string; items: number[]; max: number }[];
   bands: Record<string, { min: number; max: number; label: string }[]>;
   bands_warning: string;
+  methodology_warnings?: string[];
 }
 
 export interface ExamResult {
@@ -105,12 +96,12 @@ export interface ExamResult {
   areas: { label: string; score: number; max: number; complete: boolean }[];
   band: { age: number; range: string; label: string } | null;
   bands_warning: string;
+  methodology_warnings?: string[];
 }
 
 export interface AnswerKey {
-  items: Record<string, string>;
-  dictation_words: string[];
-  dictation_rule: string;
+  package: string; version: string; stage: string | null; title: string;
+  content: ContentNode[]; methodology: Methodology;
 }
 
 export interface ActivityRow {
@@ -150,11 +141,15 @@ export interface ActivityDetail {
     code: string;
     version: string;
     title: string;
-    central_rule: string;
+    /** Rango propio de esta actividad; puede faltar mientras se actualiza la API. */
+    ages?: [number, number] | null;
+    central_rule: string | null;
     scale: { code: string; label: string; criterion: string }[];
     validity: { code: string; label: string; use: string }[];
     age_references: Record<string, string>;
   };
+  methodology: Methodology;
+  schema_revision: string;
   activity: ActivityRow;
   can_edit: boolean;
   instruments: Instrument[];
@@ -167,22 +162,30 @@ export interface ActivityDetail {
   attachment_url: string | null;
   missing: string[];
   exam?: {
-    structure: ExamStructure;
+    structure: ExamStructure | null;
     result: ExamResult | null;
     can_view_key: boolean;
     /** Paquete del examen (se asigna aparte del de psicología). */
     stage: string;
     stage_label: string;
+    route?: string | null;
+    route_label?: string;
+    revision?: string;
     can_change: boolean;
     stages: { suggested: string; age: string; options: StageOption[] };
   };
-  sources?: { exam: ExamResult | null; exam_validity: ValidityValue | null };
+  sources?: {
+    exam: ExamResult | null; exam_validity: ValidityValue | null;
+    teacher_package: { code: string; version: string; stage: string; title: string; label: string; route_label: string };
+  };
 }
 
 export interface StageOption {
   value: string;
   label: string;
   available: boolean;
+  routes?: { value: string; label: string }[];
+  suggested_route?: string;
 }
 
 export interface EvaluationSummary {
@@ -199,6 +202,8 @@ export interface EvaluationSummary {
     /** Examen asignado; puede ser de otra etapa que el paquete. */
     exam_stage: string;
     exam_stage_label: string;
+    exam_route?: string | null;
+    exam_route_label?: string;
     exam_changed_at: string | null;
     exam_changed_by_name: string;
     round: number;
@@ -244,8 +249,9 @@ export interface DecisionPanelData {
 }
 
 /** "Título (Instrumento N)", como lo nombra el backend en lo que falta (`instrument_label`). */
-export function instrumentLabel(instrument: Pick<Instrument, "title" | "number">): string {
-  return instrument.number ? `${instrument.title} (Instrumento ${instrument.number})` : instrument.title;
+export function instrumentLabel(instrument: Instrument): string {
+  const number = instrument.type === "instrument" ? instrument.config?.number : null;
+  return number ? `${instrument.title} (Instrumento ${number})` : instrument.title ?? "";
 }
 
 /** Fecha y hora legibles ("22 de septiembre de 2026, 8:00 a. m."). */
@@ -257,5 +263,5 @@ export function formatWhen(iso: string | null | undefined): string {
 }
 
 /** Etiquetas de la escala 0–5 (el detalle viene del paquete). */
-export const SCORE_OPTIONS = ["NO", "0", "1", "2", "3", "4", "5"] as const;
-export const scoreLabel = (v: string) => (v === "NO" ? "N/O" : v);
+export const SCORE_OPTIONS = ["N/O", "0", "1", "2", "3", "4", "5"] as const;
+export const scoreLabel = (v: string) => (v === "N/O" ? "N/O" : v);

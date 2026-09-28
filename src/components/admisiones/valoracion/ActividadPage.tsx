@@ -8,10 +8,10 @@
  * al backend que verifique lo obligatorio.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { AlertCircle, CheckCircle2, ExternalLink, Replace, Save } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, Pencil, Save } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { useAutosaveDraft } from "@/hooks/useAutosaveDraft";
@@ -22,10 +22,11 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { BusyLabel } from "@/components/ui/BusyLabel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
-import { cardClass, metaTextClass, titleClass } from "@/components/ui/textStyles";
+import { cardClass, dataLabelClass, dataValueClass, metaTextClass, titleClass } from "@/components/ui/textStyles";
 import type { SectionValues } from "@/components/ui/fields/types";
 import {
-  BlockView,
+  NodeView,
+  InstructionNotice,
   ExamResultTable,
   SELF_READONLY,
   toFormValues,
@@ -36,6 +37,7 @@ import {
   ACTIVITY_LABELS,
   formatWhen,
   instrumentLabel,
+  walkNodes,
   type ActivityDetail,
   type AnswerKey,
   type Instrument,
@@ -47,6 +49,59 @@ interface DraftMeta {
   baseVersion: number;
 }
 
+function ActivityData({ label, children }: { label: string; children: ReactNode }) {
+  return <div className="min-w-0">
+    <dt className={dataLabelClass}>{label}:</dt>
+    <dd className={dataValueClass}>{children}</dd>
+  </div>;
+}
+
+/** Identificación legible de la actividad, sin códigos internos de las plantillas. */
+export function ActivityHeader({ detail, onChangeExam }: { detail: ActivityDetail; onChangeExam: () => void }) {
+  const { activity, application } = detail;
+  const ages = detail.package.ages;
+  const targetAge = ages?.length === 2 ? `${ages[0] === ages[1] ? ages[0] : ages.join("–")} años` : null;
+  const done = activity.status === "COMPLETADA";
+  return (
+    <header className={`${cardClass} space-y-4 p-5`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className={`${titleClass} text-2xl`}>{activity.label}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`badge badge-soft ${done ? "badge-success" : "badge-info"}`}>{activity.status_label}</span>
+          {!detail.can_edit && <span className="badge badge-ghost">Solo lectura</span>}
+        </div>
+      </div>
+      <dl className="grid gap-x-6 gap-y-4 border-t border-base-300 pt-4 sm:grid-cols-2">
+        <ActivityData label="Aspirante">{application.applicant_name}</ActivityData>
+        <ActivityData label="Grado solicitado">{application.grade || "Sin dato"}</ActivityData>
+        <ActivityData label="Edad del aspirante">{application.age || "Sin dato"}</ActivityData>
+        {targetAge && <ActivityData label="Edad objetivo">{targetAge}</ActivityData>}
+        <ActivityData label="Asignado a">{activity.assigned_to_name || "Sin asignar"}</ActivityData>
+        <ActivityData label="Fecha programada">{activity.scheduled_at ? (
+          <time dateTime={activity.scheduled_at}>{formatWhen(activity.scheduled_at)}</time>
+        ) : "Sin programar"}</ActivityData>
+      </dl>
+      {done && (
+        <p className="flex items-center gap-2 text-sm text-success">
+          <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+          Completada por {activity.completed_by_name} el {formatWhen(activity.completed_at)}.
+        </p>
+      )}
+      {detail.exam && (detail.exam.route_label || detail.exam.can_change) && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-base-300 pt-4">
+          {detail.exam.route_label && <p className={metaTextClass}><strong>Ruta docente:</strong> {detail.exam.route_label}</p>}
+          {detail.exam.can_change && (
+            <button type="button" onClick={onChangeExam} className={outlineBtnClass}>
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Cambiar examen
+            </button>
+          )}
+        </div>
+      )}
+    </header>
+  );
+}
+
 function InstrumentCard({
   instrument,
   detail,
@@ -55,6 +110,7 @@ function InstrumentCard({
   onDetail,
   answerKey,
   flash,
+  onReference,
 }: {
   instrument: Instrument;
   detail: ActivityDetail;
@@ -63,6 +119,7 @@ function InstrumentCard({
   onDetail: (d: ActivityDetail) => void;
   answerKey: AnswerKey | null;
   flash: Flash;
+  onReference: (id: string) => void;
 }) {
   const label = instrumentLabel(instrument);
   const canEdit = detail.can_edit;
@@ -72,7 +129,7 @@ function InstrumentCard({
   const [restored, setRestored] = useState(false);
   const versionRef = useRef(detail.data_versions[instrument.id] ?? 0);
   const draft = useAutosaveDraft<SectionValues, DraftMeta>({
-    key: `valoracion:${detail.application.id}:${detail.activity.kind}:${instrument.id}`,
+    key: `valoracion:${detail.schema_revision}:${detail.application.id}:${detail.activity.kind}:${detail.package.code}:${detail.package.version}:${detail.exam?.revision ?? "inicial"}:${instrument.id}`,
     enabled: canEdit,
   });
 
@@ -109,8 +166,12 @@ function InstrumentCard({
         method: "PATCH",
         body: JSON.stringify({
           instrument: instrument.id,
+          schema_revision: detail.schema_revision,
           data: toServerValues(instrument, form.getValues()),
           version: versionRef.current,
+          package_code: detail.package.code,
+          package_version: detail.package.version,
+          exam_revision: detail.exam?.revision,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -162,10 +223,10 @@ function InstrumentCard({
         }}
         className="space-y-6"
       >
-        {instrument.blocks.map((block) => {
+        {(instrument.children ?? []).map((block) => {
           const view = (
-            <BlockView
-              block={block}
+            <NodeView
+              node={block}
               control={form.control}
               register={form.register}
               setValue={form.setValue}
@@ -174,6 +235,7 @@ function InstrumentCard({
               answerKey={answerKey}
               onDetail={onDetail}
               flash={flash}
+              onReference={onReference}
             />
           );
           return SELF_READONLY.has(block.type) ? (
@@ -203,19 +265,23 @@ function InstrumentCard({
 /** Para el consolidado: el resultado del examen y enlaces a las entrevistas. */
 function SourcesPanel({ detail }: { detail: ActivityDetail }) {
   if (!detail.sources) return null;
-  const { exam, exam_validity } = detail.sources;
+  const { exam, exam_validity, teacher_package } = detail.sources;
   const base = `/admisiones/${detail.application.id}`;
   return (
     <div className={`${cardClass} space-y-4 p-5`}>
       <h2 className={titleClass}>Fuentes para integrar</h2>
+      <p className={metaTextClass}>
+        Componente docente aplicado: {teacher_package.title}{teacher_package.route_label ? ` · ${teacher_package.route_label}` : ""}.
+      </p>
+      {exam_validity?.level && <p className={metaTextClass}>Validez: {exam_validity.level}{exam_validity.reason ? ` · ${exam_validity.reason}` : ""}</p>}
       <div className="flex flex-wrap gap-2">
         {[
           ["entrevista-familiar", ACTIVITY_LABELS.ENTREVISTA_FAMILIAR],
           ["entrevista-aspirante", ACTIVITY_LABELS.ENTREVISTA_ASPIRANTE],
-          ["examen", ACTIVITY_LABELS.EXAMEN],
+          ["examen", teacher_package.label],
         ].map(([slug, label]) => (
           <a key={slug} href={`${base}/${slug}`} target="_blank" rel="noreferrer" className={`${outlineBtnClass} btn-sm`}>
-            <ExternalLink className="h-4 w-4" />
+            <Eye className="h-4 w-4" aria-hidden="true" />
             {label}
           </a>
         ))}
@@ -235,6 +301,12 @@ function SourcesPanel({ detail }: { detail: ActivityDetail }) {
           )}
         </div>
       ) : null}
+      {!!exam?.methodology_warnings?.length && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+          <p className="font-medium">Observaciones de la metodología</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5">{exam.methodology_warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -278,15 +350,19 @@ export default function ActividadPage() {
   // la respuesta esperada va junto a cada pregunta.
   const canViewKey = !!detail?.exam?.can_view_key;
   useEffect(() => {
-    if (!canViewKey || answerKey) return;
+    setAnswerKey(null);
+    if (!canViewKey) return;
+    let active = true;
     apiFetch(API_ENDPOINTS.admissionsExamKey(appId))
       .then((res) => (res.ok ? res.json() : null))
       .then((key: AnswerKey | null) => {
+        if (!active) return;
         if (key) setAnswerKey(key);
         else flash("error", "No pudimos cargar la clave del examen.");
       })
-      .catch(() => flash("error", "No pudimos cargar la clave del examen."));
-  }, [canViewKey, answerKey, appId, flash]);
+      .catch(() => { if (active) flash("error", "No pudimos cargar la clave del examen."); });
+    return () => { active = false; };
+  }, [canViewKey, appId, detail?.package.code, detail?.package.version, detail?.exam?.revision, flash]);
 
   const complete = async (): Promise<boolean> => {
     try {
@@ -315,60 +391,43 @@ export default function ActividadPage() {
   }
   if (!detail) return <LoadingState label="Cargando actividad…" />;
 
-  const { activity, application } = detail;
-  const done = activity.status === "COMPLETADA";
+  const { activity } = detail;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <Toast toast={toast} />
 
-      <div className={`${cardClass} p-5`}>
-        <p className="text-xs font-medium uppercase tracking-wide text-base-content/60">
-          {detail.package.title} · {detail.package.code} v{detail.package.version}
-        </p>
-        <h1 className={`${titleClass} mt-1 text-2xl`}>{activity.label}</h1>
-        <p className="mt-1 text-base-content/70">
-          {application.applicant_name} · {application.grade} · {application.age}
-        </p>
-        <p className={`mt-1 ${metaTextClass}`}>
-          Responsable: {activity.assigned_to_name || "—"}
-          {activity.scheduled_at && ` · ${formatWhen(activity.scheduled_at)}`}
-          {` · ${activity.status_label}`}
-        </p>
-        {done && (
-          <p className="mt-3 flex items-center gap-2 text-sm text-accent">
-            <CheckCircle2 className="h-5 w-5" />
-            Completada por {activity.completed_by_name} el {formatWhen(activity.completed_at)}.
-          </p>
-        )}
-        {!detail.can_edit && !done && (
-          <p className={`mt-3 ${metaTextClass}`}>Solo lectura: la registra el responsable asignado.</p>
-        )}
-        {detail.exam && (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <p className={metaTextClass}>Examen asignado: {detail.exam.stage_label}</p>
-            {detail.exam.can_change && (
-              <button type="button" onClick={() => setChangingExam(true)} className={`${outlineBtnClass} btn-sm`}>
-                <Replace className="h-4 w-4" />
-                Cambiar examen
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <ActivityHeader detail={detail} onChangeExam={() => setChangingExam(true)} />
 
       {detail.package.central_rule && (
-        <p className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-base-content/80">
-          {detail.package.central_rule}
-        </p>
+        <InstructionNotice title="Indicaciones de aplicación">
+          <p className="whitespace-pre-line">{detail.package.central_rule}</p>
+        </InstructionNotice>
+      )}
+
+      {detail.methodology.age_references && Object.keys(detail.methodology.age_references).length > 0 && (
+        <details className="rounded-lg border border-base-300 bg-base-100 p-4">
+          <summary className="cursor-pointer text-sm font-medium">Referencias de interpretación por edad</summary>
+          <dl className="mt-3 space-y-3 text-sm">
+            {Object.entries(detail.methodology.age_references).map(([age, reference]) => (
+              <div key={age}><dt className="font-medium">{age} años</dt><dd className="mt-1 text-base-content/70">{reference}</dd></div>
+            ))}
+          </dl>
+        </details>
       )}
 
       <SourcesPanel detail={detail} />
+      {!!detail.exam?.structure?.methodology_warnings?.length && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm" role="status">
+          <p className="font-medium">Observaciones de la metodología</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{detail.exam.structure.methodology_warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+        </div>
+      )}
 
       <div className="space-y-4">
         {detail.instruments.map((inst) => (
           <InstrumentCard
-            key={inst.id}
+            key={`${detail.package.code}:${detail.package.version}:${detail.exam?.revision ?? "inicial"}:${inst.id}`}
             instrument={inst}
             detail={detail}
             open={open.has(inst.id)}
@@ -383,6 +442,12 @@ export default function ActividadPage() {
             onDetail={setDetail}
             answerKey={answerKey}
             flash={flash}
+            onReference={(referenceId) => {
+              const target = detail.instruments.find((instrument) => [...walkNodes([instrument])].some((node) => node.id === referenceId));
+              if (!target) return;
+              setOpen((previous) => new Set([...previous, target.id]));
+              requestAnimationFrame(() => document.getElementById(referenceId)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+            }}
           />
         ))}
       </div>
@@ -420,6 +485,7 @@ export default function ActividadPage() {
           id={appId}
           isOpen={changingExam}
           current={detail.exam.stage}
+          currentRoute={detail.exam.route}
           options={detail.exam.stages.options}
           onClose={() => setChangingExam(false)}
           flash={flash}

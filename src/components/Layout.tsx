@@ -15,7 +15,7 @@ export default function Layout() {
     // alterna entre ancho completo/riel de íconos con el checkbox de abajo.
     // En mobile, sin ese modificador, el mecanismo nativo del drawer lo
     // esconde fuera de pantalla hasta que se abre como overlay.
-    <div className="drawer lg:drawer-open">
+    <div className="drawer h-dvh overflow-hidden lg:drawer-open">
       <input
         id={SIDEBAR_DRAWER_ID}
         type="checkbox"
@@ -24,9 +24,9 @@ export default function Layout() {
         onChange={(e) => setDrawerOpen(e.target.checked)}
       />
 
-      <div className="drawer-content flex min-h-screen flex-col bg-base-100">
+      <div className="drawer-content flex h-dvh min-h-0 flex-col overflow-hidden bg-base-100">
         <Navbar showDrawerToggle={!noAccess} />
-        <main className="flex-1 overflow-y-auto bg-base-200 p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-base-200 p-6">
           {noAccess ? <NoAccess /> : <Outlet />}
         </main>
       </div>

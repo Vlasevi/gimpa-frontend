@@ -175,6 +175,12 @@
 
 /* Fuente base del documento (parametrizada arriba) */
 @layer base {
+  /* El fondo exterior coincide con el contenido al llegar al límite del scroll. */
+  html,
+  body {
+    --root-bg: var(--color-base-200);
+  }
+
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;

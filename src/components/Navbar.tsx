@@ -44,7 +44,7 @@ export const Navbar = ({ showDrawerToggle = true }: NavbarProps) => {
     // la izquierda (el botón hamburguesa) además del de la derecha (menú de
     // usuario) — con un solo hijo `justify-end` ya bastaba, con dos hace
     // falta repartirlos en los extremos.
-    <header className="flex h-18 items-center justify-between border-b border-base-300 bg-base-100 px-6">
+    <header className="flex h-18 shrink-0 items-center justify-between border-b border-base-300 bg-base-100 px-6">
       {showDrawerToggle ? (
         <label
           htmlFor={SIDEBAR_DRAWER_ID}

@@ -9,15 +9,16 @@
  * La decisión de la rectora vive en la pestaña "Avanzar" (`DecisionSection`).
  */
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { CalendarClock, ExternalLink, Pencil, Replace, RotateCcw } from "lucide-react";
+import { Eye, Pencil, RotateCcw } from "lucide-react";
 
 import { apiFetch, API_ENDPOINTS } from "@/utils/api";
 import { ExamStageDialog } from "@/components/admisiones/valoracion/ExamStageDialog";
 import { FormInput, FormSelect, FormGrid } from "@/components/ui/FormDialog";
 import { BusyLabel } from "@/components/ui/BusyLabel";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { outlineBtnClass, primaryBtnClass } from "@/components/ui/formStyles";
 import { timeOptionsWith } from "@/components/ui/timeOptions";
 import { cardTitleClass, itemTitleClass, metaTextClass } from "@/components/ui/textStyles";
@@ -46,6 +47,140 @@ const STATUS_BADGE: Record<ActivityRow["status"], string> = {
   EN_CURSO: "badge-warning badge-soft",
   COMPLETADA: "badge-success badge-soft",
 };
+
+const ACTIVITY_GROUPS: { id: string; title: string; kinds: ActivityKind[] }[] = [
+  { id: "psicologia", title: "Psicología", kinds: ["ENTREVISTA_FAMILIAR", "ENTREVISTA_ASPIRANTE", "CONSOLIDADO"] },
+  { id: "docencia", title: "Docencia", kinds: ["EXAMEN"] },
+  { id: "comite", title: "Comité de Admisiones", kinds: ["CONCEPTO"] },
+];
+
+const ACTIVITY_TITLES: Partial<Record<ActivityKind, string>> = {
+  ENTREVISTA_FAMILIAR: "Entrevista familiar",
+  ENTREVISTA_ASPIRANTE: "Entrevista con el aspirante",
+  CONSOLIDADO: "Informe consolidado interdisciplinario",
+  CONCEPTO: "Concepto de admisión",
+};
+
+/** Etiqueta y valor permanecen juntos al envolver nombres o fechas largos. */
+function DetailLine({ label, children, prominent = false }: { label: string; children: ReactNode; prominent?: boolean }) {
+  return (
+    <div className={`flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 ${prominent ? "text-base" : "text-sm"}`}>
+      <dt className={prominent ? "font-semibold text-base-content" : "font-semibold text-base-content/70"}>{label}:</dt>
+      <dd className={`min-w-0 break-words ${prominent ? "text-base-content" : "text-base-content/70"}`}>{children}</dd>
+    </div>
+  );
+}
+
+/** Vista de la asignación: datos legibles y actividades agrupadas por equipo responsable. */
+export function AssignedEvaluation({ summary, editing, onEdit, onOpen, onChangeExam, onReopen, children }: {
+  summary: EvaluationSummary;
+  editing: boolean;
+  onEdit: () => void;
+  onOpen: (slug: string) => void;
+  onChangeExam: () => void;
+  onReopen: (kind: ActivityKind) => void;
+  children?: ReactNode;
+}) {
+  const ids = useId();
+  const evaluation = summary.evaluation;
+  const firstAssignment = summary.can_assign && !evaluation;
+  return (
+    <div className="space-y-6">
+      {!firstAssignment && (evaluation ? (
+        <header className="flex flex-col items-start gap-4 border-b border-base-300 pb-5 sm:flex-row sm:justify-between">
+          <dl className="min-w-0 flex-1 space-y-2">
+            <DetailLine label="Valoración" prominent>{evaluation.stage_label}</DetailLine>
+            <DetailLine label="Examen" prominent>{evaluation.exam_stage_label}</DetailLine>
+            {evaluation.exam_route_label && <DetailLine label="Ruta docente">{evaluation.exam_route_label}</DetailLine>}
+            {evaluation.assigned_by_name && <DetailLine label="Asignado por">{evaluation.assigned_by_name}</DetailLine>}
+            {evaluation.assigned_at && <DetailLine label="Fecha de asignación">{formatWhen(evaluation.assigned_at)}</DetailLine>}
+            {evaluation.round > 1 && <DetailLine label="Ronda">{evaluation.round}</DetailLine>}
+          </dl>
+          {summary.can_assign && !editing && (
+            <button type="button" onClick={onEdit} className={`${outlineBtnClass} shrink-0`}>
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Editar asignación
+            </button>
+          )}
+        </header>
+      ) : (
+        <p className={metaTextClass}>
+          Para asignar la valoración, primero envía la solicitud al paso Valoración desde Avanzar.
+        </p>
+      ))}
+
+      {children}
+
+      {ACTIVITY_GROUPS.map((group) => {
+        const activities = group.kinds.flatMap((kind) => summary.activities.filter((a) => a.kind === kind));
+        if (!activities.length) return null;
+        const headingId = `${ids}-${group.id}`;
+        return (
+          <section key={group.id} aria-labelledby={headingId}>
+            <h3 id={headingId} className={`${cardTitleClass} border-b border-base-300 pb-2`}>{group.title}</h3>
+            <ul className="divide-y divide-base-300">
+              {activities.map((a) => {
+                const title = ACTIVITY_TITLES[a.kind] ?? a.label;
+                const canFill = a.is_mine && a.status !== "COMPLETADA";
+                const OpenIcon = canFill ? Pencil : Eye;
+                const openLabel = canFill ? "Diligenciar" : "Ver";
+                return (
+                  <li key={a.kind} className="flex flex-col gap-3 py-4 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <h4 className={itemTitleClass}>{title}</h4>
+                        <span className={`badge badge-sm whitespace-nowrap ${STATUS_BADGE[a.status]}`}>{a.status_label}</span>
+                        {a.is_mine && <span className="badge badge-sm badge-primary badge-soft whitespace-nowrap">A tu cargo</span>}
+                      </div>
+                      <dl className="mt-2 space-y-1">
+                        <DetailLine label="Responsable">{a.assigned_to_name || "Sin asignar"}</DetailLine>
+                        {a.kind === "EXAMEN" && evaluation && (
+                          <>
+                            <DetailLine label="Paquete">{evaluation.exam_stage_label}</DetailLine>
+                            {evaluation.exam_route_label && <DetailLine label="Ruta">{evaluation.exam_route_label}</DetailLine>}
+                          </>
+                        )}
+                        {a.has_schedule && (a.scheduled_at ? (
+                          <>
+                            <DetailLine label="Cita"><time dateTime={a.scheduled_at}>{formatWhen(a.scheduled_at)}</time></DetailLine>
+                            <DetailLine label="Modalidad">{a.modality === "VIRTUAL" ? "Virtual" : "Presencial"}</DetailLine>
+                          </>
+                        ) : <DetailLine label="Cita">Sin programar</DetailLine>)}
+                      </dl>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end" aria-label={`Acciones de ${title}`}>
+                      {a.kind === "EXAMEN" && summary.can_change_exam && (
+                        <button type="button" onClick={onChangeExam} className={outlineBtnClass}
+                          title="Cambiar examen" aria-label="Cambiar el paquete del examen">
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                          Cambiar examen
+                        </button>
+                      )}
+                      {summary.can_assign && a.status === "COMPLETADA" && (
+                        <button type="button" onClick={() => onReopen(a.kind)} className={outlineBtnClass}
+                          title="Reabrir actividad" aria-label={`Reabrir ${title}`}>
+                          <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                          Reabrir
+                        </button>
+                      )}
+                      {a.can_open && (
+                        <button type="button" onClick={() => onOpen(a.slug)} className={outlineBtnClass}
+                          title={openLabel} aria-label={`${openLabel} ${title}`}>
+                          <OpenIcon className="h-4 w-4" aria-hidden="true" />
+                          {openLabel}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 /** ISO del servidor → fecha ("AAAA-MM-DD") y hora ("HH:mm") en hora local. */
 function splitLocal(iso: string | null): { date: string; time: string } {
@@ -100,9 +235,16 @@ function AssignForm({
     summary.evaluation?.exam_stage ?? summary.evaluation?.stage ?? summary.stages.suggested ?? "",
   );
   const [examTouched, setExamTouched] = useState(false);
+  const [examRoute, setExamRoute] = useState(
+    summary.evaluation?.exam_route ?? summary.exam_stages.options.find((o) => o.value === examStage)?.suggested_route ?? "",
+  );
+  const chooseExam = (value: string) => {
+    setExamStage(value);
+    setExamRoute(summary.exam_stages.options.find((o) => o.value === value)?.suggested_route ?? "");
+  };
   const chooseStage = (value: string) => {
     setStage(value);
-    if (!examTouched) setExamStage(value);
+    if (!examTouched) chooseExam(value);
   };
   const [psych, setPsych] = useState(String(byKind.get("ENTREVISTA_FAMILIAR")?.assigned_to ?? ""));
   const [teacher, setTeacher] = useState(String(byKind.get("EXAMEN")?.assigned_to ?? ""));
@@ -167,7 +309,7 @@ function AssignForm({
     try {
       const res = await apiFetch(API_ENDPOINTS.admissionsEvaluation(id), {
         method: "PUT",
-        body: JSON.stringify({ stage, exam_stage: examStage, activities }),
+        body: JSON.stringify({ stage, exam_stage: examStage, exam_route: examStage === "E2" ? examRoute : undefined, activities }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -207,13 +349,13 @@ function AssignForm({
           placeholder="Elige el paquete"
           emptyText="No hay paquetes disponibles."
           required
-          hint={`Edad del aspirante: ${summary.stages.age || "sin fecha de nacimiento"}. Aún no disponibles: ${pending.join(", ")}.`}
+          hint={`Edad del aspirante: ${summary.stages.age || "sin fecha de nacimiento"}.${pending.length ? ` Aún no disponibles: ${pending.join(", ")}.` : ""}`}
         />
         <FormSelect
           label="Examen"
           value={examStage}
           onChange={(v) => {
-            setExamStage(v);
+            chooseExam(v);
             setExamTouched(true);
           }}
           options={examStageOptions}
@@ -222,6 +364,11 @@ function AssignForm({
           required
           hint="Por defecto, el del paquete. El docente lo puede cambiar después si el aspirante necesita el de otra edad."
         />
+        {examStage === "E2" && (
+          <FormSelect label="Ruta del componente docente" value={examRoute} onChange={setExamRoute}
+            options={summary.exam_stages.options.find((o) => o.value === examStage)?.routes ?? []}
+            placeholder="Elige la ruta" required hint="A los 5 años: no escrita. A los 6–7: examen escrito." />
+        )}
         <FormSelect
           label="Psicóloga"
           value={psych}
@@ -240,7 +387,7 @@ function AssignForm({
           placeholder="Elige al docente"
           emptyText="No hay docentes para mostrar."
           required
-          hint="Aplica y califica el examen."
+          hint="Aplica y registra el componente docente presencial: escrito o no escrito según el paquete."
         />
         <FormSelect
           label="Responsable del concepto"
@@ -346,7 +493,6 @@ export function ValoracionTab({
   const [editing, setEditing] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState<ActivityKind | null>(null);
   const [changingExam, setChangingExam] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -362,7 +508,6 @@ export function ValoracionTab({
   }, [load]);
 
   const reopen = async (kind: ActivityKind) => {
-    setBusy(true);
     try {
       const res = await apiFetch(API_ENDPOINTS.admissionsEvaluationReopen(id), {
         method: "POST",
@@ -374,12 +519,14 @@ export function ValoracionTab({
         flash("success", "Actividad reabierta.");
         onChanged();
         load();
+        return true;
       } else {
         flash("error", typeof data?.detail === "string" ? data.detail : "No pudimos reabrir la actividad.");
+        return false;
       }
-    } finally {
-      setBusy(false);
-      setConfirmReopen(null);
+    } catch {
+      flash("error", "No pudimos conectar con el servidor.");
+      return false;
     }
   };
 
@@ -391,124 +538,48 @@ export function ValoracionTab({
 
   return (
     <div className="space-y-5">
-      {/* Encabezado (no se dibuja vacío: en la primera asignación el formulario ya trae
-          su título, y un bloque vacío sumaría espacio arriba). */}
-      {!firstAssignment && (
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            {summary.evaluation ? (
-              <>
-                <p className={itemTitleClass}>{summary.evaluation.stage_label}</p>
-                <p className={metaTextClass}>
-                  {summary.evaluation.package}
-                  {summary.evaluation.exam_stage !== summary.evaluation.stage &&
-                    ` · examen ${summary.evaluation.exam_stage_label}`}
-                  {summary.evaluation.round > 1 && ` · ronda ${summary.evaluation.round}`}
-                  {summary.evaluation.assigned_by_name &&
-                    ` · asignada por ${summary.evaluation.assigned_by_name} el ${formatWhen(summary.evaluation.assigned_at)}`}
-                </p>
-              </>
-            ) : (
-              <p className={metaTextClass}>
-                Para asignar la valoración, primero envía la solicitud al paso Valoración desde Avanzar.
-              </p>
-            )}
-          </div>
-          {summary.can_assign && summary.evaluation && !editing && (
-            <button type="button" onClick={() => setEditing(true)} className={outlineBtnClass}>
-              <Pencil className="h-4 w-4" />
-              Editar asignación
-            </button>
-          )}
-        </div>
-      )}
+      <AssignedEvaluation
+        summary={summary}
+        editing={editing}
+        onEdit={() => setEditing(true)}
+        onOpen={open}
+        onChangeExam={() => setChangingExam(true)}
+        onReopen={setConfirmReopen}
+      >
+        {(editing || firstAssignment) && (
+          <AssignForm
+            id={id}
+            summary={summary}
+            flash={flash}
+            footerSlot={footerSlot}
+            onFooterInUse={onFooterInUse}
+            onCancel={firstAssignment ? undefined : () => setEditing(false)}
+            onSaved={(s) => {
+              setSummary(s);
+              setEditing(false);
+              onChanged();
+            }}
+          />
+        )}
+      </AssignedEvaluation>
 
-      {(editing || firstAssignment) && (
-        <AssignForm
-          id={id}
-          summary={summary}
-          flash={flash}
-          footerSlot={footerSlot}
-          onFooterInUse={onFooterInUse}
-          onCancel={firstAssignment ? undefined : () => setEditing(false)}
-          onSaved={(s) => {
-            setSummary(s);
-            setEditing(false);
-            onChanged();
-          }}
-        />
-      )}
-
-      {/* Actividades */}
-      {summary.activities.length > 0 && (
-        <ul className="divide-y divide-base-200 rounded-lg border border-base-300">
-          {summary.activities.map((a) => (
-            <li key={a.kind} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-2">
-                  <span className={itemTitleClass}>{a.label}</span>
-                  <span className={`badge badge-sm ${STATUS_BADGE[a.status]}`}>{a.status_label}</span>
-                  {a.is_mine && <span className="badge badge-sm badge-primary badge-soft">Tuya</span>}
-                </p>
-                <p className={metaTextClass}>
-                  {a.kind === "EXAMEN" && summary.evaluation
-                  ? `${summary.evaluation.exam_stage_label} · `
-                  : ""}
-                {a.assigned_to_name || "Sin responsable"}
-                  {a.scheduled_at && (
-                    <>
-                      {" · "}
-                      <CalendarClock className="inline h-3.5 w-3.5 align-[-2px]" /> {formatWhen(a.scheduled_at)} ·{" "}
-                      {a.modality === "VIRTUAL" ? "Virtual" : "Presencial"}
-                    </>
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {a.kind === "EXAMEN" && summary.can_change_exam && (
-                  <button type="button" onClick={() => setChangingExam(true)} className={`${outlineBtnClass} btn-sm`}>
-                    <Replace className="h-4 w-4" />
-                    Cambiar examen
-                  </button>
-                )}
-                {summary.can_assign && a.status === "COMPLETADA" &&
-                  (confirmReopen === a.kind ? (
-                    <>
-                      <span className="text-sm text-base-content/70">¿Reabrir?</span>
-                      <button type="button" disabled={busy} onClick={() => reopen(a.kind)} className="btn btn-sm btn-warning">
-                        Sí, reabrir
-                      </button>
-                      <button type="button" disabled={busy} onClick={() => setConfirmReopen(null)} className={`${outlineBtnClass} btn-sm`}>
-                        No
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" onClick={() => setConfirmReopen(a.kind)} className={`${outlineBtnClass} btn-sm`}>
-                      <RotateCcw className="h-4 w-4" />
-                      Reabrir
-                    </button>
-                  ))}
-                {a.can_open && (
-                  <button
-                    type="button"
-                    onClick={() => open(a.slug)}
-                    className={a.is_mine && a.status !== "COMPLETADA" ? `${primaryBtnClass} btn-sm` : `${outlineBtnClass} btn-sm`}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    {a.is_mine && a.status !== "COMPLETADA" ? "Llenar" : "Ver"}
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ConfirmDialog
+        isOpen={confirmReopen !== null}
+        onClose={() => setConfirmReopen(null)}
+        onConfirm={() => confirmReopen ? reopen(confirmReopen) : false}
+        title="Reabrir actividad"
+        confirmText="Reabrir actividad"
+        pendingText="Reabriendo…"
+      >
+        <p>Se reabrirá <strong>{confirmReopen ? ACTIVITY_LABELS[confirmReopen] : "la actividad"}</strong> para permitir cambios.</p>
+      </ConfirmDialog>
 
       {summary.evaluation && (
         <ExamStageDialog
           id={id}
           isOpen={changingExam}
           current={summary.evaluation.exam_stage}
+          currentRoute={summary.evaluation.exam_route}
           options={summary.exam_stages.options}
           onClose={() => setChangingExam(false)}
           flash={flash}

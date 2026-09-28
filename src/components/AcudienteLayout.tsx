@@ -22,7 +22,7 @@ export default function AcudienteLayout() {
   const [drawerOpen, setDrawerOpen] = useSidebarDrawerState();
 
   return (
-    <div className="drawer lg:drawer-open">
+    <div className="drawer h-dvh overflow-hidden lg:drawer-open">
       <input
         id={SIDEBAR_DRAWER_ID}
         type="checkbox"
@@ -31,9 +31,9 @@ export default function AcudienteLayout() {
         onChange={(e) => setDrawerOpen(e.target.checked)}
       />
 
-      <div className="drawer-content flex min-h-screen flex-col bg-base-100">
+      <div className="drawer-content flex h-dvh min-h-0 flex-col overflow-hidden bg-base-100">
         <Navbar showDrawerToggle />
-        <main className="flex-1 overflow-y-auto bg-base-200 p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-base-200 p-6">
           <Outlet />
         </main>
       </div>
